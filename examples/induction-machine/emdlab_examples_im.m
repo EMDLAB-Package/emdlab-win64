@@ -8,7 +8,6 @@ clc;
 clear;
 close all;
 addpath(genpath('C:\emdlab-win64'));
-m.showm
 
 % dimensions & parameters
 gv_ISD = 74;
