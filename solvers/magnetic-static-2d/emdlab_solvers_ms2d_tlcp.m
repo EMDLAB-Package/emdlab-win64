@@ -205,7 +205,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
             end
 
             for i = 1:Nmzs
-                
+
                 mzName(i) = obj.m.checkMeshZoneExistence(mzName(i));
 
                 if obj.m.mzs.(mzName(i)).props.isCoilArm
@@ -265,7 +265,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
             end
 
             for i = 1:Nmzs
-                
+
                 mzName(i) = obj.m.checkMeshZoneExistence(mzName(i));
 
                 if obj.m.mzs.(mzName(i)).props.isCoilArm
@@ -313,7 +313,30 @@ classdef emdlab_solvers_ms2d_tlcp < handle
         function setCoilCurrent(obj, coilName, value)
             coilName = obj.checkCoilExistence(coilName);
             obj.coils.(coilName).setCurrent(value);
-            obj.makeFalse_isElementDataAssigned;
+            if obj.isElementDataAssigned
+                % applying current of excitation matrices
+                coilNames = fieldnames(obj.coils);
+
+                for i = 1:numel(coilNames)
+
+                    % get coil pointer
+                    cptr = obj.coils.(coilNames{i});
+
+                    for j = 1:cptr.NcoilArms
+
+                        % get coil arm pointer
+                        mzptr = obj.m.mzs.(cptr.coilArms(j));
+
+                        % set coil arm current density
+                        obj.edata.InternalCurrentDensity(:,obj.m.ezi(:, mzptr.zi)) = ...
+                            mzptr.props.direction * mzptr.props.turns * cptr.current * obj.units.k_current ...
+                            / (mzptr.getArea * obj.units.k_length^2);
+
+                    end
+
+                end
+            end
+
         end
 
         % definition of excitation that can be current or current density
@@ -663,7 +686,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
                     ye = ye + mze;
                     mzc = mzptr.getAreaOfElements' .* ppval(mptr.wcH, ppval(mptr.HB, Bk));
                     mzc= sum(sum(mzc))/3;
-                    yc = yc + mzc;                  
+                    yc = yc + mzc;
 
                 end
 
@@ -756,7 +779,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
             [Bx, By] = obj.getBxByOnPoints(x,y);
             Bx(isnan(Bx)) = 0;
             By(isnan(By)) = 0;
-            t = [x2-x1, y2-y1]; 
+            t = [x2-x1, y2-y1];
             t = t/norm(t);
             n = [-t(2),t(1)];
             Bt = Bx*t(1) + By*t(2);
@@ -896,10 +919,10 @@ classdef emdlab_solvers_ms2d_tlcp < handle
             eIndices = eIndices | (ismember(obj.m.edges(:, 4),zi) & (~ismember(obj.m.edges(:, 3),zi)));
             eIndices = eIndices & (~ obj.m.bedges);
             eIndices = find(eIndices);
-            
-            torque = 0;            
+
+            torque = 0;
             for eIndex = eIndices'
-    
+
                 p1Index = obj.m.edges(eIndex,1);
                 p2Index = obj.m.edges(eIndex,2);
 
@@ -931,7 +954,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
 
                 Bx2 = obj.results.BxnSmooth(index2, elIndex);
                 By2 = obj.results.BynSmooth(index2, elIndex);
-                
+
                 Txx = (0.5/mu0) * (Bx1^2 - By1^2);
                 Txy_yx = (1/mu0) * (Bx1 * By1);
                 Tyy = (0.5/mu0) * (By1^2 - Bx1^2);
@@ -1266,8 +1289,8 @@ classdef emdlab_solvers_ms2d_tlcp < handle
                     'EdgeColor', 'none', 'parent', ax);
             elseif obj.m.isTL6
                 patch('faces', obj.m.cl(:, [1,4,2,5,3,6]), 'vertices', obj.m.nodes, ...
-                'FaceVertexCData', obj.results.A, 'FaceColor', 'interp', ...
-                'EdgeColor', 'none', 'parent', ax);
+                    'FaceVertexCData', obj.results.A, 'FaceColor', 'interp', ...
+                    'EdgeColor', 'none', 'parent', ax);
             else
                 error('Wrong element type');
             end
@@ -1313,7 +1336,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
                 t = reshape(t, 2, [])';
             else
                 error('Wrong element type');
-            end            
+            end
 
             % plot mesh wireframe
             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
@@ -1354,7 +1377,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
             end
             ampB = (1./obj.edata.MagneticReluctivity(:,ti))/(4*pi*1e-7);
             ampB = repmat(ampB,3,1);
-%             ampB = sqrt(obj.results.Bxn(:,ti).^2 + obj.results.Byn(:,ti).^2);
+            %             ampB = sqrt(obj.results.Bxn(:,ti).^2 + obj.results.Byn(:,ti).^2);
 
             % plot using patch function
             xdata = obj.m.nodes(:,1);
@@ -1552,7 +1575,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
                 t = reshape(t, 2, [])';
             else
                 error('Wrong element type');
-            end            
+            end
 
             % plot contour lines
             patch(ax, 'faces', t, 'vertices', c, 'edgecolor', 'k');
@@ -1610,7 +1633,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
                 t = reshape(t, 2, [])';
             else
                 error('Wrong element type');
-            end            
+            end
 
             % plot contour lines
             patch(ax, 'faces', t, 'vertices', c, 'edgecolor', 'k');
@@ -2467,7 +2490,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
 
             t = uitab(tgp_sub,'Title','Vector Potential');
             ax = axes(t, 'FontName', 'Helvetica', 'FontSize', 14, 'FontWeight', 'normal');
-            obj.plotAmag(ax);            
+            obj.plotAmag(ax);
 
         end
 

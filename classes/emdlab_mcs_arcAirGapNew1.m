@@ -47,6 +47,9 @@ classdef emdlab_mcs_arcAirGapNew1 < handle & emdlab_g2d_constants & matlab.mixin
 
         % moving boundary
         movingBoundary = 'inner';
+
+        imesh;
+        omesh;
         
     end
     
@@ -209,6 +212,16 @@ classdef emdlab_mcs_arcAirGapNew1 < handle & emdlab_g2d_constants & matlab.mixin
                 end
 
                 obj.m = emdlab_m2d_mm(f, p, ices);
+
+%                 tmp = obj.m.getCenterOfElements;
+%                 tmp = tmp - obj.center;
+%                 tmp = sqrt(sum(tmp.^2,2));
+%                 tmp = tmp<(obj.rin+obj.rout)/2;
+% 
+%                 obj.imesh = triangulation(obj.m.cl(tmp,:),obj.m.nodes);
+%                 obj.omesh = triangulation(obj.m.cl(~tmp,:),obj.m.nodes);
+% 
+%                 obj.imesh = emdlab_
                 return;
                 
             else
@@ -344,6 +357,22 @@ classdef emdlab_mcs_arcAirGapNew1 < handle & emdlab_g2d_constants & matlab.mixin
             
         end
         
+        function rotate(obj, varargin)
+            if strcmpi(obj.movingBoundary, 'inner')
+                obj.rotateInner(varargin{:});
+            else
+                obj.rotateOuter(varargin{:});
+            end
+        end
+
+%         function rotateSliding(obj, varargin)
+%             if strcmpi(obj.movingBoundary, 'inner')
+%                 obj.imesh.
+%             else
+%                 obj.rotateOuter(varargin{:});
+%             end
+%         end
+
     end
     
 end

@@ -1037,30 +1037,62 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % show global mesh
         function varargout = showm(obj, varargin)
 
-            [f,ax] = emdlab_flib_fax(varargin{:});
-%             title(ax,'Global mesh');
+            [f,ax] = emdlab_flib_fax(varargin{:});            
             obj.ggmesh;
-            mzNames = fieldnames(obj.mzs);            
+            mzNames = string(fieldnames(obj.mzs)');
 
-            for i = 1:numel(mzNames)
-                patch('Faces', obj.mzs.(mzNames{i}).cl, ...
-                    'Vertices', obj.mzs.(mzNames{i}).nodes, 'FaceColor', ...
+            for mzName = mzNames
+                plt = patch(ax,'Faces', obj.mzs.(mzName).cl, ...
+                    'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
                     'c', 'EdgeColor', [0.2, 0.2, 0.2], ...
-                    'FaceAlpha', 0.8, 'Parent', ax, 'ButtonDownFcn', @selectPatchCallbackGM);
+                    'FaceAlpha', 0.8, ...
+                    'HitTest','on','PickableParts','visible');
+                plt.UserData = mzName;
             end
 
             index = obj.edges(:, 3) ~= obj.edges(:, 4);
-            patch('Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 2, 'parent', ax);
+            patch(ax,'Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5,'HitTest','off','PickableParts','none');
 
             zoom on;
             axis(ax, 'off');
             axis(ax, 'equal');
             set(ax, 'clipping', 'off');
 
+            set(gcf,'WindowButtonMotionFcn',@hoverFcn);
+
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
             elseif nargout > 1, error('Too many output argument.');
+            end
+
+            function hoverFcn(src,~)
+                h = hittest(src);
+                for i = 1:numel(ax.Children)
+                    if isequal(h,ax.Children(i))
+                        if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                            e.Button = 1;
+                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
+                            return;
+                        end
+                    end
+                end
+                for i = 1:numel(ax.Children)
+                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                        if ischar(ax.Children(i).FaceColor)
+                            if strcmpi(ax.Children(i).FaceColor, 'c')
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.8);
+                                drawnow;
+                            end
+                        else
+                            if any(ax.Children(i).FaceColor ~= [0,1,1])
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.8);
+                                drawnow;
+                            end
+                        end
+                    end
+                end
+                title(ax,'');
             end
 
         end

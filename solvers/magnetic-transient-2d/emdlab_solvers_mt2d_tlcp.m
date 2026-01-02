@@ -1121,7 +1121,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
                     % mesh zone energy
                     Bk = sqrt(Bk2(eziptr)');
                     ye = ye + mzptr.getAreaOfElements' * ppval(mptr.weB, Bk);
-                    yc = yc + mzptr.getAreaOfElements' * ppval(mptr.wcH, ppval(mptr.HB, Bk));;
+                    yc = yc + mzptr.getAreaOfElements' * ppval(mptr.wcH, ppval(mptr.HB, Bk));
 
                 end
 

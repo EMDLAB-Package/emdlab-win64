@@ -545,7 +545,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             ax = axes(t);
             obj.plotRelativeError(ax);
 
-            t = uitab(tgp_sub,'Title','Energy Residual');
+            t = uitab(tgp_sub,'Title','Relative Energy Residual');
             ax = axes(t);
             obj.plotEnergyResidual(ax);
 
