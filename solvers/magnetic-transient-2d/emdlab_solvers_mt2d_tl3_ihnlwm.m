@@ -279,7 +279,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
         function rebuildKeMeFe(obj)
 
-            % Construction of [K], [M] and [Fm]
+            % Rebuild of [K], [M] and [Fm]
             tic, disp('-------------------------------------------------------');
 
             mzNames = fieldnames(obj.m.mzs);
@@ -351,7 +351,8 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             Jindex = obj.m.cl(:, Jindex)';
             obj.mtcs.K11 = sparse(Iindex, Jindex, obj.edata.MagneticReluctivity .* obj.m.mtcs.Ke);
             obj.mtcs.M11 = sparse(Iindex, Jindex, obj.edata.ElectricConductivity .* obj.m.mtcs.Me * obj.units.k_length^2);
-            disp('Construction of [K], [M], and [Fm] compeleted.');
+
+            disp('Rebuild of [K], [M], and [Fm] compeleted.');
             toc, disp('-------------------------------------------------------');
 
             obj.isNeededToRebuild = false;
@@ -1089,6 +1090,9 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
         function rotateMovingRegion(obj, movingRegionName, rotAngle, xc, yc)
 
+            % moving region rotation
+            tic, disp('-------------------------------------------------------');
+
             if nargin < 4
                 xc = 0;
                 yc = 0;
@@ -1120,6 +1124,9 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             mzptr.props.InternalCurrentDensity = zeros(1,mzptr.Ne);
             mzptr.props.MagnetizationX = zeros(1,mzptr.Ne);
             mzptr.props.MagnetizationY = zeros(1,mzptr.Ne);
+
+            disp('rotation compeleted.');
+            toc, disp('-------------------------------------------------------');
 
             % updateJIT for rotating mesh zones
 

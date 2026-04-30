@@ -77,4 +77,3 @@ s.setOddPeriodicBC(km',ks');
 s.assignEdata(20)
 s.solve;
 s.gui;
-

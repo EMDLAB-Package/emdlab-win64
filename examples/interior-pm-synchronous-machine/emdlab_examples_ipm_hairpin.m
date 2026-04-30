@@ -104,4 +104,3 @@ m.showg;
 m.showmzs;
 f = s.plotBmagF(14, 'rotor', 'stator');
 s.plotBrBtOnCircle(0, 0, gv_ISD/2-gv_g/2, 1000);
-

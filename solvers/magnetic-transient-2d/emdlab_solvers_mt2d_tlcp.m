@@ -177,18 +177,18 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
         function rotateMeshZones(obj, meshZoneNames, varargin)
 
-            tmp = zeros([],1);
+            tmp = cell(numel(meshZoneNames),1);
             for i = 1:numel(meshZoneNames)
                 mzptr = obj.m.mzs.(meshZoneNames(i));
 
                 if mzptr.props.isMoving
                     obj.rotateMeshZone(meshZoneNames(i), varargin{:});
-                    tmp = [tmp;mzptr.l2g];
+                    tmp{i} = mzptr.l2g;
                     [mzptr.props.JIT,~] = emdlab_m2d_tl3_evalJIT(mzptr.cl, mzptr.nodes);
                 end
 
             end
-            tmp = unique(tmp);
+            tmp = unique(cell2mat(tmp));
             obj.m.nodes(tmp,:) = emdlab_g2d_rotatePoints(obj.m.nodes(tmp,:),varargin{:});           
 
         end

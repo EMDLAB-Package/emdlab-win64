@@ -20,7 +20,7 @@ gv_bs0 = 1.5;
 gv_hs0 = 0.6;
 gv_tta = 25;
 gv_Dsh = 14;
-gv_dm = 1.5;
+gv_dm = 3;
 gv_g = 0.5;
 gv_embrace = 0.85;
 gv_ra = 20;
@@ -99,3 +99,4 @@ s.solve(20);
 s.plotBrBtOnCircle(0, 0, gv_ISD/2-gv_g/2, 1000);
 s.plotBmagF;
 clim([0,1.8])
+m.showm

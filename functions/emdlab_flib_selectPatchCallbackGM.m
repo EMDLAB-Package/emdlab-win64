@@ -10,14 +10,14 @@ function emdlab_flib_selectPatchCallbackGM(h, e)
         ax = h.Parent;
 
         % patch
-        plt = ax.findobj('FaceAlpha', 1);
+        plt = ax.findobj('FaceColor', 'r');
 
         if ~isempty(plt)
-            set(plt, 'FaceColor', 'c', 'FaceAlpha', 0.8);
+            set(plt, 'FaceColor', 'c');
         end
 
-        set(h, 'FaceColor', 'r', 'FaceAlpha', 1);
-        title(ax, h.UserData);
+        set(h, 'FaceColor', 'r');
+        title(ax, h.UserData,'Interpreter','none');
         set(gcf, 'Name', h.UserData)
         drawnow;
     end

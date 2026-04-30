@@ -85,7 +85,7 @@ fb_index = setdiff(m.getfbn,index);
 s.setOddPeriodicBC(km,ks);
 
 % solve and plot results
-s.solve
+s.solve;
 s.gui;
 
 

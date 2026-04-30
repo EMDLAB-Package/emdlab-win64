@@ -1,5 +1,5 @@
 %{
-note: calculation of the rotor field of aa outer rotor BLDC motor
+note: rotor field calculation for an outer-rotor BLDC motor
 %}
 
 % initialization
@@ -9,21 +9,21 @@ close all;
 addpath(genpath('C:\emdlab-win64'));
 
 % dimensions & parameters
-gv_ISD = 50;
-gv_OSD = 85;
-gv_Lstk = 25;
-gv_Ns = 24;
-gv_p = 20;
-gv_wst = 4.5;
-gv_dss = 10;
-gv_bs0 = 3;
-gv_hs0 = 1;
-gv_tta = 30;
-gv_ORD = 96;
-gv_dm = 1.5;
-gv_g = 0.7;
-gv_embrace = 0.89;
-gv_Hc = -922100;
+gv_ISD = 50; % inner stator diamater [mm]
+gv_OSD = 85; % outer stator diameter [mm]
+gv_Lstk = 25; % stack length [mm]
+gv_Ns = 24; % number of stator slots
+gv_p = 20; % number of rotor poles
+gv_wst = 4.5; % width of stator tooth [mm]
+gv_dss = 10; % depth of stator slot [mm]
+gv_bs0 = 3; % stator slot opening [mm] 
+gv_hs0 = 1; % stator slot opening height [mm]
+gv_tta = 30; % tooth tip angle of stator slot [deg]
+gv_ORD = 96; % outer rotor diameter [mm]
+gv_dm = 1.5; % magnet depth [mm]
+gv_g = 0.7; % airgap thickness [mm]
+gv_embrace = 0.89; % magnet embrace ratio -> lower than one
+gv_Hc = -922100; % magnet coercive force [A/m]
 
 % define geometry data base
 g = emdlab_g2d_db;

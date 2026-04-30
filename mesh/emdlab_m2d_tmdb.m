@@ -1037,7 +1037,11 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % show global mesh
         function varargout = showm(obj, varargin)
 
-            [f,ax] = emdlab_flib_fax(varargin{:});            
+            [f,ax] = emdlab_flib_fax(varargin{:}); 
+            if isa(f,"matlab.ui.Figure")
+                f.MenuBar = "none";
+            end
+            
             obj.ggmesh;
             mzNames = string(fieldnames(obj.mzs)');
 
@@ -1045,7 +1049,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 plt = patch(ax,'Faces', obj.mzs.(mzName).cl, ...
                     'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
                     'c', 'EdgeColor', [0.2, 0.2, 0.2], ...
-                    'FaceAlpha', 0.8, ...
+                    'FaceAlpha', 0.7, ...
                     'HitTest','on','PickableParts','visible');
                 plt.UserData = mzName;
             end
@@ -1054,10 +1058,16 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             patch(ax,'Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
                 'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5,'HitTest','off','PickableParts','none');
 
-            zoom on;
-            axis(ax, 'off');
+            zoom on;box on;
+            ax.Color = [0.86,0.86,0.86];
+            grid on;
+            grid minor;
             axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
+            ax.Toolbar.Visible = 'off';
+            ax.GridColor      = [0.7 0.7 0.7];
+            ax.MinorGridColor = [0.5 0.5 0.5];
+            ax.GridAlpha      = 1;
+            ax.MinorGridAlpha = 1;
 
             set(gcf,'WindowButtonMotionFcn',@hoverFcn);
 
@@ -1081,18 +1091,112 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                     if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
                         if ischar(ax.Children(i).FaceColor)
                             if strcmpi(ax.Children(i).FaceColor, 'c')
-                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.8);
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.7);
                                 drawnow;
                             end
                         else
                             if any(ax.Children(i).FaceColor ~= [0,1,1])
-                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.8);
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.7);
                                 drawnow;
                             end
                         end
                     end
                 end
                 title(ax,'');
+            end
+
+        end
+
+        function varargout = showgg(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:}); 
+            if isa(f,"matlab.ui.Figure")
+                f.MenuBar = "none";
+            end
+            
+            obj.ggmesh;
+            mzNames = string(fieldnames(obj.mzs)');
+
+            for mzName = mzNames
+                plt = patch(ax,'Faces', obj.mzs.(mzName).cl, ...
+                    'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
+                    'c', 'EdgeColor', 'none', ...
+                    'FaceAlpha', 0.5, ...
+                    'HitTest','on','PickableParts','visible');
+                plt.UserData = mzName;
+            end
+
+            index = obj.edges(:, 3) ~= obj.edges(:, 4);
+            patch(ax,'Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5,'HitTest','off','PickableParts','none');
+
+            zoom on;box on;
+            ax.Color = [0.86,0.86,0.86];
+            grid on;
+            grid minor;
+            axis(ax, 'equal');
+            ax.Toolbar.Visible = 'off';
+            ax.GridColor      = [0.4 0.4 0.4];
+            ax.MinorGridColor = [0.2 0.2 0.2];
+            ax.GridAlpha      = 1;
+            ax.MinorGridAlpha = 1;
+
+            set(gcf,'WindowButtonMotionFcn',@hoverFcn);
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+            function hoverFcn(src,~)
+                h = hittest(src);
+                for i = 1:numel(ax.Children)
+                    if isequal(h,ax.Children(i))
+                        if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                            e.Button = 1;
+                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
+                            updateXLabel;
+                            return;
+                        end
+                    end
+                end
+                for i = 1:numel(ax.Children)
+                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                        if ischar(ax.Children(i).FaceColor)
+                            if strcmpi(ax.Children(i).FaceColor, 'c')
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.5);
+                                drawnow;
+                            end
+                        else
+                            if any(ax.Children(i).FaceColor ~= [0,1,1])
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.5);
+                                drawnow;
+                            end
+                        end
+                    end
+                end
+                title(ax,'');
+                updateXLabel;
+
+                function updateXLabel()
+                    % Get cursor position in axes units
+                    cp = ax.CurrentPoint;
+                    x = cp(1,1);
+                    y = cp(1,2);
+
+                    % Check if cursor is inside axes limits
+                    xl = ax.XLim;
+                    yl = ax.YLim;
+
+                    if x < xl(1) || x > xl(2) || y < yl(1) || y > yl(2)
+                        return
+                    end
+
+                    % Update xlabel
+                    xlabel(ax, sprintf('X = %.2f ,  Y = %.2f ,  R = %.2f ,  D = %.2f',...
+                        x, y, norm([x,y]), 2*norm([x,y])), 'Interpreter','none');
+                end
+
             end
 
         end
@@ -2749,11 +2853,12 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             
         end
 
-        function varargout = aux_addCircularAirGapInterface(obj, mzName, xci, yci, ri, xco, yco, ro, Nlayers, movingBoundary)
+        function varargout = aux_addCircularAirGapInterface(obj, mzName, xci, yci, ri, xco, yco, ro, Nlayers, movingBoundary, type)
 
             % set defaults
             if nargin<9, Nlayers = 1; end
             if nargin<10, movingBoundary = 'inner'; end
+            if nargin<11, type = 'remesh1'; end
 
             % generate global mesh to find unique indices
             obj.ggmesh;
@@ -2772,6 +2877,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % add to interface mesh zones
             obj.imzs.(mzName) = agm;
             obj.mzs.(mzName).props.isInterface = true;
+            obj.mzs.(mzName).props.interfaceType = type;
 
             if nargout == 1, varargout{1} = agm; end
             
@@ -2791,6 +2897,33 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % adding air gap to mesh zones
             obj.addmz(name, agm.m);
             obj.setMeshZoneColor(name,0,255,255);
+
+            if nargout == 1, varargout{1} = agm; end
+
+        end
+
+        function varargout = aux_addArcAirGapInterface(obj, mzName, xc, yc, ri, ro, Nlayers, movingBoundary)
+
+            % set defaults
+            if nargin<7, Nlayers = 1; end
+            if nargin<8, movingBoundary = 'inner'; end
+
+            obj.ggmesh;
+            kr = obj.getfbnioc([xc, yc],ri);
+            ks = obj.getfbnioc([xc, yc],ro);
+            rps = obj.nodes(kr,:);
+            sps = obj.nodes(ks,:);
+
+            % getting a moving contact object
+            agm = emdlab_mcs_arcAirGapNew1([xc,yc], rps, sps, Nlayers, movingBoundary);
+            
+            % adding air gap to mesh zones
+            obj.addmz(mzName, agm.m);
+            obj.setMeshZoneColor(mzName,0,255,255);
+
+            % add to interface mesh zones
+            obj.imzs.(mzName) = agm;
+            obj.mzs.(mzName).props.isInterface = true;
 
             if nargout == 1, varargout{1} = agm; end
 

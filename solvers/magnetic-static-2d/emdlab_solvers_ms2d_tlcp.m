@@ -1924,10 +1924,8 @@ classdef emdlab_solvers_ms2d_tlcp < handle
 
         function plotBvecOnCircle(obj, varargin)
 
-            [bx, by, x, y] = obj.getBxByOnCircle(varargin{:});
-            close all
-            quiver(x, y, bx, by);
-            axis off equal;
+            [bx, by, x, y] = obj.getBxByOnCircle(varargin{:});            
+            quiver(x, y, bx, by, 2);
 
         end
 

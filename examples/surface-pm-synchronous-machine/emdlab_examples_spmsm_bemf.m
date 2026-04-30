@@ -113,11 +113,12 @@ s.solveForInitialConditions;
 for i = 1:Nt    
     % calculate torque
     te(i) = s.evalTorqueByArkkio('ag', gv_g);
-    te_mst(i) = s.evalTorqueByMST3(0, 0, gv_ISD/2-gv_g/2, gv_g) ;
+    te_mst(i) = s.evalTorqueByMST3(0, 0, gv_ISD/2-gv_g/2, gv_g, 500) ;
     % rotate moving region
     s.rotateMovingRegion('moving_1', wm*timeStep);
     s.solveForOneTimeStep(timeStep);
 end
+s.forcePeriodicCoilVoltages;
 % plot results
 s.plotCoilFluxLinkages;
 s.plotCoilInducedVoltages;

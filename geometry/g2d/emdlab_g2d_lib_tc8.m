@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % tooth & coil geometry template: constant slot width
 
-function emdlab_g2d_lib_tc5(g, ID, OD, Nslots, wslot, dslot, bs0, hs0, tta, name1, name2, name3)
+function emdlab_g2d_lib_tc8(g, ID, OD, Nslots, wslot, dslot, bs0, hs0, tta, name1, name2, name3)
 
 % % input arguments check
 % arguments
@@ -36,31 +36,32 @@ if nargin == 0
 end
 
 % check unfeasible geometries
-if (ID/2+dslot) > OD/2
-    error('OD/2 must be higher than (ID/2+ds)');
+if (OD/2-dslot) < ID/2
+    error('ID/2 must be lower than (OD/2-dslot)');
 end
 
-gamma_so = 2*asin(bs0/ID);
+gamma_so = 2*asin(bs0/OD);
 alpha_s = 2*pi/Nslots;
 tta = tta * pi/180;
 
 p1 = g.addPoint(0,0);
-[p2,p2h] = g.addPoint((ID/2) * cos(gamma_so/2), (ID/2) * sin(gamma_so/2));
-[p3, p3h] = g.addPoint(p2h.x + hs0, p2h.y);
-[xi,yi] = g.getIntersectionLineLine(p3h.x, p3h.y, cos(pi/2-tta), sin(pi/2-tta),0,wslot/2,1,0);
+[p2,p2h] = g.addPoint((OD/2) * cos(gamma_so/2), (OD/2) * sin(gamma_so/2));
+[p3, p3h] = g.addPoint(p2h.x - hs0, p2h.y);
+[xi,yi] = g.getIntersectionLineLine(p3h.x, p3h.y, cos(pi/2+tta), sin(pi/2+tta),0,wslot/2,1,0);
 [p4,p4h] = g.addPoint(xi,yi);
-p5 = g.addPoint(ID/2 + dslot, wslot/2);
-p6 = g.addPoint(ID/2 + dslot, 0);
-p7 = g.addPoint(OD/2,0);
-p8 = g.addPoint((OD/2)*cos(alpha_s/2), (OD/2)*sin(alpha_s/2));
-p9 = g.addPoint((ID/2)*cos(alpha_s/2), (ID/2)*sin(alpha_s/2));
-p10 = g.addPoint(ID/2,0);
+p5 = g.addPoint(OD/2 - dslot + wslot/2, wslot/2);
+p6 = g.addPoint(OD/2 - dslot, 0);
+p7 = g.addPoint(ID/2,0);
+p8 = g.addPoint((ID/2)*cos(alpha_s/2), (ID/2)*sin(alpha_s/2));
+p9 = g.addPoint((OD/2)*cos(alpha_s/2), (OD/2)*sin(alpha_s/2));
+p10 = g.addPoint(OD/2,0);
 p11 = g.addPoint(p4h.x,0);
+p12 = g.addPoint(OD/2 - dslot + wslot/2, 0);
 
 e1 = g.addSegment(p2,p3);
 e2 = g.addSegment(p3,p4);
 e3 = g.addSegment(p4,p5);
-e4 = g.addSegment(p5,p6);
+e4 = g.addArc(p12,p5,p6,1);
 e5 = g.addSegment(p6,p7);
 e6 = g.addArc(p1,p7,p8,1);
 e7 = g.addSegment(p8,p9);
@@ -70,9 +71,9 @@ e10 = g.addSegment(p10,p11);
 e11 = g.addSegment(p11,p6);
 e12 = g.addSegment(p4,p11);
 
-l1 = g.addLoop(e1,e2,e3,e4,e5,e6,e7,e8);
-l2 = g.addLoop(e11,-e4,-e3,e12);
-l3 = g.addLoop(e10,-e12,-e2,-e1,e9);
+l1 = g.addLoop(-e8,-e7,-e6,-e5,-e4,-e3,-e2,-e1);
+l2 = g.addLoop(-e12,e3,e4,-e11);
+l3 = g.addLoop(e1,e2,e12,-e10,-e9);
 
 g.addFace(name1, l1);
 g.addFace(name2, l2);

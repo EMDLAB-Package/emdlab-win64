@@ -1,5 +1,5 @@
 %{
-note: back-emf simulation of a surface-mounted PMSM
+note: full-load current-fed fixed-speed simulation of an inner-rotor bldc motor
 %}
 
 % initialization

@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % tooth & coil geometry template: constant slot width
 
-function emdlab_g2d_lib_tc11(g, ID, OD, Nslots, dslot, ratio, name1, name2)
+function emdlab_g2d_lib_tc12(g, ID, OD, Nslots, dslot, ratio, name1, name2)
 
 % % input arguments check
 % arguments
@@ -32,21 +32,21 @@ if nargin == 0
 end
 
 % check unfeasible geometries
-if (ID/2+dslot) > OD/2
-    error('OD/2 must be higher than (ID/2+ds)');
+if (OD/2-dslot) < ID/2
+    error('ID/2 must be lower than (OD/2-dslot)');
 end
 
 alpha_s = 2*pi/Nslots;
 gamma_so = ratio * alpha_s;
 
 p1 = g.addPoint(0,0);
-p2 = g.addPoint(ID/2,0);
-p3 = g.addPoint(ID/2 + dslot, 0);
-p4 = g.addPoint(OD/2, 0);
-p5 = g.addPoint((OD/2)*cos(alpha_s/2), (OD/2)*sin(alpha_s/2));
-p6 = g.addPoint((ID/2)*cos(alpha_s/2), (ID/2)*sin(alpha_s/2));
-p7 = g.addPoint((ID/2)*cos(gamma_so/2), (ID/2)*sin(gamma_so/2));
-p8 = g.addPoint((ID/2 + dslot)*cos(gamma_so/2), (ID/2 + dslot)*sin(gamma_so/2));
+p2 = g.addPoint(OD/2,0);
+p3 = g.addPoint(OD/2 - dslot, 0);
+p4 = g.addPoint(ID/2, 0);
+p5 = g.addPoint((ID/2)*cos(alpha_s/2), (ID/2)*sin(alpha_s/2));
+p6 = g.addPoint((OD/2)*cos(alpha_s/2), (OD/2)*sin(alpha_s/2));
+p7 = g.addPoint((OD/2)*cos(gamma_so/2), (OD/2)*sin(gamma_so/2));
+p8 = g.addPoint((OD/2 - dslot)*cos(gamma_so/2), (OD/2 - dslot)*sin(gamma_so/2));
 
 e1 = g.addSegment(p2,p3);
 e2 = g.addSegment(p3,p4);
@@ -57,8 +57,8 @@ e6 = g.addSegment(p7,p8);
 e7 = g.addArc(p1,p8,p3,0);
 e8 = g.addArc(p1,p7,p2,0);
 
-l1 = g.addLoop(e2,e3,e4,e5,e6,e7);
-l2 = g.addLoop(e1,-e7,-e6,e8);
+l1 = g.addLoop(-e7,-e6,-e5,-e4,-e3,-e2);
+l2 = g.addLoop(-e1,-e8,e6,e7);
 
 g.addFace(name1, l1);
 g.addFace(name2, l2);
