@@ -28,6 +28,9 @@ https://youtu.be/ifwybm4r2_0
 **For academic use, cite this paper:**
 https://www.sciencedirect.com/science/article/pii/S2352711025004121
 
+**This paper presents the second-order magnetic-static solver of EMDLAB:**
+https://link.springer.com/article/10.1007/s00366-026-02336-y
+
 ### How to use Gmsh as a mesh generator in EMDLAB:
 In addition to the built-in EMDLAB mesh generators, it is also possible to use Gmsh as an external mesh generator.
 
