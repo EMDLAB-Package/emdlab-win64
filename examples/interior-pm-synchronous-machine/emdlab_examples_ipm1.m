@@ -25,7 +25,7 @@ gv_dm = 4;
 gv_gap = 0.5;
 gv_wtrib = 1;
 gv_wrrib = 1;
-gv_bm0 = 3;
+gv_bm0 = 4;
 gv_Hc = -922100;
 
 % define geometry data base
@@ -33,7 +33,7 @@ g = emdlab_g2d_db;
 
 % add geometry from library
 emdlab_g2d_lib_tc21(g, gv_ISD, gv_OSD, gv_Ns, gv_wst, gv_dss, gv_bs0, gv_hs0, gv_tta, gv_bw0, 'stator', 'sc', 'sap');
-emdlab_g2d_lib_rm_ipm1(g,gv_Dsh,gv_ISD-2*gv_gap,gv_p,gv_dm,gv_wtrib,gv_wrrib,gv_bm0,'rotor','magnet','rap')
+emdlab_g2d_lib_rm_ipm2(g,gv_Dsh,gv_ISD-2*gv_gap,gv_p,gv_dm,gv_wtrib,gv_wrrib,gv_bm0,'rotor','magnet','rap')
 
 % setting the wireframe mesh by mesh size function
 f_mesh = @(r) interp1([gv_Dsh/2,gv_ISD/2,gv_OSD/2], [3,gv_gap/2,3], r, 'linear','extrap');
