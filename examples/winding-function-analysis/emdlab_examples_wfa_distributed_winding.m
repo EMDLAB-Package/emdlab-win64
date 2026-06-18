@@ -29,7 +29,7 @@ g.addFace('rotor', g.addAnnularSectorLoop(gv_Dsh/2,gv_ISD/2-gv_gap,0,pi/6));
 g.setFaceColor('rotor',200,200,200);
 
 % setting the wireframe mesh by mesh size function
-f_mesh = @(r) interp1([gv_Dsh/2,gv_ISD/2-gv_gap,gv_OSD/2], [4,gv_gap,3], r, 'linear','extrap');
+f_mesh = @(r) interp1([gv_Dsh/2,gv_ISD/2-gv_gap,gv_OSD/2], [3,gv_gap,3], r, 'linear','extrap');
 g.setMeshLengthByRadialFunction(f_mesh);
 
 % mesh generation
