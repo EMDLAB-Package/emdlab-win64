@@ -22,11 +22,11 @@ gv_tta = 15;
 gv_Dsh = 28;
 gv_dm = 3;
 gv_gap = 1;
+gv_embrace = 0.89;
+gv_Hc = -922100;
 gv_Ntc = 3;
 gv_Is = 180;
 gv_rpm = 1500;
-gv_embrace = 0.89;
-gv_Hc = -922100;
 
 % define geometry data base
 g = emdlab_g2d_db;

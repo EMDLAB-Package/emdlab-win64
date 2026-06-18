@@ -57,6 +57,9 @@ classdef emdlab_g2d_db < handle
                 if isa(varargin{1},'emdlab_g2d_point')
                     x = varargin{1}.x;
                     y = varargin{1}.y;
+                elseif isvector(varargin{1}) && isnumeric(varargin{1}) && (length(varargin{1}) == 2)
+                    x = varargin{1}(1);
+                    y = varargin{1}(2);
                 else
                     throw(MException('', 'Wrong input type, it must be <emdlab_g2d_point> type.'));
                 end
@@ -997,34 +1000,51 @@ classdef emdlab_g2d_db < handle
         end
 
         %% edge edits
-        function newEdgeIndex = splitEdge(obj, edgeIndex, splitRatio)
+        function indicesOfNewEdges = splitEdge(obj, edgeIndex, splitRatio)
+
+            % splitRatio is a vector of ratios
+            if any(splitRatio >= 1) || any(splitRatio <= 0)
+                error('All split ratios must be between 0 and 1.');
+            end
 
             if sum(splitRatio) > 1
                 error('The summation of the split ratio mast be lower than one.');
             end
+
+            % get edge pointer
             eptr = obj.edges(edgeIndex).ptr;
 
-            newEdgeIndex(1) = edgeIndex;
+            % vector containing edge indicies
+            indicesOfNewEdges = zeros(1,length(splitRatio)+1);
+            indicesOfNewEdges(1) = edgeIndex;
+            indicesOfNewPoints = zeros(1,length(splitRatio));
 
+            % detect edge type and apply proper splits
             switch class(eptr)
+
                 case 'emdlab_g2d_segment'
 
+                    % get index of edge end point
                     p1Index = obj.getPointIndexByTag(eptr.p1.tag);
+
+                    % calculate new points to split the edge
                     newp = eptr.p0.getVector;
                     vec = eptr.getUnitVector * eptr.getLength;
-                    pnewIndex = [];
                     for i = 1:length(splitRatio)
                         newp = newp + splitRatio(i) * vec;
-                        pnewIndex(end+1) = obj.addPoint(newp(1),newp(2));
-
+                        indicesOfNewPoints(i) = obj.addPoint(newp(1),newp(2));
                     end
 
-                    eptr.p1 = obj.points(pnewIndex(1));
+                    % modify the first edge end point
+                    eptr.p1 = obj.points(indicesOfNewPoints(1));
+
+                    % add new edges
                     for i = 1:length(splitRatio)-1
-                        newEdgeIndex(end+1) = obj.addSegment(pnewIndex(i),pnewIndex(i+1));
+                        indicesOfNewEdges(i+1) = obj.addSegment(indicesOfNewPoints(i),indicesOfNewPoints(i+1));
                     end
 
-                    newEdgeIndex(end+1) = obj.addSegment(pnewIndex(end),p1Index);
+                    % add last edge
+                    indicesOfNewEdges(end) = obj.addSegment(indicesOfNewPoints(end),p1Index);
 
             end
 
@@ -1380,12 +1400,23 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function varargout = add3PointCornerRectangleLoop(obj, x0, y0, x1, y1, x2, y2)
+        function varargout = add3PointCornerRectangleLoop(obj, x0, y0, x1, y1, h)
+
+            % check for positive h
+            if h < 0
+                error('height <h> must be a positive nonzero number.');
+            end
+
+            % horizontal vector: width vector
+            uw = [x1,y1] - [x0,y0];
+
+            % vertical vector: height vector
+            uh = [-uw(2), uw(1)]; uh = h * uh/norm(uh);
 
             p1Index = obj.addPoint(x0,y0);
-            p2Index = obj.addPoint(x0+w,y0);
-            p3Index = obj.addPoint(x0+w,y0+h);
-            p4Index = obj.addPoint(x0,y0+h);
+            p2Index = obj.addPoint(x1,y1);
+            p3Index = obj.addPoint(x1+uh(1),y1+uh(2));
+            p4Index = obj.addPoint(x0+uh(1),y0+uh(2));
 
             e1Index = obj.addSegment(p1Index, p2Index);
             e2Index = obj.addSegment(p2Index, p3Index);
@@ -1404,12 +1435,23 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function varargout = add3PointCenterRectangleLoop(obj, x0, y0, w, h)
+        function varargout = add3PointCenterRectangleLoop(obj, x0, y0, x1, y1, h)
 
-            p1Index = obj.addPoint(x0,y0);
-            p2Index = obj.addPoint(x0+w,y0);
-            p3Index = obj.addPoint(x0+w,y0+h);
-            p4Index = obj.addPoint(x0,y0+h);
+            % check for positive h
+            if h < 0
+                error('height <h> must be a positive nonzero number.');
+            end
+
+            % horizontal vector: width vector
+            uw = 2*([x1,y1] - [x0,y0]);
+
+            % vertical vector: height vector
+            uh = [-uw(2), uw(1)]; uh = h * uh/norm(uh);
+
+            p1Index = obj.addPoint([x0,y0] - uw/2 - uh/2);
+            p2Index = obj.addPoint([x0,y0] + uw/2 - uh/2);
+            p3Index = obj.addPoint([x0,y0] + uw/2 + uh/2);
+            p4Index = obj.addPoint([x0,y0] - uw/2 + uh/2);
 
             e1Index = obj.addSegment(p1Index, p2Index);
             e2Index = obj.addSegment(p2Index, p3Index);
@@ -2934,6 +2976,13 @@ classdef emdlab_g2d_db < handle
                     yi(end+1,1) = py;
                 end
             end
+        end
+
+        %% point distance from edge objects
+        function d = getPointDistanceFromLine(xp, yp, x0, y0, ux, uy)
+            u = [ux,uy]; u = u/norm(u);
+            p0p = [xp,yp] - [x0,y0];
+            d = norm(p0p - dot(p0p,u) * u);
         end
 
     end

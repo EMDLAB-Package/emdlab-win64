@@ -755,8 +755,6 @@ classdef emdlab_solvers_ms2d_tlcp < handle
                 y = y + mzptr.props.direction * mzptr.props.turns * obj.evalMeshZoneFluxLinkage(cptr.coilArms(i));
             end
 
-            cptr.fluxLinkage = y;
-
         end
 
         %% post-proccessing: torque and force calculations
