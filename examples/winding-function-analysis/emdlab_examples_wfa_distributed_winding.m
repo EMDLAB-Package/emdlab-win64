@@ -81,5 +81,5 @@ s.setAzBC(m.getfbn, 0);
 s.solve;
 
 % visualize solution
-s.gui;
+s.plotBmagF;
 s.plotBrBtOnCircle(0, 0, gv_ISD/2-gv_gap/2, 1000);
