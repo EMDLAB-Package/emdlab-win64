@@ -14,9 +14,9 @@ gv_ISD = 150;
 gv_OSD = 250;
 gv_Ns = 18;
 gv_p = 20;
-gv_wss = 12;
-gv_dss = 50;
-gv_dsy = 7;
+gv_wss = 14;
+gv_dss = 40;
+gv_dsy = 10;
 gv_bs0 = 5;
 gv_hs0 = 1.5;
 gv_tta = 25;
@@ -24,7 +24,7 @@ gv_Ntc = 85;
 gv_g = 1;
 gv_Iph = 1.9;
 gv_Nfb = 4;
-gv_paperT = 0.5;
+gv_paperT = 1;
 gv_bw0 = 2;
 gv_dm = 6;
 gv_dry = 6;
@@ -43,7 +43,7 @@ gv_taup = gv_L/gv_p;
 g = emdlab_g2d_db;
 
 % add geometries from templates
-emdlab_g2d_lib_tc51(g,gv_g/2,gv_wst,gv_wss,gv_dss,gv_dsy,gv_bs0,gv_hs0,gv_tta,gv_paperT,gv_bw0,'stator','sc','sap');
+emdlab_g2d_lib_tc51(g,gv_wst,gv_wss,gv_dsy,gv_dss,gv_bs0,gv_hs0,gv_tta,0,gv_g/2+gv_dss+gv_dsy,1,'stator','sc','sap');
 emdlab_g2d_lib_rm_spm51(g,-gv_g/2,gv_dm,gv_dry,gv_taup,gv_embrace,'rotor','magnet','rap');
 
 % setting the wireframe mesh by mesh size function
