@@ -10,13 +10,13 @@ close all;
 addpath(genpath('C:\emdlab-win64'));
 
 % design variables
-gv_ISD = 150;
-gv_OSD = 250;
-gv_Ns = 18;
-gv_p = 20;
+gv_ISD = 80;
+gv_OSD = 140;
+gv_Ns = 12;
+gv_p = 10;
 gv_wss = 14;
-gv_dss = 40;
-gv_dsy = 10;
+gv_dss = 30;
+gv_dsy = 8;
 gv_bs0 = 5;
 gv_hs0 = 1.5;
 gv_tta = 25;
@@ -27,7 +27,7 @@ gv_Nfb = 4;
 gv_paperT = 1;
 gv_bw0 = 2;
 gv_dm = 6;
-gv_dry = 6;
+gv_dry = 8;
 gv_embrace = 0.8;
 gv_Hc = -922100;
 
@@ -43,11 +43,11 @@ gv_taup = gv_L/gv_p;
 g = emdlab_g2d_db;
 
 % add geometries from templates
-emdlab_g2d_lib_tc51(g,gv_wst,gv_wss,gv_dsy,gv_dss,gv_bs0,gv_hs0,gv_tta,0,gv_g/2+gv_dss+gv_dsy,1,'stator','sc','sap');
-emdlab_g2d_lib_rm_spm51(g,-gv_g/2,gv_dm,gv_dry,gv_taup,gv_embrace,'rotor','magnet','rap');
+emdlab_g2d_lib_tc103(g,gv_wst,gv_wss,gv_dsy,gv_dss,gv_bs0,gv_hs0,gv_tta,3,0,gv_g/2+gv_dss+gv_dsy,1,'stator','sc','sap');
+emdlab_g2d_lib_rm_spm102(g,gv_taup,gv_dry,gv_dm,gv_embrace,0,-gv_dm-gv_dry-gv_g/2,0,'rotor','magnet','rap');
 
 % setting the wireframe mesh by mesh size function
-f_mesh = @(y) interp1([-gv_g-gv_dm-gv_dry,0,gv_g+gv_dss+gv_dsy],[gv_dry/2,gv_g,gv_dsy/2],y, 'linear','extrap');
+f_mesh = @(y) interp1([-gv_g-gv_dm-gv_dry,0,gv_g+gv_dss+gv_dsy],[gv_dry/3,gv_g,gv_dsy/3],y, 'linear','extrap');
 g.setMeshLengthByYFunction(f_mesh);
 
 % mesh generation

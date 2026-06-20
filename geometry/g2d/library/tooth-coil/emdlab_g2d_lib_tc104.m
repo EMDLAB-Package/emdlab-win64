@@ -1,23 +1,23 @@
 % stator tooth & coil
 
-function emdlab_g2d_lib_tc46(g, wst, wss, dss, dsy, bs0, hs0, tta, yShift, name1, name2, name3)
+function emdlab_g2d_lib_tc104(g, yShift, wst, wss, dss, dsy, bs0, hs0, tta, paperT, bw0, name1, name2, name3)
 
-% input arguments check
-arguments
-
-    g (1,1) emdlab_g2d_db
-    wst (1,1) double {mustBePositive}
-    wss (1,1) double {mustBePositive}
-    dss (1,1) double {mustBePositive}
-    dsy (1,1) double {mustBePositive}
-    bs0 (1,1) double {mustBePositive}
-    hs0 (1,1) double {mustBePositive}
-    tta (1,1) double {mustBePositive}
-    yShift (1,1) double {mustBePositive}
-    name1 (1,:) char;
-    name2 (1,:) char;
-    name3 (1,:) char;
-
+% defult arguments for debug
+if nargin == 0
+    g = emdlab_g2d_db;
+    yShift = 1;
+    wst = 10;
+    wss = 18;
+    dss = 20;
+    dsy = 10;
+    bs0 = 3;
+    hs0 = 2;
+    tta = 10;
+    paperT = 1;
+    bw0 = 2;
+    name1 = 'stator';
+    name2 = 'sca';
+    name3 = 'sap';
 end
 
 tta = tta*pi/180;
@@ -38,7 +38,7 @@ s9 = g.extendSegmentBySegment(s1,0,bs0/2);
 s10 = g.extendSegmentBySegment(s9,pi/2,dss);
 
 l1 = g.addLoop(s1,s2,s3,s4,s5,s6,s7,s8);
-l2 = g.addRectangleLoop(wst/2+paperT,yShift+hs0+hs1+paperT,wss/2-paperT-bw0,dss-hs0-hs1-2*paperT);
+l2 = g.addRectangleLoop(wst/2+paperT,yShift+hs0+hs1+paperT,wss/2-paperT-bw0/2,dss-hs0-hs1-2*paperT);
 l3 = g.addLoop(s9,s10,-s5,-s4,-s3,-s2);
 g.addFace(name1, l1);
 g.addFace(name2, l2);
@@ -47,5 +47,9 @@ g.addFace(name3, l3, l2);
 g.setFaceColor(name1,200,200,200);
 g.setFaceColor(name2,255,137,39);
 g.setFaceColor(name3,0,255,255);
+
+% visualizations for debug
+if nargin ==0, g.showSketch; end
+if nargin ==0, g.showFaces; end
 
 end

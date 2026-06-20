@@ -332,8 +332,9 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             newObj.nodes = ext_pshift2(newObj.nodes, varargin{:});
         end
         
-        function shift(obj, varargin)
-            obj.nodes = ext_pshift2(obj.nodes, varargin{:});
+        function shift(obj, xShift, yShift)
+            obj.nodes(:,1) = obj.nodes(:,1) + xShift;
+            obj.nodes(:,2) = obj.nodes(:,2) + yShift;
         end
         
         function rotate(obj, varargin)

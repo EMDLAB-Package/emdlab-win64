@@ -1,6 +1,6 @@
 % stator tooth & coil
 
-function emdlab_g2d_lib_tc50(g, wst, wss, dsy, dss, xShift, yShift, mirrorFlag, name1, name2)
+function emdlab_g2d_lib_tc101(g, wst, wss, dsy, dss, xShift, yShift, mirrorFlag, name1, name2)
 
 % defult arguments for debug
 if nargin == 0

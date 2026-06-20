@@ -18,14 +18,22 @@ arguments
 
 end
 
+% rotor pole pitch angle
 alpha_p = 2*pi/p;
+
+% limit embrace
+embrace = min(embrace,0.96);
+embrace = max(embrace,0.04);
+
+% magnet arc angle
+alpha_m = embrace * alpha_p;
 
 o = emdlab_g2d_point(0,0);
 p1 = emdlab_g2d_point(ID/2,0);
 p2 = emdlab_g2d_point(OD/2-dm,0);
 p3 = emdlab_g2d_point(OD/2,0);
-p4 = p2.getRotateAroundOrigin(embrace*alpha_p/2);
-p5 = p3.getRotateAroundOrigin(embrace*alpha_p/2);
+p4 = p2.getRotateAroundOrigin(alpha_m/2);
+p5 = p3.getRotateAroundOrigin(alpha_m/2);
 p6 = p1.getRotateAroundOrigin(alpha_p/2);
 p7 = p2.getRotateAroundOrigin(alpha_p/2);
 p8 = p3.getRotateAroundOrigin(alpha_p/2);
