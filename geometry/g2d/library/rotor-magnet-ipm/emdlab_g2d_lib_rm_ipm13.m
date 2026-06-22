@@ -1,7 +1,7 @@
 % rotor & magnet
 % outer rotor surface-mounted permenent magnet motor
 
-function emdlab_g2d_lib_rm_ipm1(g, ID, OD, poles, Kair, g_wry, g_dm, g_wm, wrribs, wtrib, name1, name2, name3)
+function emdlab_g2d_lib_rm_ipm13(g, ID, OD, poles, Kair, g_wry, g_dm, g_wm, wrribs, wtrib, name1, name2, name3)
 
 % input arguments check
 arguments

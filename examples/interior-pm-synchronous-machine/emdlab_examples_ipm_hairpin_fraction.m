@@ -24,7 +24,7 @@ g = emdlab_g2d_db;
 % mesh density function
 f_mesh = @(r) interp1([gv_Dsh/2,gv_ISD/2,gv_OSD/2], [2,0.5,2], r, 'linear', 'extrap');
 emdlab_g2d_lib_tc9(g,gv_ISD,gv_OSD,gv_Ns,gv_Nc,3,1.8,1.5,0.8,15,0.3,0.3,'stator','sc','sap');
-emdlab_g2d_lib_rm_ipm10(g, gv_Dsh, gv_ISD-2*gv_g, gv_p, 0.25, [0.8,1], [1]*.8, [0.6,0.7], [1,1]*0.5, 0.6, 'rotor', 'magnet', 'rap');
+emdlab_g2d_lib_rm_ipm13(g, gv_Dsh, gv_ISD-2*gv_g, gv_p, 0.25, [0.8,1], [1]*.8, [0.6,0.7], [1,1]*0.5, 0.6, 'rotor', 'magnet', 'rap');
 g.setMeshLengthByRadialFunction(f_mesh)
 m = g.generateMesh('mg0');
 

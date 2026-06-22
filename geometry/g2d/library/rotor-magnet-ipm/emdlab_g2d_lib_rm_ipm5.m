@@ -1,7 +1,7 @@
 % rotor & magnet
 % outer rotor surface-mounted permenent magnet motor
 
-function emdlab_g2d_lib_rm_ipm4(g, ID, OD, p, dm, alpha_v, wtrib, wrrib, bm0, name1, name2, name3)
+function emdlab_g2d_lib_rm_ipm5(g, ID, OD, p, dm, alpha_v, wtrib, wrrib, bm0, name1, name2, name3)
 
 % defult arguments for debug
 if nargin == 0
@@ -37,17 +37,24 @@ y5 = (OD/2) * sin(alpha_p/2);
 x6 = (ID/2) * cos(alpha_p/2);
 y6 = (ID/2) * sin(alpha_p/2);
 
-% finding circle center
-tmp_a = OD/2 - wtrib - dm/2;
-tmp_d = bm0/2 + dm/2;
-tmp_m = tan(alpha_p/2);
-x_sol = roots([1+tmp_m^2,-2*tmp_m*tmp_d/cos(alpha_p/2),-tmp_a^2+tmp_d^2/cos(alpha_p/2)^2]);
+r = OD/2 - wtrib;
+[x9,y9] = g.getIntersectionRayCircle(0,-0.5*bm0/cos(alpha_p/2),cos(alpha_p/2),sin(alpha_p/2),0,0,r);
+ux = -cos(alpha_p/2);
+uy = -sin(alpha_p/2);
 
-x9 = max(x_sol);
-y9 = -tmp_d/cos(alpha_p/2) + tmp_m*x9;
+    function err = err_fcn(t)
+        x_tmp1 = x9 + t*ux;
+        y_tmp1 = y9 + t*uy;
+        [x_tmp2,y_tmp2] = g.getIntersectionRayCircle(x_tmp1,y_tmp1,cos(tmp_angle),-sin(tmp_angle),0,0,r);
+        err = abs(norm([x_tmp2-x_tmp1,y_tmp2-y_tmp1]) - dm);
+    end
 
-[x7,y7] = g.getIntersectionRayCircle(x9,y9,-cos(tmp_angle),sin(tmp_angle),x9,y9,dm/2);
-[x8,y8] = g.getIntersectionRayCircle(x9,y9,cos(tmp_angle),-sin(tmp_angle),x9,y9,dm/2);
+t = fminbnd(@err_fcn,0,ID/2);
+
+x7 = (x9 + t*ux);
+y7 = (y9 + t*uy);
+
+[x8,y8] = g.getIntersectionRayCircle(x7,y7,cos(tmp_angle),-sin(tmp_angle),0,0,r);
 [x3,y3] = g.getIntersectionLineLine(x8,y8,cos(alpha_v/2),sin(alpha_v/2),0,wrrib/2,1,0);
 [x2,y2] = g.getIntersectionLineLine(x7,y7,cos(alpha_v/2),sin(alpha_v/2),x3,y3,cos(tmp_angle),-sin(tmp_angle));
 
@@ -75,13 +82,14 @@ if wrrib == 0
     e8 = g.addSegment(p3,p8);
     e9 = g.addSegment(p8,p7);
     e10 = g.addSegment(p7,p2);
-    e11 = g.addArc(p9,p8,p7,1);
-    e12 = g.addSegment(p2,p10);
+    e11 = g.addArc(o,p8,p9,1);
+    e12 = g.addSegment(p9,p7);
+    e13 = g.addSegment(p2,p10);
 
-    l1 = g.addLoop(e1,-e12,-e10,-e11,-e8,e3,e4,e5,e6);
+    l1 = g.addLoop(e1,-e13,-e10,-e12,-e11,-e8,e3,e4,e5,e6);
     l2 = g.addLoop(e7,e8,e9,e10);
-    l3 = g.addLoop(-e9,e11);
-    l4 = g.addLoop(e2,-e7,e12);
+    l3 = g.addLoop(-e9,e11,e12);
+    l4 = g.addLoop(e2,-e7,e13);
 
     g.addFace(name1, l1);
     g.addFace(name2, l2);
@@ -98,15 +106,16 @@ else
     e6 = g.addSegment(p3,p8);
     e7 = g.addSegment(p8,p7);
     e8 = g.addSegment(p7,p2);
-    e9 = g.addArc(p9,p8,p7,1);
-    e10 = g.addSegment(p2,p10);
-    e11 = g.addSegment(p10,p3);
+    e9 = g.addArc(o,p8,p9,1);
+    e10 = g.addSegment(p9,p7);
+    e11 = g.addSegment(p2,p10);
+    e12 = g.addSegment(p10,p3);
 
     l1 = g.addLoop(e1,e2,e3,e4);
-    l2 = g.addLoop(e11,e6,e9,e8,e10);
+    l2 = g.addLoop(e12,e6,e9,e10,e8,e11);
     l3 = g.addLoop(e5,e6,e7,e8);
-    l4 = g.addLoop(e9,-e7);
-    l5 = g.addLoop(e11,-e5,e10);
+    l4 = g.addLoop(e9,e10,-e7);
+    l5 = g.addLoop(e11,e12,-e5);
 
     g.addFace(name1, l1,l2);
     g.addFace(name2, l3);
@@ -122,7 +131,6 @@ g.setFaceColor(name3 + "2",0,255,255);
 
 % visualizations for debug
 close all;
-g.setMeshMaxLength(0.2);
 if nargin == 0, g.showSketch; end
 if nargin == 0, g.showFaces; end
 

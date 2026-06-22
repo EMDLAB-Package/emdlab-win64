@@ -99,7 +99,7 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
             p1c = obj.p1 - obj.p0;
             p2c = obj.p2 - obj.p0;
             p2p1 = obj.p2 - obj.p1;
-            y = 2*asin(norm(p2p1)/2/obj.getRadius);
+            y = 2*real(asin(norm(p2p1)/2/obj.getRadius));
             if obj.direction
                 if p1c.outerProduct(p2c) < 0
                     y = 2*pi - y ;
