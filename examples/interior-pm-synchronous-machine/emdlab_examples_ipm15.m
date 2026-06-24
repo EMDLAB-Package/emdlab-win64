@@ -57,7 +57,7 @@ m.setMaterial('sc','copper');
 m.aux_cmxjcrj('stator',gv_Ns)
 m.aux_cmxjcrj('sap',gv_Ns)
 m.aux_cmxjcrj('rotor',gv_p)
-m.joinMeshZones('rap','rap1','rap2')
+m.aux_unify('rap');
 m.aux_cmxjcrj('rap',gv_p)
 m.aux_cmxjcrj('sc',gv_Ns)
 m.changeMeshZoneName('magnet1', 'magnet');

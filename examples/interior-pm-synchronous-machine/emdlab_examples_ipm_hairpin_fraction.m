@@ -43,7 +43,7 @@ for i = 1:gv_Nc
     m.aux_cmxjcrj('sc'+string(i),gv_Ns/gv_p, alpha_s);
 end
 m.aux_cmxjcrj('rotor',1, alpha_p);
-m.joinMeshZones('rap', 'rap'+string(1:2*3))
+m.aux_unify('rap');
 m.aux_cmxjcrj('rap',1, alpha_p);
 m.joinMeshZones('magnetc', 'magnetc'+string(1:2))
 m.aux_cmxjcr('magnetc',1, alpha_p);

@@ -2520,6 +2520,16 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
+        function aux_unify(obj, mzNameCommonPart)
+            mzNames = obj.getMeshZoneNames;
+            idx = ~cellfun('isempty', regexp(mzNames, "^"+mzNameCommonPart+"\d+$"));
+            if isempty(idx)
+                error('No mesh zone was detected for this common part string.');
+            else
+                obj.joinMeshZones(mzNameCommonPart, mzNames(idx));
+            end
+        end
+
         % operation sequence: copy mirror -> copy rotate
         % there are two outputs
         % output is a list containing the name of new mesh zones

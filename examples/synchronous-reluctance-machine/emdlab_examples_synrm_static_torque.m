@@ -38,11 +38,6 @@ g.setMeshLengthByRadialFunction(f_mesh);
 
 % mesh generation
 m = g.generateMesh('mg0');
-if gv_Nfb>1
-    m.joinMeshZones('fb','fb'+string(1:gv_Nfb));
-else
-    m.changeMeshZoneName('fb1', 'fb');
-end
 
 % add materials
 m.addMaterial('m330', emdlab_mlib_es_M330_35A);
@@ -57,6 +52,7 @@ m.setMaterial('sc','copper');
 m.aux_cmxjcrj('stator',gv_Ns)
 m.aux_cmxjcrj('sap',gv_Ns)
 m.aux_cmxjcrj('rotor',gv_p)
+m.aux_unify('fb')
 m.aux_cmxjcrj('fb',gv_p)
 m.aux_cmxjcr('sc',gv_Ns)
 

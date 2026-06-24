@@ -42,7 +42,6 @@ g.setMeshLengthByRadialFunction(f_mesh);
 
 % mesh generation
 m = g.generateMesh('mg0');
-m.joinMeshZones('rap','rap1','rap2')
 
 % add materials
 m.addMaterial('m330', emdlab_mlib_es_M330_35A);
@@ -57,6 +56,7 @@ m.setMaterial('sc','copper');
 m.aux_cmxjcrj('stator',gv_Ns)
 m.aux_cmxjcrj('sap',gv_Ns)
 m.aux_cmxjcrj('rotor',gv_p)
+m.aux_unify('rap');
 m.aux_cmxjcrj('rap',gv_p)
 m.aux_cmxjcrj('sc',gv_Ns)
 m.aux_cmxcr('magnet',gv_p)

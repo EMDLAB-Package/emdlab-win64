@@ -38,7 +38,6 @@ g.setMeshLengthByRadialFunction(f_mesh);
 
 % mesh generation
 m = g.generateMesh('mg0');
-m.joinMeshZones('sap', 'sap'+string(1:3));
 
 % add materials
 m.addMaterial('m530', emdlab_mlib_es_M530_50A);
@@ -52,6 +51,7 @@ m.setMeshZoneColor('rap',0,255,255);
 
 % generate full mesh
 m.aux_cmxjcrj('stator',gv_Ns)
+m.aux_unify('sap');
 m.aux_cmxjcrj('sap',gv_Ns)
 m.aux_cmxjcrj('rotor',gv_Nr)
 m.aux_cmxjcrj('rap', gv_Nr);
