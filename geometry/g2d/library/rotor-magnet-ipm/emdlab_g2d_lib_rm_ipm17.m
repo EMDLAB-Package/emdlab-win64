@@ -15,9 +15,9 @@ if nargin == 0
     g_v = 1.1;
     wtrib = 1;
     wrrib = 1;
-    d0 = 3;
-    d1 = 13;
-    d2 = 5;
+    d0 = 6;
+    d1 = 5;
+    d2 = 3;
     hD = 8;
     name1 = 'rotor';
     name2 = 'magnet';
@@ -64,11 +64,10 @@ tmp_angle2 = pi/2 - alpha_v2/2;
 % finding circle center
 ux = cos(alpha_v/2);
 uy = sin(alpha_v/2);
+m = uy/ux;
 tmp_a = OD/2 - wtrib - dm2/2;
-tmp_b = d1 + dm2/2;
-tmp_c = (1 - ux^2)/(ux*uy);
-tmp_d = y3 - tmp_b - tmp_c*x3;
-x_sol = roots([1+tmp_c^2, 2*tmp_c*tmp_d, tmp_d^2 - tmp_a^2]);
+tmp_b = y3 - (0.5*dm2 + d1 + x3*uy)/ux;
+x_sol = roots([1+m^2,2*m*tmp_b,tmp_b^2-tmp_a^2]);
 
 x16 = max(x_sol);
 y16 = sqrt(tmp_a^2 - x16^2);
