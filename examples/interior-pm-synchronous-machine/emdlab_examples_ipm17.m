@@ -29,7 +29,7 @@ gv_wrrib = 0;
 gv_gv = 1.2;
 gv_alpha_v = 120;
 gv_d0 = 5;
-gv_d1 = 8;
+gv_d1 = 3;
 gv_Hc = -922100;
 
 % define geometry data base
