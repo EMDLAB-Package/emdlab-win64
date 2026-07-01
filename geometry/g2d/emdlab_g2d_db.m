@@ -999,6 +999,10 @@ classdef emdlab_g2d_db < handle
 
         end
 
+        function y = getEdgeLength(obj, eIndex)
+            y = obj.edges(eIndex).ptr.getLength;
+        end
+
         %% edge edits
         function indicesOfNewEdges = splitEdge(obj, edgeIndex, splitRatio)
 
@@ -1232,6 +1236,80 @@ classdef emdlab_g2d_db < handle
                 m.addMeshZone(obj.faces(i).tag, obj.faces(i).getMesh(meshGenerator));
                 m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
             end
+
+        end
+
+        function meshZone = getQMesh(obj, e1, e2, e3, e4, Nx, Ny)
+
+            % set lower limits for Nx & Ny
+            Nx = max(Nx+1,3);
+            Ny = max(Ny+1,3);
+
+            % edge pointers
+            e1ptr = obj.edges(abs(e1)).ptr;
+            e2ptr = obj.edges(abs(e2)).ptr;
+            e3ptr = obj.edges(abs(e3)).ptr;
+            e4ptr = obj.edges(abs(e4)).ptr;
+
+            % Assign nodes to edges
+            e1ptr.setNnodes(Nx);
+            e2ptr.setNnodes(Ny);
+            e3ptr.setNnodes(Nx);
+            e4ptr.setNnodes(Ny);
+
+            % Get edge nodes
+            pts1 = e1ptr.getMeshNodes;
+            pts2 = e2ptr.getMeshNodes;
+            pts3 = e3ptr.getMeshNodes;
+            pts4 = e4ptr.getMeshNodes;
+
+            % Correct orientation
+            if e1<0, pts1 = flipud(pts1); end
+            if e2<0, pts2 = flipud(pts2); end
+            if e3>0, pts3 = flipud(pts3); end
+            if e4>0, pts4 = flipud(pts4); end
+
+            % Parametric grid
+            [u,v] = ndgrid(linspace(0,1,Nx),linspace(0,1,Ny));
+            u = u(:);
+            v = v(:);
+
+            [uIndex,vIndex] = ndgrid(1:Nx,1:Ny);
+            uIndex = uIndex(:);
+            vIndex = vIndex(:);
+
+            % Corner points
+            P00 = pts3(1,:);
+            P10 = pts3(end,:);
+            P01 = pts1(1,:);
+            P11 = pts1(end,:);
+
+            % Coons patch interpolation
+            pts = (1-v).*pts3(uIndex,:) + v.*pts1(uIndex,:) + ...
+                (1-u).*pts4(vIndex,:) + u.*pts2(vIndex,:) ...
+                - ((1-u).*(1-v).*P00 + ...
+                u.*(1-v).*P10 + ...
+                (1-u).*v.*P01 + ...
+                u.*v.*P11);
+
+            % Connectivity list
+            index = 0;
+            cl = zeros((Nx-1)*(Ny-1),4);
+
+            for j = 1:Ny-1
+                for i = 1:Nx-1
+                    index = index + 1;
+
+                    n1 = (j-1)*Nx + i;
+                    n2 = n1 + 1;
+                    n3 = n2 + Nx;
+                    n4 = n1 + Nx;
+
+                    cl(index,:) = [n1 n2 n3 n4];
+                end
+            end
+
+            meshZone = emdlab_m2d_qmz(cl,pts);
 
         end
 

@@ -1,3 +1,4 @@
+% EMDLAB: Electrical Machines Design Laboratory
 % 2D triangular mesh zone
 
 classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
@@ -52,7 +53,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
     
     properties (Access = private)
         
-        % element area
+        % a vector containing area of elements
         ea (:,1) double;
 
         % mesh zone area
@@ -86,13 +87,14 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
     methods        
         %% constructor and destructor
         function obj = emdlab_m2d_tmz(cl, nodes)
+
             if nargin < 2, error('Not enough input arguments.'); end
             if nargin > 2, error('Too many input arguments.'); end
 
-%             if isempty(cl) && isempty
             obj.nodes = nodes;
             obj.cl = cl;
             obj.setdata;
+
         end
         
         function y = get.Nn(obj)
@@ -321,22 +323,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             newObj.makeFalse_isDataSetted;
             newObj.setdata;
         end
-        
-        function newObj = getRotate(obj, varargin)
-            newObj = copy(obj);
-            newObj.nodes = ext_protate2(newObj.nodes, varargin{:});
-        end
-        
-        function newObj = getShift(obj, varargin)
-            newObj = copy(obj);
-            newObj.nodes = ext_pshift2(newObj.nodes, varargin{:});
-        end
-        
-        function shift(obj, xShift, yShift)
-            obj.nodes(:,1) = obj.nodes(:,1) + xShift;
-            obj.nodes(:,2) = obj.nodes(:,2) + yShift;
-        end
-        
+
         function rotate(obj, varargin)
             if numel(varargin) == 1
                 obj.nodes = ext_protate2(obj.nodes, varargin{:});
@@ -349,6 +336,21 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
         end
         
+        function newObj = getRotate(obj, varargin)
+            newObj = copy(obj);
+            newObj.nodes = ext_protate2(newObj.nodes, varargin{:});
+        end
+
+        function shift(obj, xShift, yShift)
+            obj.nodes(:,1) = obj.nodes(:,1) + xShift;
+            obj.nodes(:,2) = obj.nodes(:,2) + yShift;
+        end
+        
+        function newObj = getShift(obj, varargin)
+            newObj = copy(obj);
+            newObj.nodes = ext_pshift2(newObj.nodes, varargin{:});
+        end
+                       
         function evalQ(obj)
 %             if obj.is_Q_Evaluated, return; end
             obj.Q = sparse(double(obj.cl'), repmat(1:obj.Ne, 3, 1), ones(1, 3 * obj.Ne), ...
@@ -410,7 +412,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         
     end
     
-    %% getters
+    %% Getters
     methods
         
         function y = getAreaOfElements(obj)

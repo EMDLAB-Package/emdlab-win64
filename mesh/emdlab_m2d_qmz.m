@@ -1,5 +1,5 @@
-% developer: https://ComProgExpert.com, Ali Jamali-Fard
-% 2D quadrilateral mesh zone
+% EMDLAB: Electrical Machines Design Laboratory
+% Quadrilateral mesh zone (2D element)
 
 classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
     
@@ -20,8 +20,6 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % list of boundary edges
         bedges (:,1) double;
         
-        acoefs (1,1) double;
-        bcoefs (1,1) double;
 
     end
     properties
@@ -30,11 +28,13 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
         zi (1,1) double;
 
         % local to global node index
-        ni_l2g (:,1) double;
-        ei_l2g (:,1) double;
+        l2g (:,1) double;
 
         % material of zone
         material char = 'air';
+
+        % surface color transparency
+        transparency (1,1) double = 1;
 
         % mesh zone color
         color = 'c';
@@ -42,20 +42,23 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % mesh zone properties: differs in differents solvers
         props (1,1) struct;
 
+        % flags
+        isMoving = false;
+
     end
 
     properties (Access = private)
 
-        % element area
+        % a vector containing area of elements
         ea (:,1) double;
 
         % mesh zone area
         area (1,1) double;
 
         % states
-        isDataSetted (1,1) logical = false;
-        is_ea_Evaluated (1,1) logical = false;
-        is_area_Evaluated (1,1) logical = false;
+        isDataSet (1,1) logical = false;
+        isAreaOfElementsEvaluated (1,1) logical = false;
+        isMeshZoneAreaEvaluated (1,1) logical = false;
 
     end
 
@@ -72,9 +75,14 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
     methods
         %% Constructor and Destructor
         function obj = emdlab_m2d_qmz(cl, nodes)
+
+            if nargin < 2, error('Not enough input arguments.'); end
+            if nargin > 2, error('Too many input arguments.'); end
+
             obj.nodes = nodes;
             obj.cl = cl;
-            obj = obj.setdata;
+            obj = obj.setData;
+            
         end
 
         function y = get.Nn(obj)
@@ -87,10 +95,10 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
         
         %% Topological Functions
         % setting needed data
-        function obj = setdata(obj)
+        function obj = setData(obj)
 
             % check if already data is set
-            if obj.isDataSetted, return; end
+            if obj.isDataSet, return; end
 
             % first edge of each quadrilateral
             e1 = obj.cl(:,[1,2]);
@@ -139,7 +147,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.elements = [e1,e2,e3,e4];
 
             % change states
-            obj.isDataSetted = true;
+            obj.isDataSet = true;
 
         end
         
@@ -169,8 +177,8 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
 
         end
-        function varargout = showwf(obj)
 
+        function varargout = showwf(obj)
 
             f = emdlab_r2d_mesh();
             ax = axes(f);
@@ -191,6 +199,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             elseif nargout > 2
                 error('Too many output argument.');
             end
+            
         end
         
         %% Tools Functions
@@ -203,7 +212,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 ones(size(obj.edges,1),1),obj.Nn,obj.Nn);
             Con = Con + Con';
             % loop for movments
-            inodes = obj.getinodes;
+            inodes = obj.getInnerNodes;
             % weight matrix
             weight = diag(1./sum(Con(inodes,:),2));
             for iter = 1:100
@@ -221,17 +230,25 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 end
             end
         end
-        function y = getbnodes(obj)
+
+        function y = getBundaryNodes(obj)
+
             % getting index of boundary nodes
             y = obj.edges(obj.bedges,:);
             y = unique(y(:));
+
         end
-        function y = getinodes(obj)
+
+        function y = getInnerNodes(obj)
+
             % getting index of inner nodes
-            y = obj.getbnodes;
+            y = obj.getBundaryNodes;
             y = setdiff((1:obj.Nn)',y);
+
         end
+
         function strefine(obj)
+
             % number of nodes and elements in old mesh
             NnOld = obj.Nn;
             NeOld = obj.Ne;
@@ -247,9 +264,67 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 obj.cl(:,2),index(:,2)+NnOld,index(:,5)+NnOld+NedOld,index(:,1)+NnOld
                 obj.cl(:,3),index(:,3)+NnOld,index(:,5)+NnOld+NedOld,index(:,2)+NnOld
                 obj.cl(:,4),index(:,4)+NnOld,index(:,5)+NnOld+NedOld,index(:,3)+NnOld];
+           
             % setting data of new mesh
-            obj.setdata;
+            obj.setData;
+
         end
     
+        %% tranforms and copy generations
+        function mirror(obj, varargin)
+            obj.nodes = ext_pmirror2(obj.nodes, varargin{:});
+            obj.cl = obj.cl(:, [1, 4, 3, 2]);
+            obj.clearSetDataFlag;
+            obj.setData;
+        end
+        
+        function newObj = getMirror(obj, varargin)
+            newObj = copy(obj);
+            newObj.nodes = ext_pmirror2(newObj.nodes, varargin{:});
+            newObj.cl = newObj.cl(:, [1, 4, 3, 2]);
+            newObj.clearSetDataFlag;
+            newObj.setData;
+        end
+
+        function rotate(obj, varargin)
+            if numel(varargin) == 1
+                obj.nodes = ext_protate2(obj.nodes, varargin{:});
+            else
+                if length(varargin{2}) == 2
+                    obj.nodes = ext_protate2(obj.nodes, varargin{:});
+                else
+                    obj.nodes = emdlab_g2d_rotatePoints(obj.nodes, varargin{:});
+                end
+            end
+        end
+        
+        function newObj = getRotate(obj, varargin)
+            newObj = copy(obj);
+            newObj.nodes = ext_protate2(newObj.nodes, varargin{:});
+        end
+
+        function shift(obj, xShift, yShift)
+            obj.nodes(:,1) = obj.nodes(:,1) + xShift;
+            obj.nodes(:,2) = obj.nodes(:,2) + yShift;
+        end
+        
+        function newObj = getShift(obj, varargin)
+            newObj = copy(obj);
+            newObj.nodes = ext_pshift2(newObj.nodes, varargin{:});
+        end
+
     end
+
+    methods (Access = private)
+        
+        function clearSetDataFlag(obj)
+
+            obj.isDataSet = false;
+            obj.isAreaOfElementsEvaluated = false;
+            obj.isMeshZoneAreaEvaluated = false;
+
+        end
+        
+    end
+
 end

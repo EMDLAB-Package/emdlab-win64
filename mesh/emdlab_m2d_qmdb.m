@@ -1,11 +1,11 @@
-% developer: https://ComProgExpert.com, Ali Jamali-Fard
-% 2D quadrilateral mesh data base
+% EMDLAB: Electrical Machines Design Laboratory
+% 2D quadrilateral mesh data base class
 
 classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp
 
     properties (SetAccess = private)
 
-        % mesh nodes
+        % mesh nodes: [x,y]
         nodes (:,2) double;
 
         % mesh connectivity list
@@ -28,13 +28,22 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         % element zone index
         ezi (:,:) logical;
-        
+
+        % elements material index
+        emi (:,:) logical;
+
         % auxiliary stored matricies
         mtcs (1,1) struct;
 
         % named selections
         edgeNamedSelections (1,1) struct;
-        
+
+        % flag to print the elapsed times
+        printFlag (1,1) logical = true;
+
+        % element type
+        etype (1,:) char = 'QL4';
+
     end
 
     properties (Dependent = true)
@@ -45,12 +54,15 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % Number of elements
         Ne
 
+        % flags for element type
+        isQL4 (1,1) logical;
+        isQL8 (1,1) logical;
+
     end
 
     properties (Access = private)
 
         % element type
-        etype (1,:) char;
         isd2ElementsGenerated (1,1) logical = false;
         isd3ElementsGenerated (1,1) logical = false;
         isJITEvaluated (1,1) logical = false;
@@ -67,9 +79,46 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         isKerz1_TL3_Evaluated (1,1) logical = false;
 
     end
+
     methods
         %% Constructor and Destructor
         function obj = emdlab_m2d_qmdb()
+            % add default material
+            obj.addMaterial('air');
+        end
+
+        function addMeshZone(obj, varargin)
+
+            % you can pass an <emdlab_m2d_qmz> class without name
+            if nargin == 2
+
+                if ~isa(varargin{1}, 'emdlab_m2d_qmz')
+                    error('Mesh zone class must be <emdlab_m2d_qmz>.');
+                end
+                mzName = obj.getDefaultMeshZoneName;
+                mzptr = varargin{1};
+
+                % you can pass an <emdlab_m2d_qmz> mesh zone with specified name
+            elseif nargin == 3
+
+                mzName = obj.checkMeshZoneNonExistence(varargin{1});
+                if ~isa(varargin{2}, 'emdlab_m2d_qmz')
+                    error('Mesh zone class must be <emdlab_m2d_qmz>.');
+                end
+                mzptr = varargin{2};
+
+            else
+                error('Wrong number of arguments.');
+            end
+
+            % adding new mesh zone
+            obj.mzs.(mzName) = mzptr;
+            obj.mzs.(mzName).material = 'air';
+            obj.mzs.(mzName).color = rand(1,3);
+
+            % changing states
+            obj.makeFalse_isGlobalMeshGenerated;
+
         end
 
         function y = get.Nn(obj)
@@ -91,62 +140,93 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         end
 
         %% FEM Preparation
+        % generate global mesh
         function ggmesh(obj)
+
             % check states
-            if obj.isGlobalMeshGenerated
-                return
-            end
+            if obj.isGlobalMeshGenerated, return; end
+
             % generation of initial mesh
             Nn_tmp = 0;
             Ne_tmp = 0;
-            mzNames = fieldnames(obj.mzs);
-            for i = 1:numel(mzNames)
-                Nn_tmp = Nn_tmp + obj.mzs.(mzNames{i}).Nn;
-                Ne_tmp = Ne_tmp + obj.mzs.(mzNames{i}).Ne;
+            mzNames = obj.getMeshZoneNames;
+
+            for mzName = mzNames
+                Nn_tmp = Nn_tmp + obj.mzs.(mzName).Nn;
+                Ne_tmp = Ne_tmp + obj.mzs.(mzName).Ne;
             end
+
             % initialization of nodes and elements
             obj.nodes = zeros(Nn_tmp,2);
             obj.cl = zeros(Ne_tmp,4);
-            obj.elements = zeros(Ne_tmp,4);
+            obj.elements = zeros(Ne_tmp,5);
             nindex = 0;
             eindex= 0;
-            obj.Nmzs = 0;
+
+            % loop over mesh zones: for insertion of nodes and elements
             for i = 1:numel(mzNames)
+
                 % insertion of nodes
-                obj.nodes(1+nindex:obj.mzs.(mzNames{i}).Nn+nindex,:) = ...
-                    obj.mzs.(mzNames{i}).nodes;
+                obj.nodes(1 + nindex:obj.mzs.(mzNames(i)).Nn + nindex, :) = ...
+                    obj.mzs.(mzNames(i)).nodes;
+
                 % insertion of elements
-                obj.cl(1+eindex:obj.mzs.(mzNames{i}).Ne+eindex,:) = ...
-                    obj.mzs.(mzNames{i}).cl+nindex;
+                obj.cl(1 + eindex:obj.mzs.(mzNames(i)).Ne + eindex, 1:4) = ...
+                    obj.mzs.(mzNames(i)).cl + nindex;
+
                 % specefying zone index
-                obj.elements(1+eindex:obj.mzs.(mzNames{i}).Ne+eindex,4) = i;
-                obj.Nmzs = obj.Nmzs + 1;
-                obj.mzs.(mzNames{i}).zi = i;
-                nindex = nindex + obj.mzs.(mzNames{i}).Nn;
-                eindex = eindex + obj.mzs.(mzNames{i}).Ne;
+                obj.elements(1 + eindex:obj.mzs.(mzNames(i)).Ne + eindex, 5) = i;
+                obj.mzs.(mzNames(i)).zi = i;
+                nindex = nindex + obj.mzs.(mzNames(i)).Nn;
+                eindex = eindex + obj.mzs.(mzNames(i)).Ne;
+
             end
-            [obj.nodes,~,ic] = uniquetol(obj.nodes,obj.gleps,'ByRows',true);
+
+            % unification of nodes
+            [obj.nodes, ~, ic] = uniquetol(obj.nodes, obj.gleps, 'ByRows', true);
             obj.cl = ic(obj.cl);
+
             % setting l2g
             nindex = 0;
-            for i = 1:obj.Nmzs
-                obj.mzs.(mzNames{i}).l2g = ic(nindex+1:nindex+...
-                    obj.mzs.(mzNames{i}).Nn);
-                nindex = nindex + obj.mzs.(mzNames{i}).Nn;
+
+            % loop over mesh zones: for setting l2g
+            for mz = mzNames
+                obj.mzs.(mz).l2g = ic(nindex + 1:nindex + ...
+                    obj.mzs.(mz).Nn);
+                nindex = nindex + obj.mzs.(mz).Nn;        
             end
-            obj.setdata;
+
+            obj.setData;
             obj.evalezi;
+
             % change states
             obj.isGlobalMeshGenerated = true;
+
             % settig element type
             obj.etype = 'QL4';
+
         end
+        
+        % evaluate element material & zone index
         function evalezi(obj)
-            obj.ezi = zeros(obj.Ne,obj.Nmzs, 'logical');
+
+            % construct emi & ezi
+            meshZoneNames = obj.getMeshZoneNames;
+            obj.materialNames = string(fieldnames(obj.mts)');
+            obj.emi = false(obj.Nmts, obj.Ne);
+            obj.ezi = false(obj.Ne, obj.Nmzs);
+
             for i = 1:obj.Nmzs
-                obj.ezi(:,i) = obj.elements(:,4) == i;
+                obj.ezi(:,i) = obj.elements(:,5) == i;
+                for j = 1:obj.Nmts
+                    if obj.mzs.(meshZoneNames(i)).material == obj.materialNames(j)
+                        obj.emi(j,obj.ezi(:,i)) = true;
+                    end
+                end
             end
+
         end
+        
         function evalJIT(obj)
             % check states
             if obj.isJITEvaluated, return; end
@@ -169,6 +249,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             disp('Evaluation of JIT completed.');
             toc, disp('-------------------------------------------------------');
         end
+        
         function evalKeFe_TL3(obj)
             obj.ggmesh;
             obj.evalJIT;
@@ -197,6 +278,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % change states
             obj.isKeFe_TL3_Evaluated = true;
         end
+        
         function evalKexy1_TL3(obj)
             if obj.isKexy1_TL3_Evaluated, return; end
             obj.ggmesh;
@@ -221,6 +303,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % change states
             obj.isKexy1_TL3_Evaluated = true;
         end
+        
         function evalKexy4Fe_TL3(obj)
             obj.ggmesh;
             obj.evalJIT;
@@ -272,6 +355,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % change states
             obj.isKexy4Fe_TL3_Evaluated = true;
         end
+        
         function evalKeFe_TL6_cte(obj)
             obj.ggmesh;
             evalJIT;
@@ -314,6 +398,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % change states
             obj.isKeFe_TL6_cte_Evaluated = true;
         end
+        
         function evalKeFe_TL6(obj)
             obj.ggmesh;
             obj.evalJIT;
@@ -375,6 +460,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % change states
             obj.isKeFe_TL6_Evaluated = true;
         end
+        
         function evalKeFe(obj,etype)
             obj.etype = etype;
             % getting number of elements
@@ -458,6 +544,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             disp('Calculation of Ke, Fe and C completed.')
             toc
         end
+        
         function evalMe_TL3(obj)
             if obj.isMe_TL3_Evaluated, return; end
             tic, disp('-------------------------------------------------------');
@@ -468,42 +555,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % changing states
             obj.isMe_TL3_Evaluated = true;
         end
-        %% Material Library
-        function setMaterial(obj,mzname,mname)
-            mzname = rmspaces(mzname);
-            mznames = fieldnames(obj.mzs);
-            if ~ismember(mzname,mznames)
-                error('Specefied zone does not exist.');
-            end
-            obj.mzs.(mzname).material = lower(rmspaces(mname));
-        end
-        function addMaterial(obj,fdir,mname)
-            if ~ischar(mname)
-                error('m name must be string.')
-            end
-            mname = lower(mname);
-            mname = rmspaces(mname);
-            % reading material data from binary file
-            m = ReadMDataBinary(fdir,mname);
-            % elaluation od axiluiry data for nonlinear magnetic materials
-            if ~m.MagneticPermeability.isLinear && m.MagneticPermeability.isIsotropic
-                
-                HB = m.MagneticPermeability.value;
-                b = linspace(max(HB(:,2)),10*max(HB(:,2)),100);
-                b = [0.01;HB(:,2);b(2:end)'];
-                h = interp1([0;HB(:,2)],[0;HB(:,1)],b,'linear','extrap');
-                v = (h./b);
-                
-                m.BH = spline(b,h);
-                m.dBdH = m.BH;
-                m.dBdH.coefs = m.dBdH.coefs * diag(3:-1:1,1);
-                m.vB = spline(b,v);
-                m.dvdB = m.vB;
-                m.dvdB.coefs = m.dvdB.coefs * diag(3:-1:1,1);
-                
-            end
-            obj.mts.(mname) = m;
-        end
+
         %% Higher Order Elements
         function gd2elements(obj)
             if obj.isd2ElementsGenerated, return; end
@@ -521,6 +573,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % change states
             obj.isd2ElementsGenerated = true;
         end
+        
         function gd3elements(obj)
             % uncompleted
             if obj.isd3ElementsGenerated
@@ -541,43 +594,58 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % change states
             obj.isd3ElementsGenerated = true;
         end
+        
         %% Topological Functions
         % setting needed data
-        function setdata(obj)
-            % first edge of each triangle
+        function setData(obj)
+
+            % quadrilateral edges
             e1 = obj.cl(:,[1,2]);
-            % second edge of each triangle
             e2 = obj.cl(:,[2,3]);
-            % third edge of each triangle
-            e3 = obj.cl(:,[3,1]);
+            e3 = obj.cl(:,[3,4]);
+            e4 = obj.cl(:,[4,1]);
+
             % sorting for lower index
             [e1,s1] = sort(e1,2);
             [e2,s2] = sort(e2,2);
             [e3,s3] = sort(e3,2);
-            % specefying chaNed edge index
-            s1 = s1(:,1)==2;
-            s2 = s2(:,1)==2;
-            s3 = s3(:,1)==2;
+            [e4,s4] = sort(e4,2);
+
+            % specefying changed edge index
+            s1 = s1(:, 1) == 2;
+            s2 = s2(:, 1) == 2;
+            s3 = s3(:, 1) == 2;
+            s4 = s4(:, 1) == 2;
+
             % unification of edges
-            [obj.edges,~,ic] = unique([e1;e2;e3],'rows');
+            [obj.edges, ~, ic] = unique([e1; e2; e3; e4], 'rows');
+            
             % getting number of elements
             ne = obj.Ne;
+
             % getting index of edge corresponding to each elements
             e1 = ic(1:ne);
-            e2 = ic(1+ne:2*ne);
-            e3 = ic(1+2*ne:3*ne);
-            % specefying boundary edges
-            obj.bedges = sparse([e1,e2,e3],ones(3*ne,1),ones(3*ne,1));
-            obj.bedges = full(obj.bedges==1);
+            e2 = ic(1 + ne:2 * ne);
+            e3 = ic(1 + 2 * ne:3 * ne);
+            e4 = ic(1 + 3 * ne:4 * ne);
+
+             % specefying boundary edges
+            obj.bedges = sparse([e1, e2, e3, e4], ones(4 * ne, 1), ones(4 * ne, 1));
+            obj.bedges = full(obj.bedges == 1);
+
             % specefying trace direction
             e1(s1) = -e1(s1);
             e2(s2) = -e2(s2);
             e3(s3) = -e3(s3);
+            e4(s4) = -e4(s4);
+
             % element matrix
-            obj.elements(:,1:3) = [e1,e2,e3];
+            obj.elements(:, 1:4) = [e1, e2, e3, e4];
+
             % edge element
-            obj.edges = [obj.edges,zeros(size(obj.edges,1),6)];
-            tmdbc_evalee(obj.edges,obj.elements);
+            obj.edges = [obj.edges, zeros(size(obj.edges,1), 6)];
+            emdlab_m2d_qmdbc_evalee(obj.edges, obj.elements);
+
         end
 
         function strefine(obj)
@@ -587,6 +655,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
             obj.makeFalse_isGlobalMeshGenerated;
         end
+        
         function adrefine(obj, ti)
             el = sqrt(sum((obj.nodes(obj.edges(:,1),:) - ...
                 obj.nodes(obj.edges(:,2),:)).^2,2));
@@ -612,7 +681,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                         case 2
                         case 3
                     end
-                    
+
                     e1 = eRow;
                     e1(2) = nIndex;
                     e2 = eRow;
@@ -620,57 +689,249 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                     e3 = eRow;
                     disp('salam');
                 else
-                    
+
                 end
             end
         end
-        %% Mesh Visiualization
-        function showm(obj,color)
+        %% mesh visiualization
+        % show global mesh
+        function varargout = showm(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:}); 
+            if isa(f,"matlab.ui.Figure")
+                f.MenuBar = "none";
+            end
+            
             obj.ggmesh;
-            if nargin<2
-                color = 'k';
+            mzNames = string(fieldnames(obj.mzs)');
+
+            for mzName = mzNames
+                plt = patch(ax,'Faces', obj.mzs.(mzName).cl, ...
+                    'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
+                    'c', 'EdgeColor', [0.2, 0.2, 0.2], ...
+                    'FaceAlpha', 0.7, ...
+                    'HitTest','on','PickableParts','visible');
+                plt.UserData = mzName;
             end
-            ah =  setFigure(['[Global Mesh][','Nn = ',num2str(obj.Nn),'][Ne = ',num2str(obj.Ne),']']);
-            patch('Faces',obj.cl(:,1:3),'Vertices',obj.nodes,'FaceColor',...
-                'c','FaceAlpha',0.5,'EdgeColor',color,'parent',ah);
-            set(gcf,'HandleVisibility','off');
+
+            index = obj.edges(:, 3) ~= obj.edges(:, 4);
+            patch(ax,'Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5,'HitTest','off','PickableParts','none');
+
+            zoom on;box on;
+            ax.Color = [0.86,0.86,0.86];
+            grid on;
+            grid minor;
+            axis(ax, 'equal');
+            ax.Toolbar.Visible = 'off';
+            ax.GridColor      = [0.7 0.7 0.7];
+            ax.MinorGridColor = [0.5 0.5 0.5];
+            ax.GridAlpha      = 1;
+            ax.MinorGridAlpha = 1;
+
+            set(gcf,'WindowButtonMotionFcn',@hoverFcn);
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+            function hoverFcn(src,~)
+                h = hittest(src);
+                for i = 1:numel(ax.Children)
+                    if isequal(h,ax.Children(i))
+                        if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                            e.Button = 1;
+                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
+                            return;
+                        end
+                    end
+                end
+                for i = 1:numel(ax.Children)
+                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                        if ischar(ax.Children(i).FaceColor)
+                            if strcmpi(ax.Children(i).FaceColor, 'c')
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.7);
+                                drawnow;
+                            end
+                        else
+                            if any(ax.Children(i).FaceColor ~= [0,1,1])
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.7);
+                                drawnow;
+                            end
+                        end
+                    end
+                end
+                title(ax,'');
+            end
+
         end
-        function showfb(obj, color)
-            if ~obj.isGlobalMeshGenerated
-                error('Global mesh is not generated.');
+
+        function varargout = showgg(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:}); 
+            if isa(f,"matlab.ui.Figure")
+                f.MenuBar = "none";
             end
-            if nargin<2
-                color = 'w';
+            
+            obj.ggmesh;
+            mzNames = string(fieldnames(obj.mzs)');
+
+            for mzName = mzNames
+                plt = patch(ax,'Faces', obj.mzs.(mzName).cl, ...
+                    'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
+                    'c', 'EdgeColor', 'none', ...
+                    'FaceAlpha', 0.5, ...
+                    'HitTest','on','PickableParts','visible');
+                plt.UserData = mzName;
             end
-            ah = setFigure(['[Global Mesh Boundary Edges][','Nbe = ',num2str(sum(obj.bedges)),']']);
-            patch('Faces',obj.edges(obj.bedges,[1,2]),'Vertices',obj.nodes,...
-                'FaceColor','none','EdgeColor',color,'parent',ah);
-            set(gcf,'HandleVisibility','off');
+
+            index = obj.edges(:, 3) ~= obj.edges(:, 4);
+            patch(ax,'Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5,'HitTest','off','PickableParts','none');
+
+            zoom on;box on;
+            ax.Color = [0.86,0.86,0.86];
+            grid on;
+            grid minor;
+            axis(ax, 'equal');
+            ax.Toolbar.Visible = 'off';
+            ax.GridColor      = [0.4 0.4 0.4];
+            ax.MinorGridColor = [0.2 0.2 0.2];
+            ax.GridAlpha      = 1;
+            ax.MinorGridAlpha = 1;
+
+            set(gcf,'WindowButtonMotionFcn',@hoverFcn);
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+            function hoverFcn(src,~)
+                h = hittest(src);
+                for i = 1:numel(ax.Children)
+                    if isequal(h,ax.Children(i))
+                        if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                            e.Button = 1;
+                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
+                            updateXLabel;
+                            return;
+                        end
+                    end
+                end
+                for i = 1:numel(ax.Children)
+                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                        if ischar(ax.Children(i).FaceColor)
+                            if strcmpi(ax.Children(i).FaceColor, 'c')
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.5);
+                                drawnow;
+                            end
+                        else
+                            if any(ax.Children(i).FaceColor ~= [0,1,1])
+                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.5);
+                                drawnow;
+                            end
+                        end
+                    end
+                end
+                title(ax,'');
+                updateXLabel;
+
+                function updateXLabel()
+                    % Get cursor position in axes units
+                    cp = ax.CurrentPoint;
+                    x = cp(1,1);
+                    y = cp(1,2);
+
+                    % Check if cursor is inside axes limits
+                    xl = ax.XLim;
+                    yl = ax.YLim;
+
+                    if x < xl(1) || x > xl(2) || y < yl(1) || y > yl(2)
+                        return
+                    end
+
+                    % Update xlabel
+                    xlabel(ax, sprintf('X = %.2f ,  Y = %.2f ,  R = %.2f ,  D = %.2f',...
+                        x, y, norm([x,y]), 2*norm([x,y])), 'Interpreter','none');
+                end
+
+            end
+
         end
-        function showwf(obj, color)
-            if ~obj.isGlobalMeshGenerated
-                error('Global mesh is not generated.');
+        
+        % show free boundary
+        function varargout = showfb(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+            obj.ggmesh;
+%             title(ax,['Global mesh free boundary edges', ', Nbe = ', num2str(sum(obj.bedges))]);
+
+            patch('Faces', obj.edges(obj.bedges, [1, 2]), 'Vertices', obj.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5, 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
             end
-            if nargin<2
-                color = 'k';
-            end
-            ah = setFigure(['[Global Mesh Boundary Edges][','Nbe = ',num2str(sum(obj.bedges)),']']);
-            index = obj.edges(:,3) ~= obj.edges(:,4);
-            patch('Faces',obj.edges(index,[1,2]),'Vertices',obj.nodes,...
-                'FaceColor','none','EdgeColor',color,'LineWidth',2,'parent',ah);
-            set(gcf,'HandleVisibility','off');
+
         end
-        function showmzs(obj)
+        
+        % show wire frame
+        function varargout = showwf(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+            obj.ggmesh;
+
+            index = obj.edges(:, 3) ~= obj.edges(:, 4);
+            patch('Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        % show mesh zones
+        function varargout = showmzs(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
             mzNames = fieldnames(obj.mzs);
-            ah = setFigure(['[Number of Mesh Zones: ',num2str(numel(mzNames)),']']);
+            %             title(ax,['Number of mesh zones = ', num2str(numel(mzNames))]);
+
             for i = 1:numel(mzNames)
-                patch('Faces',obj.mzs.(mzNames{i}).cl,...
-                    'Vertices',obj.mzs.(mzNames{i}).nodes,'FaceColor',...
-                    obj.mzs.(mzNames{i}).color,'EdgeColor', 'k',...
-                    'FaceAlpha',0.9, 'Parent', ah);
+                mzptr = obj.mzs.(mzNames{i});
+                patch('Faces', mzptr.cl, ...
+                    'Vertices', mzptr.nodes, 'FaceColor', ...
+                    mzptr.color, 'linewidth', 0.05 ,'EdgeColor', [0, 0, 0], ...
+                    'FaceAlpha', 1, 'Parent', ax);
             end
-            set(gcf, 'HandleVisibility' ,'off');
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
         end
+
         function showmz(obj, mzname)
             mzname = obj.checkMeshZoneExistence(mzname);
             obj.showm('c');
@@ -679,6 +940,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 'Vertices',obj.mzs.(mzname).nodes,'FaceColor','r','EdgeColor','r',...
                 'FaceAlpha',0.1);
         end
+        
         function showmd(obj, color)
             if ~obj.isGlobalMeshGenerated
                 error('Global mesh is not generated.');
@@ -694,89 +956,149 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             axis(ah,'off','equal')
             set(gcf,'HandleVisibility','off');
         end
-        %% GUI
-        function gui(obj)
-            TMDBC_GUI(obj);
-        end
-        %% Tools: copy and transform
+
+        %% tools: copy and transform
         % copy and transform
-        function copyMirrorMeshZone(obj,nmzname,mzname,varargin)
-            mzname = obj.checkMeshZoneExistence(mzname);
-            nmzname = obj.checkMeshZoneNonExistence(nmzname);
-            obj.mzs.(nmzname) = obj.mzs.(mzname).getmirror(varargin{:});
+        function copyMirrorMeshZone(obj, nmzName, mzName, varargin)
+            mzName = obj.checkMeshZoneExistence(mzName);
+            nmzName = obj.checkMeshZoneNonExistence(nmzName);
+            obj.mzs.(nmzName) = obj.mzs.(mzName).getMirror(varargin{:});
         end
+
         function cmmz(varargin)
             copyMirrorMeshZone(varargin{:});
         end
-        function copyRotateMeshZone(obj,nmzname,mzname,varargin)
-            mzname = obj.checkMeshZoneExistence(mzname);
-            nmzname = obj.checkMeshZoneNonExistence(nmzname);
-            obj.mzs.(nmzname) = obj.mzs.(mzname).getrotate(varargin{:});
+
+        function copyRotateMeshZone(obj, nmzName, mzName, varargin)
+            mzName = obj.checkMeshZoneExistence(mzName);
+            nmzName = obj.checkMeshZoneNonExistence(nmzName);
+            obj.mzs.(nmzName) = obj.mzs.(mzName).getRotate(varargin{:});
         end
+
         function crmz(varargin)
             copyRotateMeshZone(varargin{:});
         end
-        function copyShiftMeshZone(obj,nmzname,mzname,varargin)
-            mzname = obj.checkMeshZoneExistence(mzname);
-            nmzname = obj.checkMeshZoneNonExistence(nmzname);
-            obj.mzs.(nmzname) = obj.mzs.(mzname).getshift(varargin{:});
+
+        function copyShiftMeshZone(obj, nmzName, mzName, varargin)
+            mzName = obj.checkMeshZoneExistence(mzName);
+            nmzName = obj.checkMeshZoneNonExistence(nmzName);
+            obj.mzs.(nmzName) = obj.mzs.(mzName).getShift(varargin{:});
         end
+
         function cshmz(varargin)
             copyShiftMeshZone(varargin{:});
         end
+
         % only transform
-        function rotateMeshZone(obj,mzname,varargin)
-            mzname = obj.checkMeshZoneExistence(mzname);
-            obj.mzs.(mzname).rotate(varargin{:});
+        function mirrorMeshZone(obj, mzName, varargin)
+            mzName = obj.checkMeshZoneExistence(mzName);
+            obj.mzs.(mzName).mirror(varargin{:});
         end
+
+        function mmz(varargin)
+            mirrorMeshZone(varargin{:});
+        end
+
+        function rotateMeshZone(obj, mzName, varargin)
+            mzName = char(mzName);
+            mzName = obj.checkMeshZoneExistence(mzName);
+            obj.mzs.(mzName).rotate(varargin{:});
+        end
+
+        function rotateMeshZones(obj, mzNames, varargin)
+            for mzName = mzNames
+                obj.rotateMeshZone(mzName, varargin{:});
+            end
+        end
+
         function rmz(varargin)
             rotateMeshZone(varargin{:});
         end
-        function shiftMeshZone(obj,mzname,varargin)
-            mzname = rmspaces(mzname);
-            obj.checkMeshZoneExistence(mzname)
-            obj.mzs.(mzname).nodes = ext_pshift2(obj.mzs.(mzname).nodes,...
-                varargin{:});
+
+        function shiftMeshZone(obj, mzName, varargin)
+            mzName = erase(mzName, ' ');
+            obj.checkMeshZoneExistence(mzName)
+            obj.mzs.(mzName).shift(varargin{:});
         end
+
+        function shiftMeshZones(obj, mzNames, shiftX, shiftY)
+            for mzName = mzNames
+                obj.shiftMeshZone(mzName, [shiftX, shiftY]);
+            end
+        end
+
         function shmz(varargin)
             shiftMeshZone(varargin{:});
         end
+
         %% Tools: some operations on mesh zones
-        function joinMeshZones(obj,nmzname,varargin)
-            xNmzs = numel(varargin);
+        function joinMeshZones(obj, nmzName, varargin)
+
+            % find total number of mesh zones need to be joined
+            xNmzs = 0;
+            for i = 1:numel(varargin)
+                if ischar(varargin{i})
+                    xNmzs = xNmzs + 1;
+                elseif isstring(varargin{i})
+                    xNmzs = xNmzs + numel(varargin{i});
+                else
+                    error('Input type must be <char> or <string>.');
+                end
+            end
+
             if xNmzs < 2
                 error('Minimum number mzs must be 2.');
             end
-            nmzname = obj.checkMeshZoneNonExistence(nmzname);
-            Nn_tmp = zeros(1,xNmzs);
-            Ne_tmp = zeros(1,xNmzs);
+
+            mzNames = cell(1,xNmzs);
+            index = 0;
             for i = 1:numel(varargin)
-                varargin{i} = rmspaces(varargin{i});
-                Nn_tmp(i) = obj.mzs.(varargin{i}).Nn;
-                Ne_tmp(i) = obj.mzs.(varargin{i}).Ne;
+                if ischar(varargin{i})
+                    index = index + 1;
+                    mzNames{index} = obj.checkMeshZoneExistence(varargin{i});
+                else
+                    for j = 1:numel(varargin{i})
+                        index = index + 1;
+                        mzNames{index} = obj.checkMeshZoneExistence(char(varargin{i}(j)));
+                    end
+                end
             end
-            n_nmz = zeros(sum(Nn_tmp),2);
-            e_nmz = zeros(sum(Ne_tmp),3);
+
+            nmzName = obj.checkMeshZoneNonExistence(nmzName);
+            Nn_tmp = zeros(1, xNmzs);
+            Ne_tmp = zeros(1, xNmzs);
+
+            for i = 1:xNmzs
+                Nn_tmp(i) = obj.mzs.(mzNames{i}).Nn;
+                Ne_tmp(i) = obj.mzs.(mzNames{i}).Ne;
+            end
+
+            n_nmz = zeros(sum(Nn_tmp), 2);
+            e_nmz = zeros(sum(Ne_tmp), 4);
             n_tmp = 0;
             e_tmp = 0;
-            for i = 1:numel(varargin)
-                n_nmz(1+n_tmp:n_tmp+Nn_tmp(i),:) = obj.mzs.(varargin{i}).nodes;
-                e_nmz(1+e_tmp:e_tmp+Ne_tmp(i),:) = obj.mzs.(varargin{i}).cl+n_tmp;
+
+            for i = 1:xNmzs
+                n_nmz(1 + n_tmp:n_tmp + Nn_tmp(i), :) = obj.mzs.(mzNames{i}).nodes;
+                e_nmz(1 + e_tmp:e_tmp + Ne_tmp(i), :) = obj.mzs.(mzNames{i}).cl + n_tmp;
                 n_tmp = n_tmp + Nn_tmp(i);
                 e_tmp = e_tmp + Ne_tmp(i);
             end
+
             % jointing mzs
-            [n_nmz,~,ic] = uniquetol(n_nmz,obj.gleps,'ByRows',true);
+            [n_nmz, ~, ic] = uniquetol(n_nmz, obj.gleps, 'ByRows', true);
             e_nmz = ic(e_nmz);
             % adding new mz
-            obj.mzs.(nmzname) = TMZPC(e_nmz,n_nmz);
-            obj.mzs.(nmzname).material = obj.mzs.(varargin{1}).material;
-            obj.mzs.(nmzname).color = obj.mzs.(varargin{1}).color;
+            obj.mzs.(nmzName) = emdlab_m2d_qmz(e_nmz, n_nmz);
+            obj.mzs.(nmzName).material = obj.mzs.(mzNames{1}).material;
+            obj.mzs.(nmzName).color = obj.mzs.(mzNames{1}).color;
             % removing old mzs
-            for i = 1:numel(varargin)
-                obj.mzs = rmfield(obj.mzs,varargin{i});
+            for i = 1:xNmzs
+                obj.mzs = rmfield(obj.mzs, mzNames{i});
             end
+
         end
+
         function jmzs(varargin)
             joinMeshZones(varargin{:});
         end
@@ -847,71 +1169,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
             ttmptr.mzs.(mzName).material = mzptr.material;
         end
-        %% Editing Functions
-        function y = getDefaultMeshZoneName(obj)
-            index = 0;
-            mzNames = fieldnames(obj.mzs);
-            while true
-                index = index + 1;
-                y = ['Zone',num2str(index)];
-                if ~ismember(y, mzNames), break; end
-            end
-        end
-        function mzname = checkMeshZoneExistence(obj,mzname)
-            mzname = rmspaces(mzname);
-            if ~isfield(obj.mzs,mzname)
-                error('Specified mesh zone does not exist.');
-            end
-        end
-        function mzname = checkMeshZoneNonExistence(obj,mzname)
-            mzname = rmspaces(mzname);
-            if isfield(obj.mzs,mzname)
-                error('Specified mesh zone already exist.');
-            end
-        end
-        function setMeshZoneColor(obj,mzname,color)
-            mzname = obj.checkMeshZoneExistence(mzname);
-            obj.mzs.(rmspaces(mzname)).color = color;
-        end
-        function setmzc(varargin)
-            setMeshZoneColor(varargin{:});
-        end
-        function addmz(obj,varargin)
-            if nargin<2,obj.EL.printError(0);
-            elseif nargin == 2
-                if ~isa(varargin{1}, 'QMZPC'),obj.EL.printError(2);end
-                mzname = obj.getDefaultMeshZoneName;
-                mzvalue = varargin{1};
-            elseif nargin == 3
-                if ~isa(varargin{1}, 'char'),obj.EL.printCharVarError('Mesh zone name');end
-                mzname = obj.checkMeshZoneNonExistence(varargin{1});
-                if ~isa(varargin{2}, 'QMZPC'),obj.EL.printError(2);end
-                mzvalue = varargin{2};
-            else,obj.EL.printError(1);
-            end
-            % adding new mesh zone
-            obj.mzs.(mzname) = mzvalue;
-            obj.mzs.(mzname).material = 'air';
-            obj.mzs.(mzname).color = rand(1,3);
-            % changing states
-            obj.makeFalse_isGlobalMeshGenerated;
-        end
-        function removemz(obj,mzName)
-            mzName = obj.checkMeshZoneExistence(mzName);
-            delete(obj.mzs.(mzName));
-            obj.mzs = rmfield(obj.mzs,mzName);
-            % changing states
-            obj.makeFalse_isGlobalMeshGenerated;
-        end
-        function changeMeshZoneName(obj, mzName, newName)
-            newName = obj.checkMeshZoneNonExistence(newName);
-            mzName = obj.checkMeshZoneExistence(mzName);
-            obj.mzs.(newName) = copy(obj.mzs.(mzName));
-            obj.mzs = rmfield(obj.mzs, mzName);
-        end
-        function clearAllmzs(obj)
-            obj.mzs = struct();
-        end
+
         %% Index Operations
         % free boundary
         function y = getfbe(obj)
@@ -995,7 +1253,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 error('number of input indices must be even.');
             end
             tp = obj.nodes(k,:);
-            
+
             temp = 1;
             while ~isempty(tp)
                 sp = tp(1,:);
@@ -1382,6 +1640,79 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 obj.addmz(TMZPC(etmp,ptmp));
             end
         end
+        function aux_unify(obj, mzNameCommonPart)
+            mzNames = obj.getMeshZoneNames;
+            idx = ~cellfun('isempty', regexp(mzNames, "^"+mzNameCommonPart+"\d+$"));
+            if isempty(idx)
+                error('No mesh zone was detected for this common part string.');
+            else
+                obj.joinMeshZones(mzNameCommonPart, mzNames(idx));
+            end
+        end
+
+        % operation sequence: copy mirror -> copy rotate
+        % there are two outputs
+        % output is a list containing the name of new mesh zones
+        function varargout = aux_cmcr(obj, mzName, mirrorAxis, Ncopy, rotateAngle, xc, yc)
+
+            if nargin < 5
+                rotateAngle = 2*pi/Ncopy;
+            end
+
+            if nargin < 6
+                xc = 0;
+                yc = 0;
+            end
+
+            % change the name of current mesh zone
+            obj.changeMeshZoneName(mzName, [mzName, '11']);
+
+            % mirror mesh zone with respect to x axis
+            obj.cmmz([mzName, '21'], [mzName, '11'], mirrorAxis);
+
+            for i = 2:Ncopy
+                obj.crmz([mzName, '1', num2str(i)], [mzName, '1', num2str(i-1)], rotateAngle, [xc, yc]);
+                obj.crmz([mzName, '2', num2str(i)], [mzName, '2', num2str(i-1)], rotateAngle, [xc, yc]);
+            end
+
+            if nargout == 1
+
+                newMeshZoneNames = strings(1,2*Ncopy);
+                for i = 1:Ncopy
+                    newMeshZoneNames(2*i-1) = mzName + "1" + num2str(i);
+                    newMeshZoneNames(2*i) = mzName + "2" + num2str(i);
+                end
+                varargout{1} = newMeshZoneNames;
+
+            elseif nargout > 1
+                error('Too many output arguments');
+            end
+
+            % change states
+            obj.makeFalse_isGlobalMeshGenerated;
+
+        end
+
+        function aux_cmjcrj(obj, mzName, varargin)
+            newNames = obj.aux_cmcr(mzName, varargin{:});
+            obj.joinMeshZones(mzName, newNames);
+        end
+
+        function aux_cmxjcrj(obj, mzName, varargin)
+            mzName = char(mzName);
+            newNames = obj.aux_cmcr(mzName, [1,0], varargin{:});
+            obj.joinMeshZones(mzName, newNames);
+        end
+
+        function aux_cmxjcr(obj, mzName, varargin)
+            mzName = char(mzName);
+            newNames = obj.aux_cmcr(mzName, [1,0], varargin{:});
+            for i = 1:(numel(newNames)/2)
+                newName = char(mzName + string(i));
+                obj.joinMeshZones(newName, newNames(2*i-1:2*i));
+            end
+        end
+        
     end
     methods (Access = private)
         function makeFalse_isGlobalMeshGenerated(obj)
@@ -1399,61 +1730,5 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.isKexy1_TL3_Evaluated = false;
         end
     end
-    %% Auxiliary tools
-    methods
-        function cmrj(obj, mzname, Nt, Ns, type)
-            % copy|mirror|rotate|join
-            if nargin<4, Ns = Nt; end
-            if nargin<5, type = 'x'; end
-            tau_t = 2*pi/Nt;
-            switch type
-                case 'x'
-                    mirrorAxis = [1,0];
-                case 'y'
-                    mirrorAxis = [0,1];
-                case 's'
-                    mirrorAxis = [cos(tau_t/2), sin(tau_t/2)];
-                otherwise
-                    error('Wrong type.');
-            end
-            tmp = obj.getDefaultMeshZoneName;
-            obj.changeMeshZoneName(mzname, [tmp, '1']);
-            obj.cmmz([tmp, '2'],[tmp, '1'], mirrorAxis);
-            for i = 1:2:2*(Ns-1)
-                obj.crmz([tmp,num2str(i+2)],[tmp,num2str(i)],tau_t);
-                obj.crmz([tmp,num2str(i+3)],[tmp,num2str(i+1)],tau_t);
-            end
-            tmp = getlist(tmp,1:2*Ns);
-            obj.jmzs(mzname,tmp{:});
-        end
-        function cmr(obj, mzname, Nt, Nc, type)
-            tau_t = 2*pi/Nt;
-            switch type
-                case 'x'
-                    mirrorAxis = [1,0];
-                case 'y'
-                    mirrorAxis = [0,1];
-                case 's'
-                    mirrorAxis = [cos(tau_t/2), sin(tau_t/2)];
-                otherwise
-                    error('Wrong type.');
-            end
-            obj.changeMeshZoneName(mzname, [mzname, '11']);
-            obj.cmmz([mzname, '21'],[mzname, '11'],mirrorAxis);
-            for i = 1:(Nc-1)
-                obj.crmz([mzname,'1',num2str(i+1)],[mzname,'1',num2str(i)],tau_t);
-                obj.crmz([mzname,'2',num2str(i+1)],[mzname,'2',num2str(i)],tau_t);
-            end
-        end
-        function cmrx(obj, mzname, Nt, Nc)
-            % copy|mirror|rotate|x Axis
-            if nargin<4, Nc = Nt; end
-            cmr(obj, mzname, Nt, Nc, 'x');
-        end
-        function cmrs(obj, mzname, Nt, Nc)
-            % copy|mirror|rotate|slot Symmetry
-            if nargin<4, Nc = Nt; end
-            cmr(obj, mzname, Nt, Nc, 's');
-        end
-    end
+    
 end

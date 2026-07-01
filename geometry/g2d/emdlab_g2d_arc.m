@@ -118,6 +118,9 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
 
         end
         
+        function y = getLength(obj)
+            y = obj.getRadius * obj.getAngle;
+        end
 %         function y = getCenter(obj)
 %             
 %             p = obj.getMeshNodes();

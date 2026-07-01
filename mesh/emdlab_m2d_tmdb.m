@@ -1,4 +1,5 @@
-% 2D triangular mesh data base
+% EMDLAB: Electrical Machines Design Laboratory
+% 2D triangular mesh data base class
 
 classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp
 
@@ -88,6 +89,40 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.addMaterial('air');
         end
 
+        function addMeshZone(obj, varargin)
+
+            % you can pass an <emdlab_m2d_tmz> class without name
+            if nargin == 2
+
+                if ~isa(varargin{1}, 'emdlab_m2d_tmz')
+                    error('Mesh zone class must be <emdlab_m2d_tmz>.');
+                end
+                mzName = obj.getDefaultMeshZoneName;
+                mzptr = varargin{1};
+
+            % you can pass an <emdlab_m2d_tmz> mesh zone with specified name
+            elseif nargin == 3
+
+                mzName = obj.checkMeshZoneNonExistence(varargin{1});
+                if ~isa(varargin{2}, 'emdlab_m2d_tmz')
+                    error('Mesh zone class must be <emdlab_m2d_tmz>.');
+                end
+                mzptr = varargin{2};
+
+            else
+                error('Wrong number of arguments.');
+            end
+
+            % adding new mesh zone
+            obj.mzs.(mzName) = mzptr;
+            obj.mzs.(mzName).material = 'air';
+            obj.mzs.(mzName).color = rand(1,3);
+
+            % changing states
+            obj.makeFalse_isGlobalMeshGenerated;
+
+        end
+
         function y = get.Nn(obj)
             y = size(obj.nodes, 1);
         end
@@ -108,10 +143,6 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 delete(obj.mzs.(mzNames{i}));
             end
 
-        end
-
-        function y = getMeshZoneNames(obj)
-            y = string(fieldnames(obj.mzs))';
         end
 
         function y = get.isTL3(obj)
@@ -202,11 +233,11 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
-        % evaluate element zone index
+        % evaluate element material & zone index
         function evalezi(obj)
 
             % construct emi & ezi
-            meshZoneNames = string(fieldnames(obj.mzs)');
+            meshZoneNames = obj.getMeshZoneNames;
             obj.materialNames = string(fieldnames(obj.mts)');
             obj.emi = false(obj.Nmts, obj.Ne);
             obj.ezi = false(obj.Ne, obj.Nmzs);
@@ -898,41 +929,50 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         %% topological functions
         % setting needed data
         function setdata(obj)
-            % first edge of each triangle
+
+            % triangle edges
             e1 = obj.cl(:, [1, 2]);
-            % second edge of each triangle
             e2 = obj.cl(:, [2, 3]);
-            % third edge of each triangle
             e3 = obj.cl(:, [3, 1]);
+
             % sorting for lower index
             [e1, s1] = sort(e1, 2);
             [e2, s2] = sort(e2, 2);
             [e3, s3] = sort(e3, 2);
-            % specefying chaNed edge index
+
+            % specefying changed edge index
             s1 = s1(:, 1) == 2;
             s2 = s2(:, 1) == 2;
             s3 = s3(:, 1) == 2;
+
             % unification of edges
             [obj.edges, ~, ic] = unique([e1; e2; e3], 'rows');
+            
             % getting number of elements
             ne = obj.Ne;
+
             % getting index of edge corresponding to each elements
             e1 = ic(1:ne);
             e2 = ic(1 + ne:2 * ne);
             e3 = ic(1 + 2 * ne:3 * ne);
+
             % specefying boundary edges
             obj.bedges = sparse([e1, e2, e3], ones(3 * ne, 1), ones(3 * ne, 1));
             obj.bedges = full(obj.bedges == 1);
+
             % specefying trace direction
             e1(s1) = -e1(s1);
             e2(s2) = -e2(s2);
             e3(s3) = -e3(s3);
+
             % element matrix
             obj.elements(:, 1:3) = [e1, e2, e3];
+
             % edge element
             obj.edges = [obj.edges, zeros(size(obj.edges, 1), 6)];
-            tmdbc_evalee(obj.edges, obj.elements);
+            emdlab_m2d_tmdbc_evalee(obj.edges, obj.elements);
             obj.edgeNamedSelections.('none') = find(obj.bedges);
+
         end
 
         function strefine(obj)

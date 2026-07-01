@@ -1,7 +1,7 @@
 %{
 note: calculation of the stator field of a 3-phase induction motor using
-emdlab magnetic static solver by exciting stator winding with balanced 
-currents -> fraction model
+emdlab magnetic-static solver by exciting stator winding with balanced 
+3-phase currents -> fraction model
 %}
 
 % initialization

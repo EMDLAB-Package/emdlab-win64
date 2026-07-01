@@ -1,6 +1,7 @@
-% 3D tetrahedral mesh zone
+% EMDLAB: Electrical Machines Design Laboratory
+% Tetrahedral mesh zone (3D element)
 
-classdef emdlab_m3d_ttmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
+classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
     properties(SetAccess = private)
 
@@ -89,7 +90,7 @@ classdef emdlab_m3d_ttmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
     methods
         %% constructor and destructor
-        function obj = emdlab_m3d_ttmz(cl, nodes)
+        function obj = emdlab_m3d_thmz(cl, nodes)
             if nargin < 2, error('Not enough input arguments.'); end
             if nargin > 2, error('Too many input arguments.'); end
             obj.nodes = nodes;

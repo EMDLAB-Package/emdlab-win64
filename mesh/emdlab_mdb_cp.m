@@ -41,15 +41,15 @@ classdef emdlab_mdb_cp < handle
         end
 
         function y = get.Nmzs(obj)
-
             y = numel(fieldnames(obj.mzs));
-
         end
 
         function y = get.Nmts(obj)
-
             y = numel(fieldnames(obj.mts));
+        end
 
+        function y = getMeshZoneNames(obj)
+            y = string(fieldnames(obj.mzs))';
         end
 
         function y = getDefaultMeshZoneName(obj)
@@ -131,7 +131,7 @@ classdef emdlab_mdb_cp < handle
             % adding new mesh zone
             obj.mzs.(mzName) = mzptr;
             obj.mzs.(mzName).material = 'air';
-            obj.mzs.(mzName).color = rand(1, 3);
+            obj.mzs.(mzName).color = rand(1,3);
 
             % changing states
             obj.makeFalse_isGlobalMeshGenerated;
@@ -254,7 +254,7 @@ classdef emdlab_mdb_cp < handle
         function setMaterial(obj, mzName, mName)
 
             mzName = obj.checkMeshZoneExistence(mzName);
-            mName = strrep(mName, ' ', '');
+            mName = erase(mName, ' ');
 
             if ~ismember(mName, fieldnames(obj.mts))
                 error(['Material <<', mName, '>> does not found.']);
@@ -277,12 +277,12 @@ classdef emdlab_mdb_cp < handle
 
         end
 
-        function addMaterial(obj, mName, mObject)
+        function addMaterial(obj, matrialName, mObject)
 
             if nargin == 2
-                obj.mts.(mName) = eval(['emdlab_mlib_', mName]);
+                obj.mts.(matrialName) = eval(['emdlab_mlib_', matrialName]);
             else
-                obj.mts.(mName) = mObject;
+                obj.mts.(matrialName) = mObject;
             end
 
         end

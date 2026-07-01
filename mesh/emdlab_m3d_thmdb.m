@@ -1,6 +1,7 @@
-% 3D tetrahedral mesh data base
+% EMDLAB: Electrical Machines Design Laboratory
+% tetrahedral mesh data base
 
-classdef emdlab_m3d_ttmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp
+classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp
 
     properties (SetAccess = private)
 
@@ -71,7 +72,7 @@ classdef emdlab_m3d_ttmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
     methods
         %% constructor and destructor
-        function obj = emdlab_m3d_ttmdb(varargin)
+        function obj = emdlab_m3d_thmdb(varargin)
             % add default material
             obj.addMaterial('air');
         end
