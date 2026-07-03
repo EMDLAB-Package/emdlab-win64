@@ -229,8 +229,39 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
         end
 
-        %% Excitation Definitions
+        function evalTSmooth(obj)
 
+            obj.results.Tsmooth = zeros(obj.m.Nn,1);
+            areaAttachedToNode = zeros(obj.m.Nn,1);
+            for i = 1:obj.m.Ne
+                for j = 1:4
+                    obj.results.Tsmooth(obj.m.cl(i,j)) = obj.results.Tsmooth(obj.m.cl(i,j)) + ...
+                        obj.results.T(i) * obj.m.gea(i);
+                    areaAttachedToNode(obj.m.cl(i,j)) = areaAttachedToNode(obj.m.cl(i,j)) + obj.m.gea(i);
+                end
+            end
+            obj.results.Tsmooth = obj.results.Tsmooth ./ areaAttachedToNode;
+            
+            % apply excitation conditions
+            exNames = obj.getExcitationNames;
+            for i = 1:numel(exNames)
+                exptr = obj.excitations.(exNames(i));
+                if strcmpi(exptr.type,'fixed-temperature')
+                    for j = reshape(exptr.idx, 1, [])
+                        if isa(exptr.value, 'function_handle')
+                            pts = obj.m.nodes(obj.m.edges(j,1:2),:);
+                            obj.results.Tsmooth(obj.m.edges(j,1)) = exptr.value(pts(1,1),pts(1,2));
+                            obj.results.Tsmooth(obj.m.edges(j,2)) = exptr.value(pts(2,1),pts(2,2));
+                        else
+                            obj.results.Tsmooth(obj.m.edges(j,1:2)) = exptr.value;
+                        end
+                    end                     
+                end
+            end            
+
+        end
+
+        %% Excitation Definitions
         function addFixedTemperatureBC(obj, exName, idx, value)
 
             exName = obj.checkExcitationNonExistence(exName);
@@ -291,7 +322,37 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
             cb = colorbar;
             cb.FontName = 'Verdana';
             cb.FontSize = 12;
-            cb.Label.String = 'Average Temperature';
+            cb.Label.String = 'Average Temperature [C]';
+
+            index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
+            patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function varargout = plotTemperature(obj, N, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+            if nargin<2, N=10; end
+            obj.evalTSmooth;
+
+            patch('faces', obj.m.cl, 'Vertices', obj.m.nodes, 'FaceVertexCData', obj.results.Tsmooth, ...
+                'FaceColor','interp', 'edgecolor', 'none');
+            colormap(jet(N));
+            cb = colorbar;
+            cb.FontName = 'Verdana';
+            cb.FontSize = 12;
+            cb.Label.String = 'Temperature [C]';
 
             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...

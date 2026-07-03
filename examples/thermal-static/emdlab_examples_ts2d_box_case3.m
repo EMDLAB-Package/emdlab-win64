@@ -14,7 +14,7 @@ addpath(genpath('C:\emdlab-win64'));
 W = 1; % width of the box
 H = 1; % height of the box
 Z = 1; % depth of the problem
-meshSize = 1/10; % maximum mesh size
+meshSize = 1/20; % maximum mesh size
 
 % define geometry
 g = emdlab_g2d_db;
@@ -49,3 +49,4 @@ s.addConvectionBC('rest', idx, 10, 0);
 s.solve;
 s.plotAverageTemperature(20);
 mean(s.results.T)
+s.plotTemperature(20);

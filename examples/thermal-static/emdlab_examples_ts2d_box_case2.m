@@ -49,3 +49,4 @@ s.addFixedTemperatureBC('rest', idx, 0);
 s.solve;
 s.plotAverageTemperature(20);
 mean(s.results.T)
+s.plotTemperature(20);
