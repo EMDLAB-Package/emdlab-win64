@@ -1239,7 +1239,11 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function meshZone = getQMesh(obj, e1, e2, e3, e4, Nx, Ny)
+        function meshZone = getQMeshByEdges(obj, e1, e2, e3, e4, Nx, Ny)
+
+            % set default values for Nx & Ny
+            if nargin < 5, Nx = 3; end
+            if nargin < 6, Nx = 6; end
 
             % set lower limits for Nx & Ny
             Nx = max(Nx+1,3);
@@ -1397,6 +1401,138 @@ classdef emdlab_g2d_db < handle
             end
 
         end
+
+        function varargout = showSketchWithArrows(obj)
+
+f = figure('NumberTitle','on','WindowState','maximized',...
+    'name','EMDLAB Geometry Visualization','color',[0.9,0.9,0.9]);
+hold all;
+
+%% plot edges (prepare data first)
+Ne = numel(obj.edges);
+v = cell(Ne,1);
+cl = cell(Ne,1);
+c = zeros(Ne,2);
+
+for i = 1:Ne
+    v{i} = obj.edges(i).ptr.getMeshNodes;
+    cl{i} = (1:size(v{i},1)-1)';
+    cl{i} = [cl{i},cl{i}+1];
+    c(i,:) = obj.edges(i).ptr.getCenter;
+end
+
+Index = 0;
+for i = 2:Ne
+    Index = Index + size(v{i-1},1);
+    cl{i} = cl{i} + Index;
+end
+
+v = cell2mat(v);
+cl = cell2mat(cl);
+
+%% compute directions
+if ~isempty(v)
+
+    p1 = v(cl(:,1),:);
+    p2 = v(cl(:,2),:);
+
+    midPoints = (p1 + p2)/2;
+
+    dirs = p2 - p1;
+    lens = sqrt(sum(dirs.^2,2));
+    lens(lens==0) = 1;
+
+    dirs = dirs ./ lens;
+
+    perp = [-dirs(:,2) dirs(:,1)];
+
+    arrowLength = 0.4;
+    arrowWidth  = 0.2;
+
+    %% 1️⃣ draw arrows FIRST (bottom layer)
+    for i = 1:size(midPoints,1)
+
+        M = midPoints(i,:);
+        d = dirs(i,:);
+        n = perp(i,:);
+
+        tip = M + arrowLength*d;
+
+        base1 = M + (arrowWidth/2)*n;
+        base2 = M - (arrowWidth/2)*n;
+
+        X = [tip(1) base1(1) base2(1)];
+        Y = [tip(2) base1(2) base2(2)];
+
+        patch(X,Y,'c','EdgeColor','none');
+
+    end
+
+    %% 2️⃣ draw edges
+    patch('faces',cl,'vertices',v,'edgecolor','b','linewidth',1.2);
+
+end
+
+
+%% plot points
+Np = numel(obj.points);
+p = zeros(Np,2);
+
+for i = 1:Np
+    p(i,1) = obj.points(i).x;
+    p(i,2) = obj.points(i).y;
+end
+
+if ~isempty(p)
+
+    %% 3️⃣ draw points
+    plot(p(:,1),p(:,2),'s','LineWidth',1.5,'MarkerEdgeColor','k');
+
+    p_min = min(p,[],1);
+    p_max = max(p,[],1);
+
+    plot([min(p_min(1),0),max(p_max(1),0)],[0,0],'--','color',[0.2,0.2,0.2]);
+    plot([0,0],[min(p_min(2),0),max(p_max(2),0)],'--','color',[0.2,0.2,0.2]);
+
+    %% 4️⃣ point tags
+    pointTags = cell(1,Np);
+    for i = 1:Np
+        pointTags{i} = obj.points(i).tag;
+    end
+
+    text(p(:,1),p(:,2),pointTags,...
+        'HorizontalAlignment','left',...
+        'VerticalAlignment','top',...
+        'BackgroundColor','y');
+
+end
+
+
+%% 5️⃣ edge tags (top layer)
+edgeTags = cell(1,Ne);
+for i = 1:Ne
+    edgeTags{i} = obj.edges(i).tag;
+end
+
+text(c(:,1),c(:,2),edgeTags,...
+    'BackgroundColor','w',...
+    'HorizontalAlignment','center',...
+    'VerticalAlignment','middle');
+
+
+set(gca,'clipping','off');
+
+axis off equal
+zoom on
+grid on
+drawnow;
+
+if nargout == 1
+    varargout{1} = f;
+end
+
+end
+
 
         function showFaces(obj)
 
@@ -2034,7 +2170,7 @@ classdef emdlab_g2d_db < handle
                     for i = 1:numel(obj.faces)
 
                         faceName = obj.faces(i).tag;
-                        lNames = strings(1,numel(obj.faces(i).loops));                        
+                        lNames = strings(1,numel(obj.faces(i).loops));
                         lIndex = 0;
 
                         for l = obj.faces(i).loops
@@ -2092,9 +2228,9 @@ classdef emdlab_g2d_db < handle
                         fprintf(fid2, 'call rename(oEditor, "%s", "%s")\n', lNames(1), faceName);
 
                         % set face color
-                        fprintf(fid2, 'call changeObjectColor(oEditor, "%s", %s)\n', faceName, join(string(floor(obj.faces(i).color*255)),","));                        
+                        fprintf(fid2, 'call changeObjectColor(oEditor, "%s", %s)\n', faceName, join(string(floor(obj.faces(i).color*255)),","));
 
-                    end                    
+                    end
 
                 else
                     fprintf(fid2, '%s\n', str);

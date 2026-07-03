@@ -339,7 +339,8 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             if obj.isKeFe_TL3_Evaluated, return; end
 
             % calculation of stiffness matrix, mass matrix and force vector
-            [obj.mtcs.Ke, obj.mtcs.Me, obj.mtcs.Fe, obj.mtcs.FeMx, obj.mtcs.FeMy] = emdlab_m2d_tl3_evalKeMeFe(obj.cl, obj.nodes);
+            [obj.mtcs.Ke, obj.mtcs.Me, obj.mtcs.Fe, obj.mtcs.FeMx, obj.mtcs.FeMy] = ...
+                emdlab_m2d_tl3_evalKeMeFe(obj.cl, obj.nodes);
 
             if mzFlag
 
@@ -1147,6 +1148,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
+        % show global geometry
         function varargout = showgg(obj, varargin)
 
             [f,ax] = emdlab_flib_fax(varargin{:}); 
@@ -1437,6 +1439,35 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 patch('Faces', obj.cl(varargin{i},[1,2,3]), 'Vertices', obj.nodes, ...
                     'FaceColor', 'r', 'EdgeColor', 'r', 'parent', ax, 'Marker', 'o', 'MarkerFaceColor', 'r', 'LineWidth', 2);
             end
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function varargout = showce(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+            obj.ggmesh;
+
+            pts = [obj.getCenterOfElements; obj.getCenterOfEdges];
+            cl1_tmp = repmat(1:obj.Ne,3,1);
+            cl2_tmp = abs(obj.elements(:,1:3))' + obj.Ne;
+            cl3_tmp = [cl1_tmp(:),cl2_tmp(:)];
+
+            patch('Faces', obj.cl(:, [1,2,3]), 'Vertices', obj.nodes, ...
+                'FaceColor', 'w', ...
+                'FaceAlpha', 1, 'EdgeColor', 'k', 'linewidth', 2, 'parent', ax);
+
+            patch('Faces', cl3_tmp, 'Vertices', pts, ...
+                'FaceColor', 'none', 'EdgeColor', 'r', 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
@@ -1931,6 +1962,11 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             y = (obj.nodes(obj.cl(:, 1), :) + obj.nodes(obj.cl(:, 2), :) + obj.nodes(obj.cl(:, 3), :)) / 3;
         end
 
+        function y = getCenterOfEdges(obj)
+            obj.ggmesh;
+            y = (obj.nodes(obj.edges(:, 1), :) + obj.nodes(obj.edges(:, 2), :)) / 2;
+        end
+
         % periodic nodes
         function [km, ks] = splitRotate(obj, k, varargin)
             Nk = length(k);
@@ -2046,10 +2082,10 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         end
 
         %% Named Selections
-        % edge
+        % edges
         function name = checkEdgeNamedSelectionExistence(obj, name)
-            name = rmspaces(name);
-
+            
+            name = erase(name, ' ');
             if ~isfield(obj.edgeNamedSelections, name)
                 error('Specified edge named selection does not exist.');
             end
@@ -2057,8 +2093,8 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         end
 
         function name = checkEdgeNamedSelectionNonExistence(obj, name)
-            name = rmspaces(name);
-
+            
+            name = erase(name, ' ');
             if isfield(obj.edgeNamedSelections, name)
                 error('Specified edge named selection already exist.');
             end
@@ -2066,16 +2102,18 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         end
 
         function addEdgeNamedSelection(obj, name, indices)
-            name = obj.checkEdgeNamedSelectionNonExistence(name);
 
+            name = erase(name, ' ');
+            name = obj.checkEdgeNamedSelectionNonExistence(name);
             if isempty(indices)
-                error('indices matreix is empty.');
+                error('Indices matreix cannot be empty.');
             end
 
             obj.edgeNamedSelections.(name) = indices;
             obj.edgeNamedSelections.('none') = setdiff(...
                 obj.edgeNamedSelections.('none'), ...
                 obj.edgeNamedSelections.(name));
+            
         end
 
         %% import and export

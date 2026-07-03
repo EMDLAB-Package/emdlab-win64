@@ -13,6 +13,9 @@ classdef emdlab_phy_constants
         
         % permittivity of vaccume [H/m]
         e0 = 8.85e-12;  
+
+        % Stefan-Boltzmann constant [W/(m^2 K^4)]
+        sigmaSB = 5.670374419e-8;
         
     end
     

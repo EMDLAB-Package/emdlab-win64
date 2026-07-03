@@ -87,3 +87,4 @@ s.solve();
 % visualize solution
 s.gui;
 s.plotBrBtOnCircle(0, 0, gv_ISD/2-gv_gap/2, 1000);
+

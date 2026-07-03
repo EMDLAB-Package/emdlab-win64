@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% Tetrahedral mesh zone (3D element)
+% Hexahedral mesh zone (3D element)
 
-classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
+classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
     properties(SetAccess = private)
 
@@ -9,13 +9,13 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         nodes (:,3) double;
 
         % mesh connectivity list
-        cl (:,4) double;
+        cl (:,8) double;
 
-        % mesh elements: [facet1, facet2, facet3, facet4]
-        elements (:,4) double;
+        % mesh elements: [facet1, facet2, facet3, facet4, facet5, facet6]
+        elements (:,6) double;
 
-        % unique facets: [node1, node2, node3]
-        facets (:,3) double;
+        % unique facets: [node1, node2, node3, node4]
+        facets (:,4) double;
 
         % list of boundary facets
         bfacets (:,1);
@@ -57,24 +57,16 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
      properties (Access = private)
 
-        % element volume
-        ev
+        % a vector containing volume of elements
+        ev (:,1) double;
 
         % mesh zone volume
         volume (1,1) double;
-        
-        % Q
-        Q
-
-        % Weight matrix
-        Wm
 
         % states
         isDataSet (1,1) logical = false;
-        is_ev_Evaluated (1,1) logical = false;
-        is_volume_Evaluated (1,1) logical = false;
-        is_Wm_Evaluated (1,1) logical = false;
-        is_Q_Evaluated (1,1) logical = false;
+        isVolumeOfElementsEvaluated (1,1) logical = false;
+        isMeshZoneVolumeEvaluated (1,1) logical = false;
 
     end
 
@@ -90,7 +82,7 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
     methods
         %% constructor and destructor
-        function obj = emdlab_m3d_thmz(cl, nodes)
+        function obj = emdlab_m3d_hhmz(cl, nodes)
 
             if nargin < 2, error('Not enough input arguments.'); end
             if nargin > 2, error('Too many input arguments.'); end
@@ -110,15 +102,19 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         %% FEM preparation
         function evalVolumeOfElements(obj)
-            if obj.is_ev_Evaluated, return; end
+
+            if obj.isVolumeOfElementsEvaluated, return; end
+
             % x, y and z coordinate of points
             xp = obj.nodes(:,1);
             yp = obj.nodes(:,2);
             zp = obj.nodes(:,3);
+
             % point coordinate of each triangle nodes
             xp = xp(obj.cl');
             yp = yp(obj.cl');
             zp = zp(obj.cl');
+
             % calculation the volume of each tetrahedras
             obj.ev = xp(1,:).*(yp(2,:).*(zp(4,:)-zp(3,:))+...
                 yp(3,:).*(zp(2,:)-zp(4,:))+yp(4,:).*(zp(3,:)-zp(2,:))) +...
@@ -129,16 +125,21 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 xp(4,:).*(yp(1,:).*(zp(2,:)-zp(3,:))+...
                 yp(2,:).*(zp(3,:)-zp(1,:))+yp(3,:).*(zp(1,:)-zp(2,:)));
             obj.ev = abs(obj.ev)/6;
+
             % change states
-            obj.is_ev_Evaluated = true;
+            obj.isVolumeOfElementsEvaluated = true;
+
         end
 
         function evalVolume(obj)
-            if obj.is_volume_Evaluated, return; end
+
+            if obj.isMeshZoneVolumeEvaluated, return; end
             obj.evalVolumeOfElements;
             obj.volume = sum(obj.ev);
+
             % change states
-            obj.is_volume_Evaluated = true;
+            obj.isMeshZoneVolumeEvaluated = true;
+
         end
 
         %% topological functions
@@ -153,17 +154,21 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % check if already data is set
             if obj.isDataSet, return; end
 
-            % tetrahedral facets
-            f1 = obj.cl(:,[1,2,3]);
-            f2 = obj.cl(:,[2,4,3]);
-            f3 = obj.cl(:,[3,4,1]);
-            f4 = obj.cl(:,[1,4,2]);
+            % hexahedral faces
+            f1 = obj.cl(:,[1,2,3,4]);
+            f2 = obj.cl(:,[5,8,7,6]);
+            f3 = obj.cl(:,[1,5,6,2]);
+            f4 = obj.cl(:,[2,6,7,3]);
+            f5 = obj.cl(:,[3,7,8,4]);
+            f6 = obj.cl(:,[4,8,5,1]);
 
             % sorting for lower index
             [f1,s1] = sort(f1,2);
             [f2,s2] = sort(f2,2);
             [f3,s3] = sort(f3,2);
             [f4,s4] = sort(f4,2);
+            [f5,s5] = sort(f5,2);
+            [f6,s6] = sort(f6,2);
 
             % specefying changed facet index
             s1 = ((s1(:,1)==1)&(s1(:,2)==3))|...
@@ -561,8 +566,8 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         function makeFalse_isDataSetted(obj)
             obj.isDataSet = false;
-            obj.is_ev_Evaluated = false;
-            obj.is_volume_Evaluated = false;
+            obj.isVolumeOfElementsEvaluated = false;
+            obj.isMeshZoneVolumeEvaluated = false;
             obj.is_Wm_Evaluated = false;
             obj.is_Q_Evaluated = false;
         end

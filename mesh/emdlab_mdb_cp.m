@@ -52,6 +52,10 @@ classdef emdlab_mdb_cp < handle
             y = string(fieldnames(obj.mzs))';
         end
 
+        function y = getMaterialNames(obj)
+            y = string(fieldnames(obj.mts))';
+        end
+
         function y = getDefaultMeshZoneName(obj)
 
             index = 0;
