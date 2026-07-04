@@ -1750,6 +1750,64 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             idx = find(mask);
         end
 
+        function idx = getEdgeIndicesInCircle(obj, x0, y0, r, tol)
+            % getEdgeIndicesInCircle
+            % Returns indices of edges that lie entirely inside (or on)
+            % a circle of radius r centered at (x0, y0).
+            %
+            % An edge is selected if both of its end nodes are within the circle.
+
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % 1. Extract the start and end node indices for all edges
+            edgeNodes = obj.edges(:, 1:2);
+
+            % 2. Retrieve coordinates of all nodes involved in the edges
+            p1 = obj.nodes(edgeNodes(:, 1), :);
+            p2 = obj.nodes(edgeNodes(:, 2), :);
+
+            % 3. Calculate Euclidean distance from center (x0, y0) to both endpoints
+            d1 = hypot(p1(:, 1) - x0, p1(:, 2) - y0);
+            d2 = hypot(p2(:, 1) - x0, p2(:, 2) - y0);
+
+            % 4. Select edges where both endpoints are within the radius (with tolerance)
+            mask = (d1 <= (r + tol)) & (d2 <= (r + tol));
+
+            % 5. Return the matching edge indices
+            idx = find(mask);
+        end
+
+        function idx = getEdgeIndicesOutCircle(obj, x0, y0, r, tol)
+            % getEdgeIndicesOutCircle
+            % Returns indices of edges that lie outside a circle of radius r
+            % centered at (x0, y0).
+            %
+            % Assumes an edge is outside if both endpoints are outside the radius.
+
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % 1. Extract start and end nodes for all edges
+            edgeNodes = obj.edges(:, 1:2);
+
+            % 2. Get coordinates
+            p1 = obj.nodes(edgeNodes(:, 1), :);
+            p2 = obj.nodes(edgeNodes(:, 2), :);
+
+            % 3. Calculate distance from center to both endpoints
+            d1 = hypot(p1(:, 1) - x0, p1(:, 2) - y0);
+            d2 = hypot(p2(:, 1) - x0, p2(:, 2) - y0);
+
+            % 4. Select edges where both endpoints are strictly outside the radius
+            mask = (d1 >= (r - tol)) & (d2 >= (r - tol));
+
+            % 5. Return indices
+            idx = find(mask);
+        end
+
         function idx = getEdgeIndicesOnContact(obj, mz1Name, mz2Name)
 
             mz1Name = obj.checkMeshZoneExistence(mz1Name);
@@ -2493,9 +2551,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                     ihgbc = IHGValue;
                 end
 
-
                     sourceVector(index) = sourceVector(index) + ihgbc;
-
 
             end
 

@@ -3185,6 +3185,16 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
+        function m = aux_c2qm(obj)
+            m = emdlab_m2d_qmdb;
+            mzNames = obj.getMeshZoneNames;
+            for i = 1:numel(mzNames)
+                [cl_tmp, nodes_tmp] = emdlab_m2d_t2q_subdivision(obj.mzs.(mzNames(i)).cl, obj.mzs.(mzNames(i)).nodes);
+                m.addMeshZone(mzNames(i),emdlab_m2d_qmz(cl_tmp,nodes_tmp));
+                m.mzs.(mzNames(i)).color = obj.mzs.(mzNames(i)).color;
+            end
+        end
+
     end
 
 end

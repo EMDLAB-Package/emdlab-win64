@@ -11,6 +11,9 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
         % internal & boundary conditions
         excitations (1,1) struct;
 
+        % contacts
+        contacts (1,1) struct;
+
         % elements data
         edata (1,1) struct;
 
@@ -163,14 +166,17 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
                 mzptr = obj.m.mzs.(mzNames{i});
 
                 % assigning thermal conductivities
-                if obj.m.mts.(mzptr.material).ThermalConductivity.isIsotropic
+                if obj.m.mts.(mzptr.material).ThermalConductivity.isLinear
+                    if obj.m.mts.(mzptr.material).ThermalConductivity.isIsotropic
 
-                    obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value;
+                        obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value(:);
 
+                    else
+
+                        obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value;
+
+                    end
                 else
-
-                    obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value;
-
                 end
 
             end
@@ -231,16 +237,10 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
         function evalTSmooth(obj)
 
-            obj.results.Tsmooth = zeros(obj.m.Nn,1);
-            areaAttachedToNode = zeros(obj.m.Nn,1);
-            for i = 1:obj.m.Ne
-                for j = 1:4
-                    obj.results.Tsmooth(obj.m.cl(i,j)) = obj.results.Tsmooth(obj.m.cl(i,j)) + ...
-                        obj.results.T(i) * obj.m.gea(i);
-                    areaAttachedToNode(obj.m.cl(i,j)) = areaAttachedToNode(obj.m.cl(i,j)) + obj.m.gea(i);
-                end
-            end
-            obj.results.Tsmooth = obj.results.Tsmooth ./ areaAttachedToNode;
+            gea_tmp = repmat(obj.m.gea,4,1);
+            index = obj.m.cl';
+            obj.results.Tsmooth = full(diag(sparse(index, index, repmat(obj.results.T',4,1) .* gea_tmp)) ./ ...
+            diag(sparse(index, index, gea_tmp)));
             
             % apply excitation conditions
             exNames = obj.getExcitationNames;
@@ -308,6 +308,10 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
             obj.excitations.(exName).mzName = mzName;
             obj.excitations.(exName).value = value;
 
+        end
+
+        %% Contacts
+        function addContact(obj, cName, mName, sName, value)
         end
 
         %% Visualization Functions
@@ -392,6 +396,26 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
         function exNames = getExcitationNames(obj)
             exNames = string(fieldnames(obj.excitations))';
+        end
+
+        function cName = checkContactExistence(obj, cName)
+
+            if ~isfield(obj.contacts, cName)
+                throw(MException('', ['Contatct with name [', cName, '] does not exist.']));
+            end
+
+        end
+
+        function cName = checkContactNonExistence(obj, cName)
+
+            if isfield(obj.contacts, cName)
+                throw(MException('', ['Another contacts with name [', cName, '] already exist.']));
+            end
+
+        end
+
+        function cNames = getContactsNames(obj)
+            cNames = string(fieldnames(obj.contacts))';
         end
 
         function [indexI,indexJ,value,sourceVector] = buildGMatrixSVector(obj, resistances)
