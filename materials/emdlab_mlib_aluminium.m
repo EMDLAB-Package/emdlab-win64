@@ -5,7 +5,7 @@ classdef emdlab_mlib_aluminium < emdlab_phy_material
         function obj = emdlab_mlib_aluminium()
 
             % Aluminum material properties
-            obj.ThermalConductivity.value = 237;          % W/(m·K)
+            obj.ThermalConductivity.setValue(237,'W/mK');          % W/(m·K)
             obj.HeatCapacity.value = 900;                 % J/(kg·K)
             obj.ElectricPermitivity.value = 8.854e-12;    % F/m (≈ vacuum, usually ignored for conductors)
             obj.ElectricConductivity.value = 3.5e7;       % S/m

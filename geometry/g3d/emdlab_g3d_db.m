@@ -235,7 +235,7 @@ classdef emdlab_g3d_db < handle
             emdlab_gmsh_mshFile;
 
             % get an instance of mesh data base
-            m = emdlab_m3d_ttmdb;
+            m = emdlab_m3d_thmdb;
             
             nodes = msh.POS(:,1:3);
             Np = size(nodes,1);
@@ -256,7 +256,7 @@ classdef emdlab_g3d_db < handle
 %                 index = (p21(:,1).*p31(:,2) - p21(:,2).*p31(:,1)) < 0;
 %                 cl(index,:) = cl(index,[1,3,2]);
 
-                m.addmz(obj.entities{i}.name, emdlab_m3d_ttmz(cl, xpoints));
+                m.addmz(obj.entities{i}.name, emdlab_m3d_thmz(cl, xpoints));
 %                 m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
 
             end

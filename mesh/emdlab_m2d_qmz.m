@@ -2,7 +2,7 @@
 % Quadrilateral mesh zone (2D element)
 
 classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
-    
+
     properties (SetAccess = private)
 
         % mesh nodes
@@ -19,7 +19,6 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         % list of boundary edges
         bedges (:,1) double;
-        
 
     end
     properties
@@ -63,13 +62,13 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
     end
 
     properties (Dependent = true)
-        
+
         % number of mesh zone nodes
         Nn(1, 1) double;
 
         % number of mesh zone elements
         Ne(1, 1) double;
-        
+
     end
 
     methods
@@ -82,7 +81,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.nodes = nodes;
             obj.cl = cl;
             obj = obj.setData;
-            
+
         end
 
         function y = get.Nn(obj)
@@ -92,7 +91,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
         function y = get.Ne(obj)
             y = size(obj.cl, 1);
         end
-        
+
         %% Topological Functions
         % setting needed data
         function obj = setData(obj)
@@ -150,17 +149,17 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.isDataSet = true;
 
         end
-        
+
         %% Mesh Visiualization
         function varargout = showm(obj)
-            
+
             f = emdlab_r2d_mesh();
             ax = axes(f);
             f.Name = ['[Mesh Zone][', 'Nn = ', num2str(obj.Nn), '][Ne = ', num2str(obj.Ne), ']'];
 
             patch('Faces',obj.cl(:,1:4),'Vertices',obj.nodes,'FaceColor',...
                 obj.color,'EdgeColor','k','parent',ax);
-            
+
             zoom on;
             axis(ax, 'off');
             axis(ax, 'equal');
@@ -199,9 +198,9 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             elseif nargout > 2
                 error('Too many output argument.');
             end
-            
+
         end
-        
+
         %% Tools Functions
         function obj = moveNodes(obj,MovTol)
             if nargin<2
@@ -264,12 +263,12 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 obj.cl(:,2),index(:,2)+NnOld,index(:,5)+NnOld+NedOld,index(:,1)+NnOld
                 obj.cl(:,3),index(:,3)+NnOld,index(:,5)+NnOld+NedOld,index(:,2)+NnOld
                 obj.cl(:,4),index(:,4)+NnOld,index(:,5)+NnOld+NedOld,index(:,3)+NnOld];
-           
+
             % setting data of new mesh
             obj.setData;
 
         end
-    
+
         %% tranforms and copy generations
         function mirror(obj, varargin)
             obj.nodes = ext_pmirror2(obj.nodes, varargin{:});
@@ -277,7 +276,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.clearSetDataFlag;
             obj.setData;
         end
-        
+
         function newObj = getMirror(obj, varargin)
             newObj = copy(obj);
             newObj.nodes = ext_pmirror2(newObj.nodes, varargin{:});
@@ -297,7 +296,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 end
             end
         end
-        
+
         function newObj = getRotate(obj, varargin)
             newObj = copy(obj);
             newObj.nodes = ext_protate2(newObj.nodes, varargin{:});
@@ -307,16 +306,58 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.nodes(:,1) = obj.nodes(:,1) + xShift;
             obj.nodes(:,2) = obj.nodes(:,2) + yShift;
         end
-        
+
         function newObj = getShift(obj, varargin)
             newObj = copy(obj);
             newObj.nodes = ext_pshift2(newObj.nodes, varargin{:});
         end
 
+        function mzptr = getExtrude(obj, zLevels)
+            % extrude quadrilateral mesh along z-axis and construct hexahedral mesh
+
+            p2 = [obj.nodes, zeros(obj.Nn,1)];
+            Np = size(p2,1);
+            Nq = size(obj.cl,1);
+            Nz = numel(zLevels) - 1;
+
+            if Nz < 1
+                error('zLevels must contain at least two z coordinates');
+            end
+
+            % Build extruded node coordinates
+            p3 = zeros(Np*(Nz+1), 3);
+            for k = 1:(Nz+1)
+                idx = (1:Np) + (k-1)*Np;
+                p3(idx,1) = p2(:,1);
+                p3(idx,2) = p2(:,2);
+                p3(idx,3) = zLevels(k);
+            end
+
+            % Build hexahedral connectivity
+            hhcl = zeros(Nq*Nz, 8);
+            row = 1;
+
+            for k = 1:Nz
+                offsetBot = (k-1)*Np;
+                offsetTop = k*Np;
+
+                bot = obj.cl + offsetBot;
+                top = obj.cl + offsetTop;
+
+                % Reverse top face ordering for consistent hex orientation
+                hhcl(row:row+Nq-1,:) = [bot(:,[1,2,3,4]), top(:,[1,2,3,4])];
+
+                row = row + Nq;
+            end
+
+            mzptr = emdlab_m3d_hhmz(hhcl, p3);
+
+        end
+
     end
 
     methods (Access = private)
-        
+
         function clearSetDataFlag(obj)
 
             obj.isDataSet = false;
@@ -324,7 +365,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.isMeshZoneAreaEvaluated = false;
 
         end
-        
+
     end
 
 end

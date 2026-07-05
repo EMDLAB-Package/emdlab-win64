@@ -736,14 +736,14 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
         end
 
         function f = showm(obj)
-            f = GraphicWindow();
+            f = emdlab_r3d_geometry();
             f.Name = 'Global Mesh';
             h = guihandles(f);
             mzNames = fieldnames(obj.mzs);
 
             for i = 1:numel(mzNames)
                 mzptr = obj.mzs.(mzNames{i});
-                mzptr.setdata;
+                mzptr.setData;
 
                 if isequal(mzptr.color, 'none')
                     edgeColor = 'none';
@@ -762,13 +762,13 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
         function showmzs(obj)
             mzNames = fieldnames(obj.mzs);
-            f = GraphicWindow();
+            f = emdlab_r3d_geometry();
             f.Name = ['[Number of Mesh Zones: ', num2str(numel(mzNames)), ']'];
             h = guihandles(f);
 
             for i = 1:numel(mzNames)
                 mzptr = obj.mzs.(mzNames{i});
-                mzptr.setdata;
+                mzptr.setData;
 
                 if isequal(mzptr.color, 'none')
                     edgeColor = 'none';
@@ -1044,7 +1044,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             newMeshZoneName = obj.checkMeshZoneNonExistence(newMeshZoneName);
 
             % adding new mz
-            obj.mzs.(newMeshZoneName) = emdlab_m3d_ttmz(e_nmz, n_nmz);
+            obj.mzs.(newMeshZoneName) = emdlab_m3d_thmz(e_nmz, n_nmz);
             obj.mzs.(newMeshZoneName).material = material;
             obj.mzs.(newMeshZoneName).color = color;  
             obj.mzs.(newMeshZoneName).transparency = transparency;

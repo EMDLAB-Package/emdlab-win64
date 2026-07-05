@@ -12,7 +12,7 @@ gv_Ns = 36; % number of stator slots
 gv_wst = 3.3; % width of stator tooth
 gv_dss = 18; % depth of stator slot [mm]
 gv_th = 4; % thickness of housing [mm]
-meshSize = 1; % mesh size [mm]
+meshSize = 2; % mesh size [mm]
 
 % dependents
 gv_alpha_s = 2*pi/gv_Ns; % stator slot pitch angle [rad]
@@ -56,55 +56,32 @@ g.addArc(13,7,11,1);
 g.addArc(13,4,8,1);
 g.addArc(13,8,12,1);
 
-g.addFace('copper', g.addLoop(1,12,-4,-10));
-g.addFace('sz1', g.addLoop(4,13,-7,-11));
-g.addFace('sz2', g.addLoop(2,14,-5,-12));
-g.addFace('sz3', g.addLoop(5,15,-8,-13));
-g.addFace('hz1', g.addLoop(3,16,-6,-14));
-g.addFace('hz2', g.addLoop(6,17,-9,-15));
+Nr1 = ceil(g.getEdgeLength(1)/meshSize);
+Nr2 = ceil(g.getEdgeLength(2)/meshSize);
+Nr3 = ceil(g.getEdgeLength(3)/meshSize);
+Nt1 = ceil(g.getEdgeLength(16)/meshSize);
+Nt2 = ceil(g.getEdgeLength(17)/meshSize);
 
-g.setMeshMaxLength(meshSize);
-m = g.generateMesh('gmsh');
+% get mesh database
+m = emdlab_m2d_qmdb;
+m.addMeshZone('copper', g.getQMeshByEdges(1,12,-4,-10,Nr1,Nt1));
+m.addMeshZone('sz1', g.getQMeshByEdges(4,13,-7,-11,Nr1,Nt2));
+m.addMeshZone('sz2', g.getQMeshByEdges(2,14,-5,-12,Nr2,Nt1));
+m.addMeshZone('sz3', g.getQMeshByEdges(5,15,-8,-13,Nr2,Nt2));
+m.addMeshZone('hz1', g.getQMeshByEdges(3,16,-6,-14,Nr3,Nt1));
+m.addMeshZone('hz2', g.getQMeshByEdges(6,17,-9,-15,Nr3,Nt2));
+
 m.joinMeshZones('stator', 'sz1', 'sz2',' sz3');
 m.aux_cmxjcrj('stator',1)
+m.setMeshZoneColor('stator', 190, 190, 190);
+
 m.joinMeshZones('housing', 'hz1', 'hz2');
 m.aux_cmxjcrj('housing',1)
-m.aux_cmxjcrj('copper',1)
-m.showce
-% get mesh database
-m = m.aux_c2qm;
-m.setMeshZoneColor('stator', 190, 190, 190);
 m.setMeshZoneColor('housing',163,73,164);
+
+m.aux_cmxjcrj('copper',1)
 m.setMeshZoneColor('copper',255,137,39);
 
-% add materials
-m.addMaterial('copper', emdlab_mlib_copper);
-m.addMaterial('iron', emdlab_mlib_iron);
-m.addMaterial('aluminium', emdlab_mlib_aluminium);
-
-% set materials
-m.mts.iron.setThermalConductivity(50);
-m.setMaterial('stator', 'iron');
-m.mts.copper.setThermalConductivity(10);
-m.setMaterial('copper', 'copper');
-m.mts.aluminium.setThermalConductivity(200);
-m.setMaterial('housing', 'aluminium');
-
-% add solver
-s = emdlab_solvers_ts2d_lptn_qm(m);
-s.setLengthUnit('mm');
-s.setDepth(gv_Lstk);
-
-% set boundary conditions
-idx = m.getEdgeIndicesInCircle(0,0,gv_ISD/2);
-s.addHeatFluxBC('inner_surface', idx, 500);
-
-idx = m.getEdgeIndicesOnCircle(0,0,gv_OSD/2 + gv_th,(gv_OSD/2 + gv_th)*(1-cos(asin(meshSize/(gv_OSD/2 + gv_th)))));
-s.addConvectionBC('outer_surface', idx, 10, 25);
-
-% solve and plot results
-s.solve;
-m.showmzs;
-s.plotAverageTemperature(20);
-mean(s.results.T)
-s.plotTemperature(20);
+z = linspace(0,35,ceil(35/meshSize));
+mz = m.mzs.copper.getExtrude(z);
+mz.showm

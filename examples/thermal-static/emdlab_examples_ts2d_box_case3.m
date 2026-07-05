@@ -29,7 +29,7 @@ m.addMaterial('copper', emdlab_mlib_copper);
 m.setMaterial('z1', 'copper');
 m.setMeshZoneColor('z1', 0, 255, 255);
 m.showmzs;
-m.mts.copper.ThermalConductivity.value = 1;
+m.mts.copper.setThermalConductivity(1);
 
 % add solver
 s = emdlab_solvers_ts2d_lptn_qm(m);

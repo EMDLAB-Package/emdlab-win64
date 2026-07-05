@@ -81,7 +81,7 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
     end
 
     methods
-        %% constructor and destructor
+        %% Constructor and Destructor
         function obj = emdlab_m3d_hhmz(cl, nodes)
 
             if nargin < 2, error('Not enough input arguments.'); end
@@ -142,7 +142,7 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
-        %% topological functions
+        %% Topological Functions
         % setting needed data
         function setdataForce(obj)
             obj.isDataSet = false;
@@ -151,83 +151,89 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         function setData(obj)
 
-            % check if already data is set
             if obj.isDataSet, return; end
 
-            % hexahedral faces
-            f1 = obj.cl(:,[1,2,3,4]);
-            f2 = obj.cl(:,[5,8,7,6]);
-            f3 = obj.cl(:,[1,5,6,2]);
-            f4 = obj.cl(:,[2,6,7,3]);
-            f5 = obj.cl(:,[3,7,8,4]);
-            f6 = obj.cl(:,[4,8,5,1]);
+            % Hex faces
+            f1 = obj.cl(:, [1,2,3,4]);
+            f2 = obj.cl(:, [5,8,7,6]);
+            f3 = obj.cl(:, [1,5,6,2]);
+            f4 = obj.cl(:, [2,6,7,3]);
+            f5 = obj.cl(:, [3,7,8,4]);
+            f6 = obj.cl(:, [4,8,5,1]);
 
-            % sorting for lower index
-            [f1,s1] = sort(f1,2);
-            [f2,s2] = sort(f2,2);
-            [f3,s3] = sort(f3,2);
-            [f4,s4] = sort(f4,2);
-            [f5,s5] = sort(f5,2);
-            [f6,s6] = sort(f6,2);
+            % Stack all faces
+            allFaces = [f1; f2; f3; f4; f5; f6];
 
-            % specefying changed facet index
-            s1 = ((s1(:,1)==1)&(s1(:,2)==3))|...
-                ((s1(:,1)==3)&(s1(:,2)==2))|...
-                ((s1(:,1)==2)&(s1(:,2)==1));
-            s2 = ((s2(:,1)==1)&(s2(:,2)==3))|...
-                ((s2(:,1)==3)&(s2(:,2)==2))|...
-                ((s2(:,1)==2)&(s2(:,2)==1));
-            s3 = ((s3(:,1)==1)&(s3(:,2)==3))|...
-                ((s3(:,1)==3)&(s3(:,2)==2))|...
-                ((s3(:,1)==2)&(s3(:,2)==1));
-            s4 = ((s4(:,1)==1)&(s4(:,2)==3))|...
-                ((s4(:,1)==3)&(s4(:,2)==2))|...
-                ((s4(:,1)==2)&(s4(:,2)==1));
-            
+            [~,idx] = min(allFaces,[],2);
+            for i = 1:length(idx)
+                allFaces(i,:) = circshift(allFaces(i,:), 1-idx(i));
+            end
+
+            % Canonical form for uniqueness
+            [sortedFaces,s] = sort(allFaces, 2);
+
+            % facet path
+            s = s(:,2) < s(:,3);
+
             % unification of facets
-            [obj.facets,~,ic] = unique([f1;f2;f3;f4],'rows');
+            [~, ia, ic] = unique(sortedFaces, 'rows');
+            obj.facets = allFaces(ia,:);
 
             % getting number of elements
             ne = obj.Ne;
 
-            % getting index of facets corresponding to each elements
-            f1 = ic(1:ne);
-            f2 = ic(1+ne:2*ne);
-            f3 = ic(1+2*ne:3*ne);
-            f4 = ic(1+3*ne:4*ne);
+            % Face index per element
+            obj.elements = [
+                ic(1:ne), ...
+                ic(ne+1:2*ne), ...
+                ic(2*ne+1:3*ne), ...
+                ic(3*ne+1:4*ne), ...
+                ic(4*ne+1:5*ne), ...
+                ic(5*ne+1:6*ne)
+                ];
 
             % specefying boundary facets
-            obj.bfacets = sparse([f1,f2,f3,f4],ones(4*ne,1),ones(4*ne,1));
+            obj.bfacets = sparse(obj.elements,ones(6*ne,1),ones(6*ne,1));
             obj.bfacets = full(obj.bfacets == 1);
-            
-            % specefying trace direction
-            f1(s1) = -f1(s1);
-            f2(s2) = -f2(s2);
-            f3(s3) = -f3(s3);
-            f4(s4) = -f4(s4);
-            
-            % element matrix
-            obj.elements = [f1,f2,f3,f4];
-            
-            % evaluation of area of each elements
-            obj.evalVolumeOfElements;
-            obj.facetNamedSelections.('none') = find(obj.bfacets);
-            
-            % change states
-            obj.isDataSet = true;
 
+            ic(s) = -ic(s);
+
+            % Face index per element
+            obj.elements = [
+                ic(1:ne), ...
+                ic(ne+1:2*ne), ...
+                ic(2*ne+1:3*ne), ...
+                ic(3*ne+1:4*ne), ...
+                ic(4*ne+1:5*ne), ...
+                ic(5*ne+1:6*ne)
+                ];
+
+            obj.isDataSet = true;
         end
        
-        %% visiualization functions
-        function showm(obj)
-            obj.setData;
-            [f,ax] = emdlab_r3d_mesh();
+        %% Mesh Visiualization
+        function varargout = showm(obj)
+            
+           [f,ax] = emdlab_r3d_geometry();
+            f.Name = ['[Mesh Zone][', 'Nn = ', num2str(obj.Nn), '][Ne = ', num2str(obj.Ne), ']'];
 
-            f.Name = ['[Global Mesh][','Nn = ',num2str(obj.Nn),'][Ne = ',num2str(obj.Ne),']'];
-            patch('Faces',obj.facets(obj.bfacets,1:3),'Vertices',...
-                obj.nodes,'FaceColor',...
-                obj.color,'EdgeColor','k', 'parent', ax);
+            patch('Faces',obj.facets(obj.bfacets,1:4),'Vertices',obj.nodes,'FaceColor',...
+                obj.color,'EdgeColor','k','parent',ax, 'facealpha',1);
+            
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
             set(f, 'Visible', 'on');
+
+            if nargout == 1
+                varargout{1} = f;
+            elseif nargout == 2
+                varargout{1} = f;
+                varargout{2} = ax;
+            elseif nargout > 2
+                error('Too many output argument.');
+            end
+
         end
 
         function showg(obj)

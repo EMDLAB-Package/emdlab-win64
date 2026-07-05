@@ -12,7 +12,7 @@ gv_Ns = 36; % number of stator slots
 gv_wst = 3.3; % width of stator tooth
 gv_dss = 18; % depth of stator slot [mm]
 gv_th = 4; % thickness of housing [mm]
-meshSize = 2; % mesh size [mm]
+meshSize = 1; % mesh size [mm]
 
 % dependents
 gv_alpha_s = 2*pi/gv_Ns; % stator slot pitch angle [rad]
@@ -88,11 +88,11 @@ m.addMaterial('iron', emdlab_mlib_iron);
 m.addMaterial('aluminium', emdlab_mlib_aluminium);
 
 % set materials
-m.mts.iron.ThermalConductivity.value = 50;
+m.mts.iron.setThermalConductivity(50);
 m.setMaterial('stator', 'iron');
-m.mts.copper.ThermalConductivity.value = 10;
+m.mts.copper.setThermalConductivity(10);
 m.setMaterial('copper', 'copper');
-m.mts.aluminium.ThermalConductivity.value = 200;
+m.mts.aluminium.setThermalConductivity(200);
 m.setMaterial('housing', 'aluminium');
 
 % add solver

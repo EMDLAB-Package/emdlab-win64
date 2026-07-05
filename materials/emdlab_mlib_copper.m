@@ -5,7 +5,7 @@ classdef emdlab_mlib_copper < emdlab_phy_material
         function obj = emdlab_mlib_copper()
 
             % Copper material properties
-            obj.ThermalConductivity.value = 385;          % W/(m·K)
+            obj.ThermalConductivity.setValue(385,'W/mK');         % W/(m·K)
             obj.HeatCapacity.value = 385;                 % J/(kg·K)
             obj.ElectricPermitivity.value = 8.854e-12;    % F/m (≈ vacuum, copper ignored for quasi-static)
             obj.ElectricConductivity.value = 5.96e7;      % S/m

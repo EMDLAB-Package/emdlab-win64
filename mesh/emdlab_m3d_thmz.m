@@ -216,7 +216,8 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         %% visiualization functions
         function showm(obj)
             obj.setData;
-            [f,ax] = emdlab_r3d_mesh();
+            f = GraphicWindow();
+            ax = axes(f);
 
             f.Name = ['[Global Mesh][','Nn = ',num2str(obj.Nn),'][Ne = ',num2str(obj.Ne),']'];
             patch('Faces',obj.facets(obj.bfacets,1:3),'Vertices',...
@@ -456,7 +457,7 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             newObj.mirror(varargin{:});
             newObj.cl = newObj.cl(:,[1,3,2,4]);
             newObj.makeFalse_isDataSetted;
-            newObj.setdata;
+            newObj.setData;
         end
 
         function newObj = getMirrorXY(obj)

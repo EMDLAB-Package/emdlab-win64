@@ -157,7 +157,7 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
             mzNames = obj.m.getMeshZoneNames;
 
             % check if all materials are linear
-            obj.edata.areAllLinear = true;
+            obj.edata.areAllTemperatureIndependent = true;
 
             % loop over mesh zones
             for i = 1:obj.m.Nmzs
@@ -166,7 +166,7 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
                 mzptr = obj.m.mzs.(mzNames{i});
 
                 % assigning thermal conductivities
-                if obj.m.mts.(mzptr.material).ThermalConductivity.isLinear
+                if obj.m.mts.(mzptr.material).ThermalConductivity.isTemperatureDependent 
                     if obj.m.mts.(mzptr.material).ThermalConductivity.isIsotropic
 
                         obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value(:);
@@ -177,6 +177,15 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
                     end
                 else
+                    if obj.m.mts.(mzptr.material).ThermalConductivity.isIsotropic
+
+                        obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value(:);
+
+                    else
+
+                        obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value;
+
+                    end
                 end
 
             end

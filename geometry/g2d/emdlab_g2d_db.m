@@ -1243,7 +1243,7 @@ classdef emdlab_g2d_db < handle
 
             % set default values for Nx & Ny
             if nargin < 5, Nx = 3; end
-            if nargin < 6, Nx = 6; end
+            if nargin < 6, Ny = 3; end
 
             % set lower limits for Nx & Ny
             Nx = max(Nx+1,3);
