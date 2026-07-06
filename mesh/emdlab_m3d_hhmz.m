@@ -209,6 +209,7 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 ];
 
             obj.isDataSet = true;
+            
         end
        
         %% Mesh Visiualization

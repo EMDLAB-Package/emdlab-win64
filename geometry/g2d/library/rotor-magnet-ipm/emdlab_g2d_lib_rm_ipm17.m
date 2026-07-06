@@ -178,16 +178,20 @@ else
     e20 = g.addSegment(p17,p6);
     e21 = g.addArc(p18,p17,p19,1);
 
-    l1 = g.addLoop(e1,e2,e3,-e21,e20,e4);
-    l2 = g.addLoop(e11,e6,e9,e8,e10);
-    l3 = g.addLoop(e12,e13,e18,e15,e16);
+    e22 = g.splitArc(e9);
+    e23 = g.splitArc(e18);
+    e24 = g.splitArc(e21);
+
+    l1 = g.addLoop(e1,e2,e3,-e24,-e21,e20,e4);
+    l2 = g.addLoop(e11,e6,e9,e22,e8,e10);
+    l3 = g.addLoop(e12,e13,e18,e23,e15,e16);
     l4 = g.addLoop(e5,e6,e7,e8);
     l5 = g.addLoop(e13,e14,e15,e17);
-    l6 = g.addLoop(e9,-e7);
+    l6 = g.addLoop(e9,e22,-e7);
     l7 = g.addLoop(e11,-e5,e10);
-    l8 = g.addLoop(e18,-e14);
+    l8 = g.addLoop(e18,e23,-e14);
     l9 = g.addLoop(e12,-e17,e16);
-    l10 = g.addLoop(e21,e19);
+    l10 = g.addLoop(e21,e24,e19);
 
     g.addFace(name1, l1, l2, l3);
     g.addFace(name2 + "1", l4);

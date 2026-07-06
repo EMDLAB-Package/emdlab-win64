@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % a two-dimensional thermal-static solver based on LPTN for QM
 
-classdef emdlab_solvers_ts2d_lptn_qm < handle
+classdef emdlab_solvers_ts2d_lptn_qma < handle
 
     properties (SetAccess = protected)
 
@@ -59,7 +59,7 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
     methods
         %% Constructor and Destructor
-        function obj = emdlab_solvers_ts2d_lptn_qm(m)
+        function obj = emdlab_solvers_ts2d_lptn_qma(m)
 
             % mesh pointer
             m.ggmesh;
@@ -206,14 +206,41 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
             resistances = zeros(obj.m.Ne,2);
             z = obj.getDepth;
 
+            ec = obj.m.getCenterOfEdges;
+            xec = ec(:,1);
+            yec = ec(:,2);
+            xec = xec(abs(obj.m.elements(:,1:4)));
+            yec = yec(abs(obj.m.elements(:,1:4)));
+
+            ux = zeros(obj.m.Ne,3);
+            uy = zeros(obj.m.Ne,3);
+
+            mzNames = obj.m.getMeshZoneNames;
+            for mz = mzNames
+                mzptr = obj.m.mzs.(mz);
+                
+                ux(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).ux,mzptr.Ne,1);
+                uy(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).uy,mzptr.Ne,1);
+            end
+
             % loop over elements to calculate conductances of each element
             for i = 1:obj.m.Ne
 
                 kx = obj.edata.ThermalConductivity(1,i);
+                ky = obj.edata.ThermalConductivity(2,i);
+
+                u13 = [xec(i,3),yec(i,3),0] - [xec(i,1),yec(i,1),0];
+                u24 = [xec(i,4),yec(i,4),0] - [xec(i,2),yec(i,2),0];
+                u13 = u13 / norm(u13);
+                u24 = u24 / norm(u24);
+
+
+                k13 = kx * dot(ux(i,:),u13).^2 + ky * dot(uy(i,:),u13).^2 - (ky-kx) * dot(ux(i,:),u13) * dot(uy(i,:),u13);
+                k24 = kx * dot(ux(i,:),u24).^2 + ky * dot(uy(i,:),u24).^2 - (ky-kx) * dot(ux(i,:),u24) * dot(uy(i,:),u24);
 
                 % calculation of conductances
-                resistances(i,1) = (obj.m.el(i,2) + obj.m.el(i,4))/(kx*z*(obj.m.el(i,1) + obj.m.el(i,3)));
-                resistances(i,2) = (obj.m.el(i,1) + obj.m.el(i,3))/(kx*z*(obj.m.el(i,2) + obj.m.el(i,4)));
+                resistances(i,1) = (obj.m.el(i,2) + obj.m.el(i,4))/(k13*z*(obj.m.el(i,1) + obj.m.el(i,3)));
+                resistances(i,2) = (obj.m.el(i,1) + obj.m.el(i,3))/(k24*z*(obj.m.el(i,2) + obj.m.el(i,4)));
 
             end
 

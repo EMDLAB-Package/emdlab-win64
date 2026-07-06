@@ -102,9 +102,15 @@ s.addHeatFluxBC('inner_surface', idx, 500);
 idx = m.getEdgeIndicesOnCircle(0,0,gv_OSD/2 + gv_th,(gv_OSD/2 + gv_th)*(1-cos(asin(meshSize/(gv_OSD/2 + gv_th)))));
 s.addConvectionBC('outer_surface', idx, 10, 25);
 
+s.addInternalHeatSource('s1', 'copper', 1e5, 'w/m3')
+s.addContact('c1','stator','housing',1200)
+s.addContact('c2','stator','copper',100)
+
 % solve and plot results
 s.solve;
 m.showmzs;
 s.plotAverageTemperature(20);
-mean(s.results.T)
 s.plotTemperature(20);
+fprintf('Tmin = %.2f\n', min(s.results.T));
+fprintf('Tmax = %.2f\n', max(s.results.T));
+fprintf('Tavg = %.2f\n', mean(s.results.T));

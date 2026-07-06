@@ -7,12 +7,12 @@ addpath(genpath('C:\emdlab-win64'));
 % design variables
 gv_ISD = 73; % inner stator diameter [mm]
 gv_OSD = 125; % outer stator diameter [mm]
-gv_Lstk = 70; % stack length [mm]
+gv_Lstk = 10; % stack length [mm]
 gv_Ns = 36; % number of stator slots
 gv_wst = 3.3; % width of stator tooth
 gv_dss = 18; % depth of stator slot [mm]
 gv_th = 4; % thickness of housing [mm]
-meshSize = 1; % mesh size [mm]
+meshSize = 2; % mesh size [mm]
 
 % dependents
 gv_alpha_s = 2*pi/gv_Ns; % stator slot pitch angle [rad]
@@ -72,14 +72,14 @@ m.addMeshZone('hz1', g.getQMeshByEdges(3,16,-6,-14,Nr3,Nt1));
 m.addMeshZone('hz2', g.getQMeshByEdges(6,17,-9,-15,Nr3,Nt2));
 
 m.joinMeshZones('stator', 'sz1', 'sz2',' sz3');
-m.aux_cmxjcrj('stator',1)
+m.aux_cmxjcrj('stator',6,gv_alpha_s)
 m.setMeshZoneColor('stator', 190, 190, 190);
 
 m.joinMeshZones('housing', 'hz1', 'hz2');
-m.aux_cmxjcrj('housing',1)
+m.aux_cmxjcrj('housing',6,gv_alpha_s)
 m.setMeshZoneColor('housing',163,73,164);
 
-m.aux_cmxjcrj('copper',1)
+m.aux_cmxjcrj('copper',6,gv_alpha_s)
 m.setMeshZoneColor('copper',255,137,39);
 
 % add materials
@@ -105,11 +105,23 @@ idx = m.getEdgeIndicesOnCircle(0,0,gv_ISD/2);
 s.addHeatFluxBC('inner_surface', idx, 500);
 
 idx = m.getEdgeIndicesOnCircle(0,0,gv_OSD/2 + gv_th);
-s.addConvectionBC('outer_surface', idx, 10, 25);
+s.addConvectionBC('outer_surface', idx, 25, 25);
+
+s.addInternalHeatSource('s1', 'copper', 2e5, 'w/m3')
+s.addInternalHeatSource('s2', 'stator', 0.1e5, 'w/m3')
+
+% s.addContact('c1','stator','housing',1200)
+
+h = 200;
+s.addContact('c2','stator','copper',h)
 
 % solve and plot results
 s.solve;
 m.showmzs;
 s.plotAverageTemperature(20);
-mean(s.results.T)
 s.plotTemperature(20);
+fprintf('Tmin = %.2f\n', min(s.results.T));
+fprintf('Tmax = %.2f\n', max(s.results.T));
+fprintf('Tavg = %.2f\n', mean(s.results.T));
+
+title('h_{contact} = ' + string(h) + " W/(m^2.K)")

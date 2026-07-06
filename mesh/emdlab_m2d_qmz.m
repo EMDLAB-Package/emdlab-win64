@@ -44,6 +44,8 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % flags
         isMoving = false;
 
+        orientation = 'global';
+
     end
 
     properties (Access = private)
@@ -351,6 +353,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
 
             mzptr = emdlab_m3d_hhmz(hhcl, p3);
+            mzptr.color = obj.color;
 
         end
 

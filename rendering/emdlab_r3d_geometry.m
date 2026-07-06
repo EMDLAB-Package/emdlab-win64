@@ -1,7 +1,11 @@
-function [f,va] = emdlab_r3d_geometry(bgFlag)
+function [f,va] = emdlab_r3d_geometry(bgFlag, hflag)
 
 if nargin == 0
-    bgFlag = true;
+    bgFlag = 1;
+end
+
+if nargin>2
+    hflag = 1;
 end
 
 %% ================= FIGURE ==========================================
@@ -15,15 +19,21 @@ f = figure( ...
     'Renderer', 'opengl', ...
     'Units', 'pixels', ...
     'ToolBar','none', ...
-    'DockControls','off');
+    'DockControls','off',...
+    'MenuBar','none');
 
 movegui(f, 'center');
 
 f.UserData = struct( ...
     'cp', [0 0], ...
+    'cp0', [0 0], ...
     'isMouseDown', false, ...
     'isMouseLeft', false, ...
-    'zf', 1);
+    'isMouseRight', false, ...
+    'isDragging', false, ...
+    'zf', 1, ...
+    'hoverPatch', gobjects(0), ...
+    'dragThreshold', 3);
 
 %% ================= MAIN VIEW AXIS ==================================
 va = axes(f, ...
@@ -32,14 +42,9 @@ va = axes(f, ...
     'Position', [0 0 1 1], ...
     'Clipping', 'off');
 
-% Completely remove the top-right axis menu
-
 va.Toolbar.Visible = 'off';
 
-va.Interactions = [];
-va.PickableParts = 'none';
-
-camzoom(va,0.8);
+camzoom(va,0.7);
 axis(va,'off','vis3d');
 
 %% ================= BACKGROUND ======================================
@@ -57,7 +62,7 @@ if bgFlag
 
     uistack(bg,'bottom');
     setBackground(bg);
-    drawBackgroundLabel(bg, 'emdlab_win64');   % larger font applied
+    %     drawBackgroundLabel(bg, 'emdlab_win64');
 end
 
 %% ================= SMALL COORDINATE AXIS ===========================
@@ -87,6 +92,16 @@ patch(ca, ...
 
 ca.HandleVisibility = 'off';
 
+if bgFlag
+    f.UserData.txt = drawBackgroundLabel(bg,'');
+else
+    f.UserData.txt = '';
+end
+
+va.UserData.camMovH = [0,0,0];
+va.UserData.camPosH = [0,0,0];
+va.UserData.rFlag = true;
+
 %% ================= CALLBACKS =======================================
 f.WindowButtonDownFcn   = @fButtonDownFcn;
 f.WindowButtonMotionFcn = @fButtonMotionFcn;
@@ -104,35 +119,65 @@ f.Visible = 'on';
         ud = f.UserData;
         ud.isMouseDown = true;
         ud.cp = f.CurrentPoint;
+        ud.cp0 = ud.cp;
         ud.isMouseLeft = strcmpi(f.SelectionType,'normal');
+        ud.isMouseRight = strcmpi(f.SelectionType,'alt');
+        ud.isDragging = false;
         f.UserData = ud;
     end
 
-    function fButtonMotionFcn(~,~)
+    function fButtonMotionFcn(src,~)
         ud = f.UserData;
-        if ~ud.isMouseDown || ~ud.isMouseLeft
+
+        % ---------- DRAG MODE: rotate only ----------
+        if ud.isMouseDown && (ud.isMouseLeft || ud.isMouseRight)
+            cpNew = f.CurrentPoint;
+            dxy = cpNew - ud.cp;
+
+            if norm(cpNew - ud.cp0) > ud.dragThreshold
+                ud.isDragging = true;
+            end
+
+            ud.cp = cpNew;
+
+            if ud.isDragging
+                dx = dxy(1);
+                dy = dxy(2);
+
+                if ud.isMouseLeft
+                    rotScale = 0.35;
+                    camorbit(va, -rotScale*dx, -rotScale*dy, 'camera');
+                    camorbit(ca, -rotScale*dx, -rotScale*dy, 'camera');
+                else
+                    mousePanVa(dx,dy);
+                end
+            end
+
+            f.UserData = ud;
+            drawnow limitrate;
             return
         end
 
-        cpNew = f.CurrentPoint;
-        dxy = cpNew - ud.cp;
-        ud.cp = cpNew;
-
-        dx = dxy(1);
-        dy = dxy(2);
-
-        rotScale = 0.35;
-        camorbit(va, -rotScale*dx, -rotScale*dy, 'camera');
-        camorbit(ca, -rotScale*dx, -rotScale*dy, 'camera');
-
-        f.UserData = ud;
-        drawnow limitrate;
+        % ---------- HOVER MODE: highlight only ----------
+        hoverHighlight(src);
     end
 
-    function fButtonUpFcn(~,~)
+    function fButtonUpFcn(src,~)
         ud = f.UserData;
+
+        % click selection only if it was not a drag
+        if ud.isMouseLeft && ~ud.isDragging
+            h = hittest(src);
+            if isa(h,'matlab.graphics.primitive.Patch') && ancestor(h,'axes') == va
+                e.Button = 1;
+                emdlab_flib_selectPatchCallbackGM(h,e);
+            end
+        end
+
         ud.isMouseDown = false;
         ud.isMouseLeft = false;
+        ud.isMouseRight = false;
+        ud.isDragging = false;
         f.UserData = ud;
     end
 
@@ -165,7 +210,8 @@ f.Visible = 'on';
                     camorbit(ca,-10,0,'camera');
                     camorbit(va,-10,0,'camera');
                 elseif hasShift
-                    camroll(va,-5); camroll(ca,-5);
+                    camroll(va,-5);
+                    camroll(ca,-5);
                 elseif hasCtrl
                     keyboardPanVa(+10,0);
                 end
@@ -175,7 +221,8 @@ f.Visible = 'on';
                     camorbit(ca,10,0,'camera');
                     camorbit(va,10,0,'camera');
                 elseif hasShift
-                    camroll(va,5); camroll(ca,5);
+                    camroll(va,5);
+                    camroll(ca,5);
                 elseif hasCtrl
                     keyboardPanVa(-10,0);
                 end
@@ -185,7 +232,7 @@ f.Visible = 'on';
                     camorbit(ca,0,-10,'camera');
                     camorbit(va,0,-10,'camera');
                 elseif hasShift
-                    ud=f.UserData;
+                    ud = f.UserData;
                     camzoom(va,1.1);
                     ud.zf = ud.zf*1.1;
                     f.UserData = ud;
@@ -198,7 +245,7 @@ f.Visible = 'on';
                     camorbit(ca,0,10,'camera');
                     camorbit(va,0,10,'camera');
                 elseif hasShift
-                    ud=f.UserData;
+                    ud = f.UserData;
                     camzoom(va,0.9);
                     ud.zf = ud.zf*0.9;
                     f.UserData = ud;
@@ -209,15 +256,18 @@ f.Visible = 'on';
                 %% ---------- PRESET VIEWS ----------
             case 'z'
                 if hasNoMod
-                    view(va,[0 0 1]); view(ca,[0 0 1]);
+                    view(va,[0 0 1]);
+                    view(ca,[0 0 1]);
                 end
             case 'x'
                 if hasNoMod
-                    view(va,[1 0 0]); view(ca,[1 0 0]);
+                    view(va,[1 0 0]);
+                    view(ca,[1 0 0]);
                 end
             case 'y'
                 if hasNoMod
-                    view(va,[0 1 0]); view(ca,[0 1 0]);
+                    view(va,[0 1 0]);
+                    view(ca,[0 1 0]);
                 end
             case 'i'
                 if hasNoMod
@@ -228,7 +278,8 @@ f.Visible = 'on';
                 %% ---------- ROLL ----------
             case 'space'
                 if hasNoMod
-                    camroll(va,90); camroll(ca,90);
+                    camroll(va,90);
+                    camroll(ca,90);
                 end
 
                 %% ---------- SAVE EPS ----------
@@ -243,11 +294,17 @@ f.Visible = 'on';
                 %% ---------- ZOOM FIT ----------
             case 'f'
                 if hasNoMod
-                    ud=f.UserData;
+                    ud = f.UserData;
                     camzoom(va,1/ud.zf);
                     ud.zf = 1;
                     f.UserData = ud;
                 end
+            case 'r'
+
+                va.CameraPosition = va.UserData.camMovH;
+                va.CameraTarget   =  va.UserData.camPosH;
+                va.UserData.rFlag = true;
+
         end
     end
 
@@ -273,6 +330,42 @@ f.Visible = 'on';
         % ca intentionally NOT panned
     end
 
+
+    function mousePanVa(dx,dy)
+
+
+        campos_ = va.CameraPosition;
+        camtar_ = va.CameraTarget;
+        camup_  = va.CameraUpVector;
+
+        % Camera basis vectors
+        forward = camtar_ - campos_;
+        dist = norm(forward);
+        forward = forward/dist;
+
+        right = cross(forward,camup_);
+        right = right/norm(right);
+
+        up = cross(right,forward);
+        up = up/norm(up);
+
+        % Translation proportional to camera distance
+        s = dist/9800;
+
+        move = (-dx*right - dy*up)*s;
+
+
+
+        if va.UserData.rFlag
+            va.UserData.camMovH = campos_;
+            va.UserData.camPosH = camtar_;
+            va.UserData.rFlag = false;
+        end
+
+        va.CameraPosition = campos_ + move;
+        va.CameraTarget   = camtar_ + move;
+
+    end
     function fResizeFcn(~,~)
         handles = guihandles(f);
         if isfield(handles,'cba')
@@ -286,8 +379,50 @@ f.Visible = 'on';
     end
 
 %% ================= HELPERS =========================================
+
+    function hoverHighlight(src)
+        if ~hflag; return; end
+        ud = f.UserData;
+        h = hittest(src);
+
+        % Restore previously hovered patch
+        if ~isempty(ud.hoverPatch) && isgraphics(ud.hoverPatch)
+            if isa(ud.hoverPatch,'matlab.graphics.primitive.Patch')
+                restorePatchAppearance(ud.hoverPatch);
+            end
+        end
+
+        ud.hoverPatch = gobjects(0);
+
+        % Default title when not hovering a patch
+        f.UserData.txt.String = '';
+
+        % Highlight current hovered patch only if it belongs to va
+        if isa(h,'matlab.graphics.primitive.Patch') && ancestor(h,'axes') == va
+            set(h, 'FaceColor', 'y', 'FaceAlpha', 1, 'edgecolor', [0.2,0.2,0.2]);
+            ud.hoverPatch = h;
+
+            f.UserData.txt.String = h.UserData.Tag;
+
+        end
+
+        f.UserData = ud;
+        drawnow limitrate;
+    end
+
+
+    function restorePatchAppearance(hp)
+        if ~isgraphics(hp)
+            return
+        end
+
+        % default restore state
+        set(hp, 'FaceColor', hp.UserData.c, 'FaceAlpha', 1, 'edgecolor', [0.2,0.2,0.2]);
+    end
+
     function setBackground(ax)
-        n = 250; d = n/3;
+        n = 250;
+        d = n/3;
 
         c1 = [1 1 1; d^2 d 1; n^2 n 1]\[1;0.80;1];
         c2 = [1 1 1; d^2 d 1; n^2 n 1]\[1;0.81;1];
@@ -304,8 +439,8 @@ f.Visible = 'on';
         axis(ax,'off');
     end
 
-    function drawBackgroundLabel(ax,str)
-        text(ax,0.5,0.95,str, ...
+    function txt = drawBackgroundLabel(ax,str)
+        txt=text(ax,0.5,0.95,str, ...
             'Units','normalized', ...
             'HorizontalAlignment','center', ...
             'VerticalAlignment','middle', ...
@@ -314,8 +449,7 @@ f.Visible = 'on';
             'FontWeight','bold', ...
             'Color',[1 1 1]*0.2, ...
             'Interpreter','none', ...
-            'HitTest','off', ...
-            'PickableParts','none');
+            'HitTest','off');
     end
 
     function drawAxisArrow(ax,dir,color,labelText)

@@ -6,7 +6,7 @@ classdef emdlab_phy_mp_ThermalConductivity
     properties(SetAccess = ?emdlab_phy_material)
 
         % value of material property -> thermal conductivity
-        value (1,1) double;
+        value;
 
         % this unit multiplier maps the value in original unit to SI unit
         unitUser (1,1) string; 

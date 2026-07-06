@@ -112,6 +112,13 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
 
         end
 
+        function y = getSignedAngle(obj)
+            y = obj.getAngle;
+            if ~obj.direction
+                y = -y;
+            end
+        end
+
         function y = getAngleDegree(obj)
 
             y = obj.getAngle*180/pi;

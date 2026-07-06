@@ -706,6 +706,18 @@ classdef emdlab_g2d_db < handle
 
         end
 
+        function newEdgeIndex = splitArc(obj, eIndex)
+
+            edgeHandle = obj.edges(eIndex).ptr;
+            tmp = edgeHandle.p0.getVector;
+            tmp = emdlab_g2d_rotatePoints(edgeHandle.p1.getVector,edgeHandle.getSignedAngle/2, tmp(1),tmp(2));
+            p = obj.addPoint(tmp(1),tmp(2));
+            p2 = edgeHandle.p2;
+            edgeHandle.p2 = obj.points(p);
+            newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),p,obj.addPoint(p2),edgeHandle.direction);
+
+        end
+
         % edge extensions to draw complex geometries
         function varargout = extendSegmentBySegmentUpToPoint(obj, eIndex, x, y, seIndex)
 

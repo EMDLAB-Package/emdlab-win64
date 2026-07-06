@@ -23,6 +23,9 @@ classdef emdlab_mdb_cp < handle
         % a vector to store material names
         materialNames (1,:) string;
 
+        % coordinate systems
+        cs (1,1) struct;
+
     end
 
     properties (Dependent = true)
@@ -38,6 +41,7 @@ classdef emdlab_mdb_cp < handle
     methods
 
         function obj = emdlab_mdb_cp()
+            obj.cs.global = emdlab_m3d_cs;
         end
 
         function y = get.Nmzs(obj)
@@ -87,6 +91,50 @@ classdef emdlab_mdb_cp < handle
 
         end
 
+        function y = getRelativeCSNames(obj)
+            y = string(fieldnames(obj.cs))';
+        end
+
+        function y = getDefaultRelativeCSName(obj)
+
+            index = 0;
+            csNames = obj.getRelativeCSNames;
+
+            while true
+                index = index + 1;
+                y = ['RelativeCS_', num2str(index)];
+                if ~ismember(y, csNames), break; end
+            end
+
+        end
+
+        function rcsName = checkRelativeCSExistence(obj, rcsName)
+
+            rcsName = erase(rcsName, ' ');
+            if ~isfield(obj.cs, rcsName)
+                error('Specified relative coordinate system does not exist.');
+            end
+
+        end
+
+        function rcsName = checkRelativeCSNonExistence(obj, rcsName)
+
+            rcsName = erase(rcsName, ' ');
+            if isfield(obj.cs, rcsName)
+                error('Specified relative coordinate system already exist.');
+            end
+
+        end
+
+        function addRelativeCS(obj, rcsName, xAxis, yPoint, originPoint)
+            if nargin<5
+                originPoint = [0,0,0];
+            end
+            rcsName = obj.checkRelativeCSNonExistence(rcsName);
+            tmp = emdlab_m3d_cs; 
+            obj.cs.(rcsName) = tmp.setCoordinateSystem(xAxis, yPoint, originPoint);
+        end
+        
         function setMeshZoneColor(obj, mzName, R, G, B)
 
             if ischar(mzName)
@@ -101,6 +149,12 @@ classdef emdlab_mdb_cp < handle
                 error('Wrong input type, mzName must be char or string');
             end
 
+        end
+
+        function setMeshZoneOrientation(obj, mzName, csName)
+            mzName = obj.checkMeshZoneExistence(mzName);
+            csName = obj.checkRelativeCSExistence(csName);
+            obj.mzs.(mzName).orientation = csName;
         end
 
         function setmzc(varargin)
