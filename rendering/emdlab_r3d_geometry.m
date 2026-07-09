@@ -166,13 +166,13 @@ f.Visible = 'on';
         ud = f.UserData;
 
         % click selection only if it was not a drag
-        if ud.isMouseLeft && ~ud.isDragging
-            h = hittest(src);
-            if isa(h,'matlab.graphics.primitive.Patch') && ancestor(h,'axes') == va
-                e.Button = 1;
-                emdlab_flib_selectPatchCallbackGM(h,e);
-            end
-        end
+%         if ud.isMouseLeft && ~ud.isDragging
+%             h = hittest(src);
+%             if isa(h,'matlab.graphics.primitive.Patch') && ancestor(h,'axes') == va
+%                 e.Button = 1;
+%                 emdlab_flib_selectPatchCallbackGM(h,e);
+%             end
+%         end
 
         ud.isMouseDown = false;
         ud.isMouseLeft = false;
@@ -321,7 +321,7 @@ f.Visible = 'on';
 
         up = camup_ ./ norm(camup_);
 
-        panSpeed = 0.2;
+        panSpeed = 0.4;
         move = (dx * right + dy * up) * panSpeed;
 
         va.CameraPosition = campos_ - move;

@@ -23,6 +23,10 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
         % edge length
         facetArea (:,1) double;
         fa (:,6) double;
+        xfc (:,1) double;
+        yfc (:,1) double;
+        zfc (:,1) double;
+        facetCenter (:,3) double;
 
         % neighborhood elements
         nbs (:,6) double;
@@ -728,6 +732,18 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 ic(5*ne+1:6*ne)
                 ];
 
+            % calculate facet areas
+            p12 = obj.nodes(obj.facets(:,2),:) - obj.nodes(obj.facets(:,1),:);
+            p13 = obj.nodes(obj.facets(:,3),:) - obj.nodes(obj.facets(:,1),:);
+            p14 = obj.nodes(obj.facets(:,4),:) - obj.nodes(obj.facets(:,1),:);
+            obj.facetArea = 0.5*(vecnorm(cross(p12,p13),2,2) + vecnorm(cross(p13,p14),2,2));
+            obj.fa = obj.facetArea(abs(obj.elements(:,1:6))); 
+            obj.facetCenter = (obj.nodes(obj.facets(:,1),:)+obj.nodes(obj.facets(:,2),:)+...
+                obj.nodes(obj.facets(:,3),:)+obj.nodes(obj.facets(:,4),:))/4;
+            obj.xfc = obj.facetCenter(abs(obj.elements(:,1:6)),1);
+            obj.yfc = obj.facetCenter(abs(obj.elements(:,1:6)),2);
+            obj.zfc = obj.facetCenter(abs(obj.elements(:,1:6)),3);
+
             obj.nbs = zeros(obj.Ne,6);
             % edge element
             obj.facets = [obj.facets, zeros(size(obj.facets,1), 6)];
@@ -943,6 +959,76 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             axis off equal
 
             view([1, 1, 1])
+        end
+
+        function varargout = showFacets(obj, varargin)
+
+            [f,ax] = obj.showm;
+            for i = 1:numel(varargin)
+                patch('Faces', obj.facets(varargin{i},[1,2,3,4]), 'Vertices', obj.nodes, ...
+                    'FaceColor', 'r', 'EdgeColor', 'w', 'parent', ax, 'Marker', 'none', ...
+                    'PickableParts', 'none', 'MarkerFaceColor', 'none', 'LineWidth', 1);
+            end
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function idx = getFacetIndicesOnHalfPlane(obj, p0, n, v_dir, tol)
+            %GETFACETINDICESONHALFPLANE Returns indices of facets lying entirely on a half-plane.
+            % A facet is on the half-plane if all of its nodes are on the half-plane.
+            %
+            % p0    - Point on the boundary line of the half-plane (1x3)
+            % n     - Normal vector of the plane (1x3)
+            % v_dir - Vector pointing into the active half of the plane (1x3)
+            % tol   - Tolerance (defaults to obj.gleps)
+
+            % Handle default tolerance
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % 1. Get indices of all nodes on the half-plane
+            node_idx = obj.getNodeIndicesOnHalfPlane(p0, n, v_dir, tol);
+
+            % 2. Find facets whose all 4 nodes are in node_idx (using your ismember approach)
+            mask = ismember(obj.facets(:, 1), node_idx) & ...
+                ismember(obj.facets(:, 2), node_idx) & ...
+                ismember(obj.facets(:, 3), node_idx) & ...
+                ismember(obj.facets(:, 4), node_idx);
+
+            % 3. Return facet indices
+            idx = find(mask);
+        end
+
+        function idx = getFacetIndicesOnCylinder(obj, p0, p1, R, tol)
+            %GETFACETINDICESONCYLINDER Returns indices of facets lying entirely on a cylinder's lateral surface.
+            % A facet is on the cylinder if all of its nodes are on the cylinder.
+            %
+            % p0  - Point defining the start of the cylinder axis (1x3)
+            % p1  - Point defining the end of the cylinder axis (1x3)
+            % R   - Cylinder radius
+            % tol - Tolerance (defaults to obj.gleps)
+
+            % Handle default tolerance
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % 1. Get indices of all nodes on the cylinder lateral surface
+            node_idx = obj.getNodeIndicesOnCylinder(p0, p1, R, tol);
+
+            % 2. Find facets whose all 4 nodes are in node_idx (using your ismember approach)
+            mask = ismember(obj.facets(:, 1), node_idx) & ...
+                ismember(obj.facets(:, 2), node_idx) & ...
+                ismember(obj.facets(:, 3), node_idx) & ...
+                ismember(obj.facets(:, 4), node_idx);
+
+            % 3. Return facet indices
+            idx = find(mask);
         end
 
         function varargout = shownfs(obj)
@@ -1271,9 +1357,131 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
         end
 
-        function y = getnIndexOnPlane(obj, p0, n)
-            y = find(abs(obj.nodes * n' - p0 * n') < obj.gleps);
+        function idx = getNodeIndicesOnPlane(obj, p0, n, tol)
+            %GETNODEINDICESONPLANE Indices of nodes lying on a plane.
+            % Plane defined by point p0 and normal n.
+
+            if nargin < 4 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % Ensure n is a column vector and p0 is a row vector for dot product
+            n = n(:);
+            p0 = p0(:).';
+
+            % Compute dot product: Nodes * Normal - Point * Normal
+            % This is the projection distance (scaled by ||n||)
+            d = obj.nodes * n - (p0 * n);
+
+            idx = find(abs(d) < tol);
         end
+
+        function idx = getNodeIndicesOnHalfPlane(obj, p0, n, v_dir, tol)
+            %GETNODEINDICESONHALFPLANE Indices of nodes on a half-plane.
+            %
+            % p0    - Point on the boundary line of the half-plane (1x3)
+            % n     - Normal vector of the plane (1x3)
+            % v_dir - Vector pointing into the active half of the plane (1x3)
+            % tol   - Tolerance
+
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % Force row vectors
+            p0 = p0(:).';
+            n = n(:).';
+            v_dir = v_dir(:).';
+
+            % Normalize vectors to make physical sense of tolerance
+            n = n / norm(n);
+            % Project v_dir to ensure it is orthogonal to the normal n
+            v_dir = v_dir - (v_dir * n.') * n;
+            v_dir = v_dir / norm(v_dir);
+
+            % Vectors from p0 to all nodes (N x 3)
+            V = obj.nodes - p0;
+
+            % 1. Distance to the infinite plane (must be near 0)
+            dist_to_plane = V * n.';
+
+            % 2. Projection along the half-plane direction (must be >= 0)
+            dist_along_half = V * v_dir.';
+
+            % Nodes must lie on the plane AND on the positive side of the boundary line
+            on_plane = abs(dist_to_plane) < tol;
+            in_half = dist_along_half >= -tol; % allow tolerance at the boundary edge
+
+            idx = find(on_plane & in_half);
+        end
+
+        function idx = getNodeIndicesOnCylinder(obj, p0, p1, h, tol)
+            %GETNODEINDICESONCYLINDER Indices of nodes lying on a cylinder's lateral surface.
+            % Cylinder axis goes from point p0 to point p1, with radius h.
+
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % Ensure row vectors for vectorised calculations (1x3)
+            p0 = p0(:).';
+            p1 = p1(:).';
+
+            % Axis vector and its length
+            axis_vec = p1 - p0;
+            L = norm(axis_vec);
+
+            if L < 1e-12
+                error('Points p0 and p1 must be distinct to define a cylinder axis.');
+            end
+
+            % Unit vector along the cylinder axis
+            u = axis_vec / L;
+
+            % Vectors from p0 to all nodes (N x 3)
+            V = obj.nodes - p0;
+
+            % Projection of vectors onto the axis (N x 1)
+            d_axial = V * u.';
+
+            % Squared distance to the axis: ||V||^2 - d_axial^2
+            % sum(V.^2, 2) calculates the squared norm of each row
+            d_perp_sq = sum(V.^2, 2) - d_axial.^2;
+
+            % Ensure no negative values due to minor numerical precision limits
+            d_perp = sqrt(max(d_perp_sq, 0));
+
+            % Conditions:
+            % 1. Radial distance must match radius h within tol
+            % 2. Node must lie within the axial limits [0, L] of the cylinder
+            on_lateral_surface = (abs(d_perp - h) < tol);
+            within_bounds = (d_axial >= -tol) & (d_axial <= L + tol);
+
+            idx = find(on_lateral_surface & within_bounds);
+        end
+
+        function idx = getFacetIndicesOnPlane(obj, p0, n, tol)
+            %GETFACETINDICESONPLANE Returns indices of facets lying entirely on a plane.
+            % A facet is on the plane if all of its nodes are on the plane.
+
+            % Handle default tolerance
+            if nargin < 4 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % Get indices of all nodes on the plane
+            node_idx = obj.getNodeIndicesOnPlane(p0, n, tol);
+
+            % Find facets whose all nodes are in node_idx
+            mask = ismember(obj.facets(:,1), node_idx) & ...
+                ismember(obj.facets(:,2), node_idx) & ...
+                ismember(obj.facets(:,3), node_idx) & ...
+                ismember(obj.facets(:,4), node_idx);
+
+            % Return facet indices
+            idx = find(mask);
+        end
+
 
         function y = getfb(obj)
             y = obj.facets(obj.bfacets, 1:3);

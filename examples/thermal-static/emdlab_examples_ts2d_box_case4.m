@@ -14,7 +14,7 @@ addpath(genpath('C:\emdlab-win64'));
 W = 1; % width of the box
 H = 1; % height of the box
 Z = 1; % depth of the problem
-meshSize = 1/20; % maximum mesh size
+meshSize = 0.05; % maximum mesh size
 
 % define geometry
 g = emdlab_g2d_db;
@@ -28,11 +28,10 @@ m.addMeshZone('z1', g.getQMeshByEdges(1,2,3,4,ceil(W/meshSize),ceil(H/meshSize))
 m.addMaterial('copper', emdlab_mlib_copper);
 m.setMaterial('z1', 'copper');
 m.setMeshZoneColor('z1', 0, 255, 255);
-m.showmzs;
 m.mts.copper.setThermalConductivity(1);
 
 % add solver
-s = emdlab_solvers_ts2d_lptn_qm(m);
+s = emdlab_solvers_ts2d_tn_qm(m);
 s.setLengthUnit('m');
 s.setDepth(Z);
 
@@ -42,6 +41,8 @@ s.addInternalHeatSource('hg1', 'z1', 1000);
 
 % solve and plot results
 s.solve;
-s.plotAverageTemperature(20);
-mean(s.results.T)
-s.plotTemperature;
+s.plotThermalNetwork;
+s.plotTemperature(10);
+fprintf('Tmin = %.4f\n', min(s.results.T));
+fprintf('Tmax = %.4f\n', max(s.results.T));
+fprintf('Tavg = %.4f\n', s.getAverageTemperature);

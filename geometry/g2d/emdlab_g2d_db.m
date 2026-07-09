@@ -695,26 +695,26 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function splitSegment(obj, eIndex)
+        function [newEdgeIndex, newPointIndex] = splitSegment(obj, eIndex)
 
             edgeHandle = obj.edges(eIndex).ptr;
             tmp = edgeHandle.getCenter;
-            p = obj.addPoint(tmp(1),tmp(2));
+            newPointIndex = obj.addPoint(tmp(1),tmp(2));
             p2 = edgeHandle.p1;
-            edgeHandle.p1 = obj.points(p);
-            obj.addSegment(p,obj.addPoint(p2));
+            edgeHandle.p1 = obj.points(newPointIndex);
+            newEdgeIndex = obj.addSegment(newPointIndex,obj.addPoint(p2));
 
         end
 
-        function newEdgeIndex = splitArc(obj, eIndex)
+        function [newEdgeIndex, newPointIndex] = splitArc(obj, eIndex)
 
             edgeHandle = obj.edges(eIndex).ptr;
             tmp = edgeHandle.p0.getVector;
             tmp = emdlab_g2d_rotatePoints(edgeHandle.p1.getVector,edgeHandle.getSignedAngle/2, tmp(1),tmp(2));
-            p = obj.addPoint(tmp(1),tmp(2));
+            newPointIndex = obj.addPoint(tmp(1),tmp(2));
             p2 = edgeHandle.p2;
-            edgeHandle.p2 = obj.points(p);
-            newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),p,obj.addPoint(p2),edgeHandle.direction);
+            edgeHandle.p2 = obj.points(newPointIndex);
+            newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),newPointIndex,obj.addPoint(p2),edgeHandle.direction);
 
         end
 
@@ -1251,6 +1251,30 @@ classdef emdlab_g2d_db < handle
 
         end
 
+        function m = generateQMesh(obj, meshGenerator)
+
+            % default mesh generator
+            if nargin<2
+                meshGenerator = 'gmsh';
+            end
+
+            if strcmpi(meshGenerator, 'gmsh')
+                obj.write_geo_file;
+                m = obj.read_msh_file_qm;
+                return;
+            end
+
+            % get an instance of mesh data base
+            m = emdlab_m2d_tmdb;
+
+            % add mesh zones
+            for i = 1:numel(obj.faces)
+                m.addMeshZone(obj.faces(i).tag, obj.faces(i).getMesh(meshGenerator));
+                m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
+            end
+
+        end
+
         function meshZone = getQMeshByEdges(obj, e1, e2, e3, e4, Nx, Ny)
 
             % set default values for Nx & Ny
@@ -1326,6 +1350,7 @@ classdef emdlab_g2d_db < handle
             end
 
             meshZone = emdlab_m2d_qmz(cl,pts);
+            meshZone.color = 'c';
 
         end
 
@@ -1414,136 +1439,136 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function varargout = showSketchWithArrows(obj)
+        function varargout = showEdgeDirections(obj)
 
-f = figure('NumberTitle','on','WindowState','maximized',...
-    'name','EMDLAB Geometry Visualization','color',[0.9,0.9,0.9]);
-hold all;
+            f = figure('NumberTitle','on','WindowState','maximized',...
+                'name','EMDLAB Geometry Visualization','color',[0.9,0.9,0.9]);
+            hold all;
 
-%% plot edges (prepare data first)
-Ne = numel(obj.edges);
-v = cell(Ne,1);
-cl = cell(Ne,1);
-c = zeros(Ne,2);
+            %% plot edges (prepare data first)
+            Ne = numel(obj.edges);
+            v = cell(Ne,1);
+            cl = cell(Ne,1);
+            c = zeros(Ne,2);
 
-for i = 1:Ne
-    v{i} = obj.edges(i).ptr.getMeshNodes;
-    cl{i} = (1:size(v{i},1)-1)';
-    cl{i} = [cl{i},cl{i}+1];
-    c(i,:) = obj.edges(i).ptr.getCenter;
-end
+            for i = 1:Ne
+                v{i} = obj.edges(i).ptr.getMeshNodes;
+                cl{i} = (1:size(v{i},1)-1)';
+                cl{i} = [cl{i},cl{i}+1];
+                c(i,:) = obj.edges(i).ptr.getCenter;
+            end
 
-Index = 0;
-for i = 2:Ne
-    Index = Index + size(v{i-1},1);
-    cl{i} = cl{i} + Index;
-end
+            Index = 0;
+            for i = 2:Ne
+                Index = Index + size(v{i-1},1);
+                cl{i} = cl{i} + Index;
+            end
 
-v = cell2mat(v);
-cl = cell2mat(cl);
+            v = cell2mat(v);
+            cl = cell2mat(cl);
 
-%% compute directions
-if ~isempty(v)
+            %% compute directions
+            if ~isempty(v)
 
-    p1 = v(cl(:,1),:);
-    p2 = v(cl(:,2),:);
+                p1 = v(cl(:,1),:);
+                p2 = v(cl(:,2),:);
 
-    midPoints = (p1 + p2)/2;
+                midPoints = (p1 + p2)/2;
 
-    dirs = p2 - p1;
-    lens = sqrt(sum(dirs.^2,2));
-    lens(lens==0) = 1;
+                dirs = p2 - p1;
+                lens = sqrt(sum(dirs.^2,2));
+                lens(lens==0) = 1;
 
-    dirs = dirs ./ lens;
+                dirs = dirs ./ lens;
 
-    perp = [-dirs(:,2) dirs(:,1)];
+                perp = [-dirs(:,2) dirs(:,1)];
 
-    arrowLength = 0.4;
-    arrowWidth  = 0.2;
+                arrowLength = 0.4;
+                arrowWidth  = 0.2;
 
-    %% 1️⃣ draw arrows FIRST (bottom layer)
-    for i = 1:size(midPoints,1)
+                %% 1️⃣ draw arrows FIRST (bottom layer)
+                for i = 1:size(midPoints,1)
 
-        M = midPoints(i,:);
-        d = dirs(i,:);
-        n = perp(i,:);
+                    M = midPoints(i,:);
+                    d = dirs(i,:);
+                    n = perp(i,:);
 
-        tip = M + arrowLength*d;
+                    tip = M + arrowLength*d;
 
-        base1 = M + (arrowWidth/2)*n;
-        base2 = M - (arrowWidth/2)*n;
+                    base1 = M + (arrowWidth/2)*n;
+                    base2 = M - (arrowWidth/2)*n;
 
-        X = [tip(1) base1(1) base2(1)];
-        Y = [tip(2) base1(2) base2(2)];
+                    X = [tip(1) base1(1) base2(1)];
+                    Y = [tip(2) base1(2) base2(2)];
 
-        patch(X,Y,'c','EdgeColor','none');
+                    patch(X,Y,'c','EdgeColor','none');
 
-    end
+                end
 
-    %% 2️⃣ draw edges
-    patch('faces',cl,'vertices',v,'edgecolor','b','linewidth',1.2);
+                %% 2️⃣ draw edges
+                patch('faces',cl,'vertices',v,'edgecolor','b','linewidth',1.2);
 
-end
-
-
-%% plot points
-Np = numel(obj.points);
-p = zeros(Np,2);
-
-for i = 1:Np
-    p(i,1) = obj.points(i).x;
-    p(i,2) = obj.points(i).y;
-end
-
-if ~isempty(p)
-
-    %% 3️⃣ draw points
-    plot(p(:,1),p(:,2),'s','LineWidth',1.5,'MarkerEdgeColor','k');
-
-    p_min = min(p,[],1);
-    p_max = max(p,[],1);
-
-    plot([min(p_min(1),0),max(p_max(1),0)],[0,0],'--','color',[0.2,0.2,0.2]);
-    plot([0,0],[min(p_min(2),0),max(p_max(2),0)],'--','color',[0.2,0.2,0.2]);
-
-    %% 4️⃣ point tags
-    pointTags = cell(1,Np);
-    for i = 1:Np
-        pointTags{i} = obj.points(i).tag;
-    end
-
-    text(p(:,1),p(:,2),pointTags,...
-        'HorizontalAlignment','left',...
-        'VerticalAlignment','top',...
-        'BackgroundColor','y');
-
-end
+            end
 
 
-%% 5️⃣ edge tags (top layer)
-edgeTags = cell(1,Ne);
-for i = 1:Ne
-    edgeTags{i} = obj.edges(i).tag;
-end
+            %% plot points
+            Np = numel(obj.points);
+            p = zeros(Np,2);
 
-text(c(:,1),c(:,2),edgeTags,...
-    'BackgroundColor','w',...
-    'HorizontalAlignment','center',...
-    'VerticalAlignment','middle');
+            for i = 1:Np
+                p(i,1) = obj.points(i).x;
+                p(i,2) = obj.points(i).y;
+            end
+
+            if ~isempty(p)
+
+                %% 3️⃣ draw points
+                plot(p(:,1),p(:,2),'s','LineWidth',1.5,'MarkerEdgeColor','k');
+
+                p_min = min(p,[],1);
+                p_max = max(p,[],1);
+
+                plot([min(p_min(1),0),max(p_max(1),0)],[0,0],'--','color',[0.2,0.2,0.2]);
+                plot([0,0],[min(p_min(2),0),max(p_max(2),0)],'--','color',[0.2,0.2,0.2]);
+
+                %% 4️⃣ point tags
+                pointTags = cell(1,Np);
+                for i = 1:Np
+                    pointTags{i} = obj.points(i).tag;
+                end
+
+                text(p(:,1),p(:,2),pointTags,...
+                    'HorizontalAlignment','left',...
+                    'VerticalAlignment','top',...
+                    'BackgroundColor','y');
+
+            end
 
 
-set(gca,'clipping','off');
+            %% 5️⃣ edge tags (top layer)
+            edgeTags = cell(1,Ne);
+            for i = 1:Ne
+                edgeTags{i} = obj.edges(i).tag;
+            end
 
-axis off equal
-zoom on
-grid on
-drawnow;
+            text(c(:,1),c(:,2),edgeTags,...
+                'BackgroundColor','w',...
+                'HorizontalAlignment','center',...
+                'VerticalAlignment','middle');
 
-if nargout == 1
-    varargout{1} = f;
-end
 
-end
+            set(gca,'clipping','off');
+
+            axis off equal
+            zoom on
+            grid on
+            drawnow;
+
+            if nargout == 1
+                varargout{1} = f;
+            end
+
+        end
 
 
         function showFaces(obj)
@@ -2110,6 +2135,53 @@ end
                 cl(index,:) = cl(index,[1,3,2]);
 
                 m.addMeshZone(obj.faces(i).tag, emdlab_m2d_tmz(cl, xpoints));
+                m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
+
+            end
+
+        end
+
+        function m = read_msh_file_qm(obj)
+
+            % run gmsh via matlab
+            pyCodePath = "C:\\emdlab-win64\\py-files\\gmsh\\emdlab_gmsh_runGeoSaveQMsh2D.py";
+
+            [status ,~] = system(char('"' + obj.pyPath + '"' + " " + '"' + pyCodePath+ '"'));
+
+            % check for system error
+            if status ~= 0
+                error(['EMDLAB cannot communicate with Gmsh. Please check:\n' ...
+                    '1) You have installed Python.\n' ...
+                    '2) You have installed Gmsh via: pip install gmsh\n' ...
+                    '3) You have set pyPath correctly.\n']);
+            end
+
+            % read generated mesh;
+            emdlab_gmsh_mshFile;
+
+            % get an instance of mesh data base
+            m = emdlab_m2d_qmdb;
+
+            nodes = msh.POS(:,1:2);
+            Np = size(nodes,1);
+
+            % add faces
+            for i = 1:numel(obj.faces)
+
+                cl = msh.QUADS(msh.QUADS(:,5) == i, 1:4);
+                index = unique(cl(:));
+                index = sort(index);
+                xpoints = nodes(index,:);
+                pindex = zeros(Np,1);
+                pindex(index) = 1:size(xpoints,1);
+                cl = pindex(cl);
+
+                p21 = xpoints(cl(:,2),:) - xpoints(cl(:,1),:);
+                p31 = xpoints(cl(:,3),:) - xpoints(cl(:,1),:);
+                index = (p21(:,1).*p31(:,2) - p21(:,2).*p31(:,1)) < 0;
+                cl(index,:) = cl(index,[1,4,3,2]);
+
+                m.addMeshZone(obj.faces(i).tag, emdlab_m2d_qmz(cl, xpoints));
                 m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
 
             end

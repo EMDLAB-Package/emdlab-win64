@@ -56,10 +56,10 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
     properties (Dependent = true)
 
         % Number of nodes
-        Nn
+        Nn (1,1) double;
 
         % Number of elements
-        Ne
+        Ne (1,1) double;
 
         % flags for element type
         isQL4 (1,1) logical;
@@ -121,10 +121,10 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % adding new mesh zone
             obj.mzs.(mzName) = mzptr;
             obj.mzs.(mzName).material = 'air';
-            obj.mzs.(mzName).color = rand(1,3);
+%             obj.mzs.(mzName).color = rand(1,3);
 
             % changing states
-            obj.makeFalse_isGlobalMeshGenerated;
+            obj.clearGlobalMeshGenerationFlag;
 
         end
 
@@ -570,7 +570,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             if obj.isd2ElementsGenerated, return; end
             obj.ggmesh;
             if obj.etype ~= 'TL3'
-                obj.makeFalse_isGlobalMeshGenerated;
+                obj.clearGlobalMeshGenerationFlag;
                 obj.ggmesh;
             end
             Nn_old = obj.Nn;
@@ -590,7 +590,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
             obj.ggmesh;
             if obj.etype ~= 'TL3'
-                obj.makeFalse_isGlobalMeshGenerated;
+                obj.clearGlobalMeshGenerationFlag;
                 obj.ggmesh;
             end
             Nn_old = obj.Nn;
@@ -666,7 +666,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             for i = 1:numel(mznames)
                 obj.mzs.(mznames{i}).strefine;
             end
-            obj.makeFalse_isGlobalMeshGenerated;
+            obj.clearGlobalMeshGenerationFlag;
         end
 
         function adrefine(obj, ti)
@@ -2328,7 +2328,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
 
             % change states
-            obj.makeFalse_isGlobalMeshGenerated;
+            obj.clearGlobalMeshGenerationFlag;
 
         end
 
@@ -2591,7 +2591,8 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
     methods (Access = private)
 
-        function makeFalse_isGlobalMeshGenerated(obj)
+        function clearGlobalMeshGenerationFlag(obj)
+
             obj.isGlobalMeshGenerated = false;
             obj.isd2ElementsGenerated = false;
             obj.isd3ElementsGenerated = false;
@@ -2604,6 +2605,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.isFe_TL3_Evaluated = false;
             obj.isMe_TL3_Evaluated = false;
             obj.isKexy1_TL3_Evaluated = false;
+            
         end
 
     end

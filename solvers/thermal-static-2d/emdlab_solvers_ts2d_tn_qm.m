@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% a two-dimensional thermal-static solver based on LPTN for QM
+% a two-dimensional thermal-static solver based on TN for QM
 
-classdef emdlab_solvers_ts2d_lptn_qm < handle
+classdef emdlab_solvers_ts2d_tn_qm < handle
 
     properties (SetAccess = protected)
 
@@ -19,6 +19,8 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
         % results
         results (1,1) struct;
+
+        kxySV (:,1) double;
 
     end
 
@@ -59,9 +61,12 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
     methods
         %% Constructor and Destructor
-        function obj = emdlab_solvers_ts2d_lptn_qm(m)
+        function obj = emdlab_solvers_ts2d_tn_qm(m)
 
             % mesh pointer
+            if isa(m, 'emdlab_m3d_qmdb')
+                error('Mesh class must be <emdlab_m2d_qmdb');
+            end
             m.ggmesh;
             obj.m = m;
 
@@ -158,6 +163,8 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
             % check if all materials are linear
             obj.edata.areAllTemperatureIndependent = true;
+            obj.edata.areAllIsotropic = true;
+            obj.edata.areAllHomogeneous = true;
 
             % loop over mesh zones
             for i = 1:obj.m.Nmzs
@@ -168,25 +175,18 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
                 % assigning thermal conductivities
                 if obj.m.mts.(mzptr.material).ThermalConductivity.isTemperatureDependent 
                     if obj.m.mts.(mzptr.material).ThermalConductivity.isIsotropic
-
                         obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value;
-
                     else
-
                         obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value(:);
-
                     end
                 else
                     if obj.m.mts.(mzptr.material).ThermalConductivity.isIsotropic
-
                         obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value;
-
                     else
-
                         obj.edata.ThermalConductivity(1,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value(1);
                         obj.edata.ThermalConductivity(2,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value(2);
                         obj.edata.ThermalConductivity(3,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value(3);
-
+                        obj.edata.areAllIsotropic = false;
                     end
                 end
 
@@ -206,14 +206,43 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
             resistances = zeros(obj.m.Ne,2);
             z = obj.getDepth;
 
+            ec = obj.m.getCenterOfEdges;
+            xec = ec(:,1);
+            yec = ec(:,2);
+            xec = xec(abs(obj.m.elements(:,1:4)));
+            yec = yec(abs(obj.m.elements(:,1:4)));
+
+            ux = zeros(obj.m.Ne,3);
+            uy = zeros(obj.m.Ne,3);
+
+            mzNames = obj.m.getMeshZoneNames;
+            for mz = mzNames
+                mzptr = obj.m.mzs.(mz);
+                
+                ux(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).ux,mzptr.Ne,1);
+                uy(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).uy,mzptr.Ne,1);
+            end
+
+            obj.kxySV = zeros(obj.m.Ne,1);
             % loop over elements to calculate conductances of each element
             for i = 1:obj.m.Ne
 
                 kx = obj.edata.ThermalConductivity(1,i);
+                ky = obj.edata.ThermalConductivity(2,i);
+
+                u13 = [xec(i,3),yec(i,3),0] - [xec(i,1),yec(i,1),0];
+                u24 = [xec(i,4),yec(i,4),0] - [xec(i,2),yec(i,2),0];
+                u13 = u13 / norm(u13);
+                u24 = u24 / norm(u24);
+
+                k13 = kx * dot(ux(i,:),u13).^2 + ky * dot(uy(i,:),u13).^2;
+                k24 = kx * dot(ux(i,:),u24).^2 + ky * dot(uy(i,:),u24).^2;
+                obj.kxySV(i) = (kx-ky) * (dot(ux(i,:),u13)*dot(uy(i,:),u13) - dot(ux(i,:),u24)*dot(uy(i,:),u24))/2;
+
 
                 % calculation of conductances
-                resistances(i,1) = (obj.m.el(i,2) + obj.m.el(i,4))/(kx*z*(obj.m.el(i,1) + obj.m.el(i,3)));
-                resistances(i,2) = (obj.m.el(i,1) + obj.m.el(i,3))/(kx*z*(obj.m.el(i,2) + obj.m.el(i,4)));
+                resistances(i,1) = (obj.m.el(i,2) + obj.m.el(i,4))/(k13*z*(obj.m.el(i,1) + obj.m.el(i,3)));
+                resistances(i,2) = (obj.m.el(i,1) + obj.m.el(i,3))/(k24*z*(obj.m.el(i,2) + obj.m.el(i,4)));
 
             end
 
@@ -249,6 +278,42 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
             % construct global matrices and solve
             G_maxtrix = sparse(indexI, indexJ, value);
             obj.results.T = G_maxtrix\sourceVector;
+            obj.evalTSmooth;
+            sourceVectorU = sourceVector;
+
+            if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
+
+                releativeError = 1e-3;
+                maxIteration = 50;
+                iter = 0;
+                err = inf;
+                
+                % iterative loop for solver
+                while iter<maxIteration && err>releativeError
+
+                    % handle anisotropy
+                    if ~obj.edata.areAllIsotropic
+                        for i = 1:obj.m.Ne
+                            T1 = obj.results.Tsmooth(obj.m.cl(i,1));
+                            T2 = obj.results.Tsmooth(obj.m.cl(i,2));
+                            T3 = obj.results.Tsmooth(obj.m.cl(i,3));
+                            T4 = obj.results.Tsmooth(obj.m.cl(i,4));
+                            sourceVectorU(i) = sourceVector(i) + obj.kxySV(i)*z*  ...
+                                (-(T2-T1)+(T3-T2)-(T4-T3)+(T1-T4));
+                        end
+                    end
+
+                    Told = obj.results.T;
+                    % solver iteration
+                    obj.results.T = G_maxtrix\sourceVectorU;
+                    obj.evalTSmooth;
+
+                    iter = iter + 1;
+                    err = norm(obj.results.T-Told,2)/norm(obj.results.T,2);
+
+                end
+
+            end
 
         end
 
@@ -432,6 +497,100 @@ classdef emdlab_solvers_ts2d_lptn_qm < handle
 
         end
 
+        function y = getAverageTemperature(obj)
+            y = obj.m.gea * obj.results.T / sum(obj.m.gea);
+        end
+
+        % show center to edge connections
+        function varargout = plotThermalNetwork(obj, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+
+            mzNames = obj.m.getMeshZoneNames;
+            ecolor = zeros(obj.m.Ne, 3);
+
+            for i = 1:obj.m.Nmzs
+                mzptr = obj.m.mzs.(mzNames{i});
+                ecolor(obj.m.ezi(:, i), 1) = mzptr.color(1);
+                ecolor(obj.m.ezi(:, i), 2) = mzptr.color(2);
+                ecolor(obj.m.ezi(:, i), 3) = mzptr.color(3);
+            end
+
+            pts = [obj.m.getCenterOfElements; obj.m.getCenterOfEdges];
+            cl1_tmp = repmat(1:obj.m.Ne,4,1);
+            cl2_tmp = abs(obj.m.elements(:,1:4))' + obj.m.Ne;
+            cl3_tmp = [cl1_tmp(:),cl2_tmp(:)];
+
+            patch('Faces', obj.m.cl(:, [1,2,3,4]), 'Vertices', obj.m.nodes, ...
+                'FaceColor', 'flat', 'FaceVertexCData', ecolor, ...
+                'FaceAlpha', 1, 'EdgeColor', 'k', 'linewidth', 1, 'parent', ax);
+
+            P = pts;
+
+            cl = cl3_tmp;
+
+            Xall = [];
+            Yall = [];
+
+            for e = 1:size(cl,1)
+                i = cl(e,1);
+                j = cl(e,2);
+
+                p1 = P(i,:);
+                p2 = P(j,:);
+
+                d = p2 - p1;
+                L = norm(d);
+                if L == 0
+                    continue
+                end
+
+                ex = d / L;
+                ey = [-ex(2), ex(1)];
+
+                leadFrac = 0.15;
+                leadLen  = leadFrac * L;
+                amp      = 0.08 * L;
+                nzig     = 6;
+
+                xzig = linspace(leadLen, L-leadLen, 2*nzig+1);
+                yzig = zeros(size(xzig));
+                yzig(2:2:end-1) = amp;
+                yzig(3:2:end-1) = -amp;
+
+                xloc = [0, leadLen, xzig, L];
+                yloc = [0, 0,       yzig, 0];
+
+                pts = p1 + xloc.'*ex + yloc.'*ey;
+
+                Xall = [Xall; pts(:,1); NaN];
+                Yall = [Yall; pts(:,2); NaN];
+            end
+
+            
+            patch(Xall, Yall, 'w', ...
+                'EdgeColor', 'b', ...
+                'FaceColor', 'none', ...
+                'LineWidth', 1);
+
+%             plot(P(:,1), P(:,2), 'ro', 'MarkerFaceColor', 'r');
+%             text(P(:,1), P(:,2), compose(' %d',1:size(P,1)));
+
+
+%             patch('Faces', cl3_tmp, 'Vertices', pts, ...
+%                 'FaceColor', 'none', 'EdgeColor', 'b', 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
     end
 
     methods (Access=private)
