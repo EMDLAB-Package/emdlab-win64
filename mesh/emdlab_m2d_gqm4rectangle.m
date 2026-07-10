@@ -1,4 +1,4 @@
-function mz = emdlab_m2d_getQMesh4Rectangle(x0,y0,W,H,Nx,Ny)
+function mz = emdlab_m2d_gqm4rectangle(x0,y0,W,H,Nx,Ny)
 
 if nargin == 0
     x0 = 0;
@@ -30,5 +30,7 @@ for j = 1:Ny
 end
 
 mz = emdlab_m2d_qmz(cl,pts);
+
+if nargin == 0, mz.showm; end
 
 end

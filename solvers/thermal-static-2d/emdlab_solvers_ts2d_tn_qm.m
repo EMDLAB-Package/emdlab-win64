@@ -20,7 +20,9 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
         % results
         results (1,1) struct;
 
-        kxySV (:,1) double;
+        kxy13SV (:,1) double;
+        kxy24SV (:,1) double;
+        initialTemperature (1,1) double = 25;
 
     end
 
@@ -223,7 +225,7 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
                 uy(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).uy,mzptr.Ne,1);
             end
 
-            obj.kxySV = zeros(obj.m.Ne,1);
+            obj.kxy13SV = zeros(obj.m.Ne,1);
             % loop over elements to calculate conductances of each element
             for i = 1:obj.m.Ne
 
@@ -237,7 +239,8 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
                 k13 = kx * dot(ux(i,:),u13).^2 + ky * dot(uy(i,:),u13).^2;
                 k24 = kx * dot(ux(i,:),u24).^2 + ky * dot(uy(i,:),u24).^2;
-                obj.kxySV(i) = (kx-ky) * (dot(ux(i,:),u13)*dot(uy(i,:),u13) - dot(ux(i,:),u24)*dot(uy(i,:),u24))/2;
+                obj.kxy13SV(i) = (kx-ky) * dot(ux(i,:),u13)*dot(uy(i,:),u13);
+                obj.kxy24SV(i) = (ky-kx) * dot(ux(i,:),u24)*dot(uy(i,:),u24);
 
 
                 % calculation of conductances
@@ -278,8 +281,10 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             % construct global matrices and solve
             G_maxtrix = sparse(indexI, indexJ, value);
             obj.results.T = G_maxtrix\sourceVector;
-            obj.evalTSmooth;
+            obj.evalTn;
             sourceVectorU = sourceVector;
+
+            obj.solverHistory.relativeError = [];
 
             if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
 
@@ -294,26 +299,66 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
                     % handle anisotropy
                     if ~obj.edata.areAllIsotropic
                         for i = 1:obj.m.Ne
-                            T1 = obj.results.Tsmooth(obj.m.cl(i,1));
-                            T2 = obj.results.Tsmooth(obj.m.cl(i,2));
-                            T3 = obj.results.Tsmooth(obj.m.cl(i,3));
-                            T4 = obj.results.Tsmooth(obj.m.cl(i,4));
-                            sourceVectorU(i) = sourceVector(i) + obj.kxySV(i)*z*  ...
-                                (-(T2-T1)+(T3-T2)-(T4-T3)+(T1-T4));
+                            T1 = obj.results.Tn(obj.m.cl(i,1));
+                            T2 = obj.results.Tn(obj.m.cl(i,2));
+                            T3 = obj.results.Tn(obj.m.cl(i,3));
+                            T4 = obj.results.Tn(obj.m.cl(i,4));
+                            sourceVectorU(i) = sourceVector(i) + obj.kxy13SV(i)*z*  ...
+                                ((T1-T2)+(T3-T4)) - obj.kxy24SV(i)*z*  ...
+                                ((T2-T3)+(T4-T1));
                         end
                     end
 
                     Told = obj.results.T;
+
                     % solver iteration
                     obj.results.T = G_maxtrix\sourceVectorU;
-                    obj.evalTSmooth;
+                    obj.evalTn;
 
                     iter = iter + 1;
                     err = norm(obj.results.T-Told,2)/norm(obj.results.T,2);
+                    obj.solverHistory.relativeError(end+1) = err;
 
                 end
 
             end
+
+        end
+
+        function evalTn(obj)
+
+            obj.results.Tn = zeros(obj.m.Nn,1);
+            ec = obj.m.getCenterOfElements;
+            denum = zeros(obj.m.Nn,1);
+
+            % loop over elements
+            for i = 1:obj.m.Ne
+                for j = 1:4
+                    pIndex = obj.m.cl(i,j);
+                    di = norm(ec(i,:) - obj.m.nodes(pIndex,:));
+                    obj.results.Tn(pIndex) = obj.results.Tn(pIndex) + obj.results.T(i)/di;
+                    denum(pIndex) = denum(pIndex) + 1/di;
+                end
+            end
+
+            obj.results.Tn = obj.results.Tn ./ denum;
+
+%             % apply excitation conditions
+%             exNames = obj.getExcitationNames;
+%             for i = 1:numel(exNames)
+%                 exptr = obj.excitations.(exNames(i));
+%                 if strcmpi(exptr.type,'fixed-temperature')
+%                     for j = reshape(exptr.idx, 1, [])
+%                         if isa(exptr.value, 'function_handle')
+%                             pts = obj.m.nodes(obj.m.edges(j,1:2),:);
+%                             obj.results.Tn(obj.m.edges(j,1)) = exptr.value(pts(1,1),pts(1,2));
+%                             obj.results.Tn(obj.m.edges(j,2)) = exptr.value(pts(2,1),pts(2,2));
+%                         else
+%                             obj.results.Tn(obj.m.edges(j,1:2)) = exptr.value;
+%                         end
+%                     end                     
+%                 end
+%             end          
 
         end
 
@@ -471,6 +516,39 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             obj.evalTSmooth;
 
             patch('faces', obj.m.cl, 'Vertices', obj.m.nodes, 'FaceVertexCData', obj.results.Tsmooth, ...
+                'FaceColor','interp', 'edgecolor', 'none');
+            colormap(jet(N));
+            cb = colorbar;
+            cb.FontName = 'Verdana';
+            cb.FontSize = 12;
+            cb.Label.String = 'Temperature [C]';
+            climits = clim; 
+            cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
+            cb.Ticks(1) = cb.Ticks(1) + 0.01;
+
+            index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
+            patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function varargout = plotTemperatureTn(obj, N, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+            if nargin<2, N=10; end
+            obj.evalTn;
+
+            patch('faces', obj.m.cl, 'Vertices', obj.m.nodes, 'FaceVertexCData', obj.results.Tn, ...
                 'FaceColor','interp', 'edgecolor', 'none');
             colormap(jet(N));
             cb = colorbar;

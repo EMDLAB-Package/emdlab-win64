@@ -70,7 +70,7 @@ m.aux_cmxjcrj('stator',1)
 m.joinMeshZones('housing', 'hz1', 'hz2');
 m.aux_cmxjcrj('housing',1)
 m.aux_cmxjcrj('copper',1)
-m.showce
+
 % get mesh database
 m = m.aux_c2qm;
 m.setMeshZoneColor('stator', 190, 190, 190);

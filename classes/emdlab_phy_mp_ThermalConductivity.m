@@ -104,12 +104,18 @@ classdef emdlab_phy_mp_ThermalConductivity
                             'to get thermal conductivity you must specify temperature.']);
                     end
 
-                case [false, true, true]
-                case [true, true, true]
-                case [false, true, true]
-                case [true, true, true]
-                case [false, true, true]
-                case [true, true, true]
+                case [false, false, true]
+                    y = obj.value(:) * obj.unitMultiplier;
+
+                case [true, false, true]
+
+                case [false, true, false]
+
+                case [true, true, false]
+
+                case [false, false, false]
+
+                case [true, false, false]
 
             end
 

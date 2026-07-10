@@ -1,4 +1,4 @@
-function mzptr = emdlab_m2d_getPolygonTM(p)
+function mzptr = emdlab_m2d_gtm4polygon(p)
 
 f = (1:size(p,1))';
 f = [f,circshift(f,-1)];

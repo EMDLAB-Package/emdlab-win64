@@ -14,7 +14,7 @@ addpath(genpath('C:\emdlab-win64'));
 W = 1; % width of the box
 H = 1; % height of the box
 Z = 1; % depth of the problem
-meshSize = 0.1; % maximum mesh size
+meshSize = 0.2; % maximum mesh size
 
 % define geometry
 g = emdlab_g2d_db;
