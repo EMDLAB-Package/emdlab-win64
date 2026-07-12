@@ -1106,6 +1106,23 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
+        function varargout = showContact(obj, mz1Name, mz2Name)
+
+            obj.ggmesh;
+            idx = obj.getEdgeIndicesOnContact(mz1Name, mz2Name);
+            [f,ax] = obj.showgg;
+
+            patch('Faces', obj.edges(idx,1:2), 'Vertices', obj.nodes, ...
+                'EdgeColor', 'b', 'parent', ax, 'Marker', 'none', 'MarkerFaceColor', 'none', ...
+                'LineWidth', 3, 'PickableParts','none');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
         %% Transform Functions
         function copyMirrorMeshZone(obj, nmzName, mzName, varargin)
             mzName = obj.checkMeshZoneExistence(mzName);
