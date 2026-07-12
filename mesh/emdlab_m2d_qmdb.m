@@ -23,6 +23,8 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % edge length
         edgeLength (:,1) double;
         el (:,4) double;
+        uEdges (:,2) double;
+        nEdges (:,2) double;
 
         % neighborhood elements
         nbs (:,4) double;
@@ -654,6 +656,10 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             obj.edgeLength = sqrt(sum((obj.nodes(obj.edges(:,1),:) - obj.nodes(obj.edges(:,2),:)).^2, 2));
             obj.el = obj.edgeLength(abs(obj.elements(:,1:4)));
+
+            obj.uEdges = obj.nodes(obj.edges(:,2),:) - obj.nodes(obj.edges(:,1),:);
+            obj.uEdges = obj.uEdges ./ vecnorm(obj.uEdges, 2, 2);
+            obj.nEdges = [obj.uEdges(:,2), -obj.uEdges(:,1)];
 
             % edge element
             obj.edges = [obj.edges, zeros(size(obj.edges,1), 6)];

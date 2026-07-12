@@ -20,8 +20,10 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
         % results
         results (1,1) struct;
 
-        kxy13SV (:,1) double;
-        kxy24SV (:,1) double;
+        % matrix containing source terms due to aisotropy
+        kxySV (:,4) double;
+
+        % initial temperature assumption for iterative solver
         initialTemperature (1,1) double = 25;
 
     end
@@ -55,9 +57,6 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
         % number of excitations
         Nex (1,1) double;
-
-        % number of coils
-        Ncoils (1,1) double;
 
     end
 
@@ -205,47 +204,54 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             obj.assignElementData;
 
             % calculate resistances
-            resistances = zeros(obj.m.Ne,2);
+            resistances = zeros(obj.m.Ne,4);
             z = obj.getDepth;
 
-            ec = obj.m.getCenterOfEdges;
-            xec = ec(:,1);
-            yec = ec(:,2);
-            xec = xec(abs(obj.m.elements(:,1:4)));
-            yec = yec(abs(obj.m.elements(:,1:4)));
-
-            ux = zeros(obj.m.Ne,3);
-            uy = zeros(obj.m.Ne,3);
-
+            % loop over mesh zones
             mzNames = obj.m.getMeshZoneNames;
+            ux = zeros(obj.m.Ne,3);
+            uy = zeros(obj.m.Ne,3);            
             for mz = mzNames
-                mzptr = obj.m.mzs.(mz);
-                
+                mzptr = obj.m.mzs.(mz);                
                 ux(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).ux,mzptr.Ne,1);
                 uy(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).uy,mzptr.Ne,1);
             end
 
-            obj.kxy13SV = zeros(obj.m.Ne,1);
+            % store source term due to anisotropy
+            obj.kxySV = zeros(obj.m.Ne,4);
+
+            % element centers
+            elementCenter = obj.m.getCenterOfElements;
+            edgeCenter = obj.m.getCenterOfEdges;
+            elm = zeros(obj.m.Ne,4);
+
             % loop over elements to calculate conductances of each element
             for i = 1:obj.m.Ne
 
                 kx = obj.edata.ThermalConductivity(1,i);
                 ky = obj.edata.ThermalConductivity(2,i);
 
-                u13 = [xec(i,3),yec(i,3),0] - [xec(i,1),yec(i,1),0];
-                u24 = [xec(i,4),yec(i,4),0] - [xec(i,2),yec(i,2),0];
-                u13 = u13 / norm(u13);
-                u24 = u24 / norm(u24);
+                for j = 1:4
 
-                k13 = kx * dot(ux(i,:),u13).^2 + ky * dot(uy(i,:),u13).^2;
-                k24 = kx * dot(ux(i,:),u24).^2 + ky * dot(uy(i,:),u24).^2;
-                obj.kxy13SV(i) = (kx-ky) * dot(ux(i,:),u13)*dot(uy(i,:),u13);
-                obj.kxy24SV(i) = (ky-kx) * dot(ux(i,:),u24)*dot(uy(i,:),u24);
+                    % direction vector from cell center i to cell center j
+                    if obj.m.nbs(i,j)
+                        uij = elementCenter(obj.m.nbs(i,j), :) - elementCenter(i,:);
+                        die = 0.5 * norm(uij);
+                    else
+                        uij = edgeCenter(abs(obj.m.elements(i,j)),:) - elementCenter(i,:);
+                        die = norm(uij);
+                    end                    
+                    uij = uij / norm(uij);
 
+                    kij = kx * (ux(i,1:2) * uij').^2 + ky * (uy(i,1:2) * uij').^2;
+                    obj.kxySV(i,j) = (kx-ky) * (ux(i,1:2) * uij') * (uy(i,1:2) * uij');
 
-                % calculation of conductances
-                resistances(i,1) = (obj.m.el(i,2) + obj.m.el(i,4))/(k13*z*(obj.m.el(i,1) + obj.m.el(i,3)));
-                resistances(i,2) = (obj.m.el(i,1) + obj.m.el(i,3))/(k24*z*(obj.m.el(i,2) + obj.m.el(i,4)));
+                    elm(i,j) = abs(uij * obj.m.nEdges(abs(obj.m.elements(i,j)),:)');
+
+                    % calculation of conductances
+                    resistances(i,j) = die/(kij*z*obj.m.el(i,j) * elm(i,j));
+
+                end
 
             end
 
@@ -282,30 +288,31 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             G_maxtrix = sparse(indexI, indexJ, value);
             obj.results.T = G_maxtrix\sourceVector;
             obj.evalTn;
-            sourceVectorU = sourceVector;
-
+            
             obj.solverHistory.relativeError = [];
 
             if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
 
-                releativeError = 1e-3;
-                maxIteration = 50;
+                releativeError = 1e-4;
+                maxIteration = 200;
                 iter = 0;
                 err = inf;
                 
                 % iterative loop for solver
                 while iter<maxIteration && err>releativeError
 
+                    sourceVectorU = sourceVector;
+
                     % handle anisotropy
                     if ~obj.edata.areAllIsotropic
                         for i = 1:obj.m.Ne
-                            T1 = obj.results.Tn(obj.m.cl(i,1));
-                            T2 = obj.results.Tn(obj.m.cl(i,2));
-                            T3 = obj.results.Tn(obj.m.cl(i,3));
-                            T4 = obj.results.Tn(obj.m.cl(i,4));
-                            sourceVectorU(i) = sourceVector(i) + obj.kxy13SV(i)*z*  ...
-                                ((T1-T2)+(T3-T4)) - obj.kxy24SV(i)*z*  ...
-                                ((T2-T3)+(T4-T1));
+                            Tij = obj.results.Tn(obj.m.cl(i,[1,2,3,4,1]));
+                            for j = 1:4
+                                if ~obj.m.bedges(abs(obj.m.elements(i,j)))
+                                    sourceVectorU(i) = sourceVectorU(i) + z * ...
+                                        obj.kxySV(i,j) * (Tij(j) - Tij(j+1)) * elm(i,j);
+                                end
+                            end
                         end
                     end
 
@@ -391,6 +398,8 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
         %% Excitation Definitions
         function addFixedTemperatureBC(obj, exName, idx, value)
 
+            if isempty(idx), error('Empty edge indices.'); end
+
             exName = obj.checkExcitationNonExistence(exName);
             obj.excitations.(exName).type = 'fixed-temperature';
             obj.excitations.(exName).idx = idx;
@@ -399,6 +408,8 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
         end
 
         function addConvectionBC(obj, exName, idx, hValue, Tinf)
+
+            if isempty(idx), error('Empty edge indices.'); end
 
             exName = obj.checkExcitationNonExistence(exName);
             obj.excitations.(exName).type = 'convection';
@@ -410,6 +421,8 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
         function addRadiationBC(obj, exName, idx, eValue, Tsurr)
 
+            if isempty(idx), error('Empty edge indices.'); end
+
             exName = obj.checkExcitationNonExistence(exName);
             obj.excitations.(exName).type = 'radiation';
             obj.excitations.(exName).idx = idx;
@@ -420,10 +433,24 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
         function addHeatFluxBC(obj, exName, idx, value)
 
+            if isempty(idx), error('Empty edge indices.'); end
+
             exName = obj.checkExcitationNonExistence(exName);
             obj.excitations.(exName).type = 'heat-flux';
             obj.excitations.(exName).idx = idx;
             obj.excitations.(exName).value = value;
+
+        end
+
+        function addHeatFlowBC(obj, exName, idx, value)
+
+            if isempty(idx), error('Empty edge indices.'); end
+
+            exName = obj.checkExcitationNonExistence(exName);
+            obj.excitations.(exName).type = 'heat-flux';
+            obj.excitations.(exName).idx = idx;
+            area = sum(obj.m.edgeLength(idx)) * obj.getDepth * obj.units.k_length;
+            obj.excitations.(exName).value = value/area;
 
         end
 
@@ -434,7 +461,6 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             obj.excitations.(exName).type = 'internal-heat-source';
             obj.excitations.(exName).mzName = mzName;
             
-
             z = obj.getDepth;
             um = obj.units.k_length;
             Area = sum(obj.m.gea(obj.m.ezi(:,obj.m.mzs.(mzName).zi))) * um^2;
@@ -719,6 +745,8 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             indexJ = zeros(obj.m.Ne,5);
             value = zeros(obj.m.Ne,5);
             sourceVector = zeros(obj.m.Ne,1);
+            Rp = zeros(1,4);
+            idx = 1:4;
 
             % loop over elements to construct G_matrix
             for i = 1:obj.m.Ne
@@ -726,64 +754,25 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
                 % constructing i-th row
                 indexI(i,:) = i;
 
-                % conductance between cell P and 1 nb
-                if obj.m.nbs(i,1)
-                    if ismember(abs(obj.m.elements(i,1)),abs(obj.m.elements(obj.m.nbs(i,1),[1,3])))
-                        Rp1 = resistances(i,1)/2 + resistances(obj.m.nbs(i,1),1)/2;
-                    else
-                        Rp1 = resistances(i,1)/2 + resistances(obj.m.nbs(i,1),2)/2;
-                    end
-                    indexJ(i,2) = obj.m.nbs(i,1);
-                    value(i,2) = -1/Rp1;
-                else
-                    Rp1 = inf;
-                    indexJ(i,2) = i;
-                end
+                % conductance between cell P and j-th nb
+                for j = 1:4
 
-                % conductance between cell P and 2 nb
-                if obj.m.nbs(i,2)
-                    if ismember(abs(obj.m.elements(i,2)),abs(obj.m.elements(obj.m.nbs(i,2),[1,3])))
-                        Rp2 = resistances(i,2)/2 + resistances(obj.m.nbs(i,2),1)/2;
-                    else
-                        Rp2 = resistances(i,2)/2 + resistances(obj.m.nbs(i,2),2)/2;
-                    end
-                    indexJ(i,3) = obj.m.nbs(i,2);
-                    value(i,3) = -1/Rp2;
-                else
-                    Rp2 = inf;
-                    indexJ(i,3) = i;
-                end
+                    % index of j-th neighbor
+                    nbIndex = obj.m.nbs(i,j);
 
-                % conductance between cell P and 3 nb
-                if obj.m.nbs(i,3)
-                    if ismember(abs(obj.m.elements(i,3)),abs(obj.m.elements(obj.m.nbs(i,3),[1,3])))
-                        Rp3 = resistances(i,1)/2 + resistances(obj.m.nbs(i,3),1)/2;
+                    if nbIndex
+                        Rp(j) = resistances(i,j) + resistances(nbIndex,idx(abs(obj.m.elements(nbIndex,:)) == (abs(obj.m.elements(i,j)))));
+                        indexJ(i,j+1) = nbIndex;
+                        value(i,j+1) = -1/Rp(j);
                     else
-                        Rp3 = resistances(i,1)/2 + resistances(obj.m.nbs(i,3),2)/2;
+                        Rp(j) = inf;
+                        indexJ(i,j+1) = i;
                     end
-                    indexJ(i,4) = obj.m.nbs(i,3);
-                    value(i,4) = -1/Rp3;
-                else
-                    Rp3 = inf;
-                    indexJ(i,4) = i;
-                end
-
-                % conductance between cell P and 4 nb
-                if obj.m.nbs(i,4)
-                    if ismember(abs(obj.m.elements(i,4)),abs(obj.m.elements(obj.m.nbs(i,4),[1,3])))
-                        Rp4 = resistances(i,2)/2 + resistances(obj.m.nbs(i,4),1)/2;
-                    else
-                        Rp4 = resistances(i,2)/2 + resistances(obj.m.nbs(i,4),2)/2;
-                    end
-                    indexJ(i,5) = obj.m.nbs(i,4);
-                    value(i,5) = -1/Rp4;
-                else
-                    Rp4 = inf;
-                    indexJ(i,5) = i;
+                    
                 end
 
                 indexJ(i,1) = i;
-                value(i,1) = 1/Rp1 + 1/Rp2 + 1/Rp3 + 1/Rp4;
+                value(i,1) = sum(1 ./ Rp);
 
             end
 
@@ -805,24 +794,14 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
                 if obj.m.edges(index,5)
 
                     eIndex = obj.m.edges(index,5);
-                    if ismember(obj.m.edges(index,6),[1,3])
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,1);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,1);
-                    else
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,2);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,2);
-                    end
+                    value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.edges(index,6));
+                    sourceVector(eIndex) = sourceVector(eIndex) + tvbc/resistances(eIndex,obj.m.edges(index,6));
 
                 else
 
                     eIndex = obj.m.edges(index,7);
-                    if ismember(obj.m.edges(index,8),[1,3])
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,1);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,1);
-                    else
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,2);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,2);
-                    end
+                    value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.edges(index,8));
+                    sourceVector(eIndex) = sourceVector(eIndex) + tvbc/resistances(eIndex,obj.m.edges(index,8));
 
                 end
 

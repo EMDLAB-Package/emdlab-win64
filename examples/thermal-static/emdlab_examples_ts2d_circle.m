@@ -13,7 +13,7 @@ addpath(genpath('C:\emdlab-win64'));
 % inputs
 R = 1; % circle radius
 Z = 1; % depth of the problem
-meshSize = 0.1; % maximum mesh size
+meshSize = 0.2; % maximum mesh size
 
 % % construct quadrilateral mesh
 m = emdlab_m2d_qmdb();

@@ -12,7 +12,7 @@ gv_Ns = 36; % number of stator slots
 gv_wst = 3.3; % width of stator tooth
 gv_dss = 18; % depth of stator slot [mm]
 gv_th = 4; % thickness of housing [mm]
-meshSize = 2; % mesh size [mm]
+meshSize = 1; % mesh size [mm]
 
 % dependents
 gv_alpha_s = 2*pi/gv_Ns; % stator slot pitch angle [rad]
