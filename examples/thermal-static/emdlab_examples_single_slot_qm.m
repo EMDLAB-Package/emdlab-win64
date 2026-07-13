@@ -96,7 +96,7 @@ m.mts.aluminium.setThermalConductivity(200);
 m.setMaterial('housing', 'aluminium');
 
 % add solver
-s = emdlab_solvers_ts2d_tn_qm(m);
+s = emdlab_solvers_ts2d_tn(m);
 s.setLengthUnit('mm');
 s.setDepth(gv_Lstk);
 

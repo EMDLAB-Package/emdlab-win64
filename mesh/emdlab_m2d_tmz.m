@@ -48,6 +48,8 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         % flags
         isMoving = false;
+
+        orientation = 'global';
         
     end
     

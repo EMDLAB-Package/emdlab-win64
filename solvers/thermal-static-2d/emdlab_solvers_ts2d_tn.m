@@ -1,12 +1,12 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % a two-dimensional thermal-static solver based on TN for QM
 
-classdef emdlab_solvers_ts2d_tn_qm < handle
+classdef emdlab_solvers_ts2d_tn < handle
 
     properties (SetAccess = protected)
 
         % solver mesh
-        m (1,1) emdlab_m2d_qmdb;
+        m (1,1);
 
         % internal & boundary conditions
         excitations (1,1) struct;
@@ -21,7 +21,7 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
         results (1,1) struct;
 
         % matrix containing source terms due to aisotropy
-        kxySV (:,4) double;
+        kxySV (:,:) double;
 
         % initial temperature assumption for iterative solver
         initialTemperature (1,1) double = 25;
@@ -51,6 +51,9 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
         isElementDataAssigned (1,1) logical = false;
         isResultsValid (1,1) logical = false;
 
+        meshType (1,:) char = '';
+        NR (1,1) double;
+
     end
 
     properties (Dependent = true)
@@ -62,11 +65,20 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
     methods
         %% Constructor and Destructor
-        function obj = emdlab_solvers_ts2d_tn_qm(m)
+        function obj = emdlab_solvers_ts2d_tn(m)
 
             % mesh pointer
-            if isa(m, 'emdlab_m3d_qmdb')
-                error('Mesh class must be <emdlab_m2d_qmdb');
+            if isa(m, 'emdlab_m2d_qmdb')
+                obj.meshType = 'qm';
+                obj.NR = 4;
+            elseif isa(m, 'emdlab_m2d_tmdb')
+                obj.meshType = 'tm';
+                obj.NR = 3;
+                m.evalJIT;
+            elseif isa(m, 'emdlab_m2d_qtmdb')
+                obj.meshType = 'qtm';
+            else
+                error('Mesh class must be <emdlab_m2d_qmdb> or <emdlab_m2d_qmdb> or <emdlab_m2d_qtmdb>');
             end
             m.ggmesh;
             obj.m = m;
@@ -204,7 +216,7 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             obj.assignElementData;
 
             % calculate resistances
-            resistances = zeros(obj.m.Ne,4);
+            resistances = zeros(obj.m.Ne,obj.NR);
             z = obj.getDepth;
 
             % loop over mesh zones
@@ -218,12 +230,12 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             end
 
             % store source term due to anisotropy
-            obj.kxySV = zeros(obj.m.Ne,4);
+            obj.kxySV = zeros(obj.m.Ne,obj.NR);
 
             % element centers
             elementCenter = obj.m.getCenterOfElements;
             edgeCenter = obj.m.getCenterOfEdges;
-            elm = zeros(obj.m.Ne,4);
+            elm = zeros(obj.m.Ne,obj.NR);
 
             % loop over elements to calculate conductances of each element
             for i = 1:obj.m.Ne
@@ -231,7 +243,7 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
                 kx = obj.edata.ThermalConductivity(1,i);
                 ky = obj.edata.ThermalConductivity(2,i);
 
-                for j = 1:4
+                for j = 1:obj.NR
 
                     % direction vector from cell center i to cell center j
                     if obj.m.nbs(i,j)
@@ -307,7 +319,7 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
                     if ~obj.edata.areAllIsotropic
                         for i = 1:obj.m.Ne
                             Tij = obj.results.Tn(obj.m.cl(i,[1,2,3,4,1]));
-                            for j = 1:4
+                            for j = 1:obj.NR
                                 if ~obj.m.bedges(abs(obj.m.elements(i,j)))
                                     sourceVectorU(i) = sourceVectorU(i) + z * ...
                                         obj.kxySV(i,j) * (Tij(j) - Tij(j+1)) * elm(i,j);
@@ -340,7 +352,7 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
             % loop over elements
             for i = 1:obj.m.Ne
-                for j = 1:4
+                for j = 1:obj.NR
                     pIndex = obj.m.cl(i,j);
                     di = norm(ec(i,:) - obj.m.nodes(pIndex,:));
                     obj.results.Tn(pIndex) = obj.results.Tn(pIndex) + obj.results.T(i)/di;
@@ -371,9 +383,9 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
         function evalTSmooth(obj)
 
-            gea_tmp = repmat(obj.m.gea,4,1);
+            gea_tmp = repmat(obj.m.gea,obj.NR,1);
             index = obj.m.cl';
-            obj.results.Tsmooth = full(diag(sparse(index, index, repmat(obj.results.T',4,1) .* gea_tmp)) ./ ...
+            obj.results.Tsmooth = full(diag(sparse(index, index, repmat(obj.results.T',obj.NR,1) .* gea_tmp)) ./ ...
             diag(sparse(index, index, gea_tmp)));
             
             % apply excitation conditions
@@ -605,6 +617,23 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             y = obj.m.gea * obj.results.T / sum(obj.m.gea);
         end
 
+        function showContact(obj, varargin)
+
+            if numel(varargin) == 1
+                cName = obj.checkContactExistence(varargin{1});
+                idx = obj.contacts.(cName).idx;
+            elseif numel(varargin) == 2
+                mz1Name = obj.m.checkMeshZoneExistence(varargin{1});
+                mz2Name = obj.m.checkMeshZoneExistence(varargin{2});
+                idx = obj.m.getEdgeIndicesOnContact(mz1Name, mz2Name);
+            else
+                error('Wrong inputs.');
+            end
+
+            obj.m.showEdges(idx);
+
+        end
+
         % show center to edge connections
         function varargout = plotThermalNetwork(obj, varargin)
 
@@ -621,11 +650,11 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
             end
 
             pts = [obj.m.getCenterOfElements; obj.m.getCenterOfEdges];
-            cl1_tmp = repmat(1:obj.m.Ne,4,1);
-            cl2_tmp = abs(obj.m.elements(:,1:4))' + obj.m.Ne;
+            cl1_tmp = repmat(1:obj.m.Ne,obj.NR,1);
+            cl2_tmp = abs(obj.m.elements(:,1:obj.NR))' + obj.m.Ne;
             cl3_tmp = [cl1_tmp(:),cl2_tmp(:)];
 
-            patch('Faces', obj.m.cl(:, [1,2,3,4]), 'Vertices', obj.m.nodes, ...
+            patch('Faces', obj.m.cl(:, 1:obj.NR), 'Vertices', obj.m.nodes, ...
                 'FaceColor', 'flat', 'FaceVertexCData', ecolor, ...
                 'FaceAlpha', 1, 'EdgeColor', 'k', 'linewidth', 1, 'parent', ax);
 
@@ -741,12 +770,12 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
 
         function [indexI,indexJ,value,sourceVector] = buildGMatrixSVector(obj, resistances)
 
-            indexI = zeros(obj.m.Ne,5);
-            indexJ = zeros(obj.m.Ne,5);
-            value = zeros(obj.m.Ne,5);
+            indexI = zeros(obj.m.Ne,obj.NR+1);
+            indexJ = zeros(obj.m.Ne,obj.NR+1);
+            value = zeros(obj.m.Ne,obj.NR+1);
             sourceVector = zeros(obj.m.Ne,1);
-            Rp = zeros(1,4);
-            idx = 1:4;
+            Rp = zeros(1,obj.NR);
+            idx = 1:obj.NR;
 
             % loop over elements to construct G_matrix
             for i = 1:obj.m.Ne
@@ -755,7 +784,7 @@ classdef emdlab_solvers_ts2d_tn_qm < handle
                 indexI(i,:) = i;
 
                 % conductance between cell P and j-th nb
-                for j = 1:4
+                for j = 1:obj.NR
 
                     % index of j-th neighbor
                     nbIndex = obj.m.nbs(i,j);

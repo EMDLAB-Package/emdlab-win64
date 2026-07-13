@@ -20,6 +20,15 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % list of boundary edges
         bedges
 
+        % edge length
+        edgeLength (:,1) double;
+        el (:,3) double;
+        uEdges (:,2) double;
+        nEdges (:,2) double;
+
+        % neighborhood elements
+        nbs (:,3) double;
+
         % jacobian inverse transpose
         JIT (4,:) double;
 
@@ -969,9 +978,21 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % element matrix
             obj.elements(:, 1:3) = [e1, e2, e3];
 
+            % initialize nbs matrix
+            obj.nbs = zeros(obj.Ne,3);
+
+            % edge length
+            obj.edgeLength = sqrt(sum((obj.nodes(obj.edges(:,1),:) - obj.nodes(obj.edges(:,2),:)).^2, 2));
+            obj.el = obj.edgeLength(abs(obj.elements(:,1:3)));
+
+            % edge unit vectors
+            obj.uEdges = obj.nodes(obj.edges(:,2),:) - obj.nodes(obj.edges(:,1),:);
+            obj.uEdges = obj.uEdges ./ vecnorm(obj.uEdges, 2, 2);
+            obj.nEdges = [obj.uEdges(:,2), -obj.uEdges(:,1)];
+
             % edge element
             obj.edges = [obj.edges, zeros(size(obj.edges, 1), 6)];
-            emdlab_m2d_tmdbc_evalee(obj.edges, obj.elements);
+            emdlab_m2d_tmdbc_evalee(obj.edges, obj.elements, obj.nbs);
             obj.edgeNamedSelections.('none') = find(obj.bedges);
 
         end
@@ -1539,6 +1560,23 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
+        function varargout = showContact(obj, mz1Name, mz2Name)
+
+            obj.ggmesh;
+            idx = obj.getEdgeIndicesOnContact(mz1Name, mz2Name);
+            [f,ax] = obj.showgg;
+
+            patch('Faces', obj.edges(idx,1:2), 'Vertices', obj.nodes, ...
+                'EdgeColor', 'b', 'parent', ax, 'Marker', 'none', 'MarkerFaceColor', 'none', ...
+                'LineWidth', 3, 'PickableParts','none');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+        
         %% tools: copy and transform
         % copy and transform
         function copyMirrorMeshZone(obj, nmzName, mzName, varargin)
@@ -1788,6 +1826,493 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 y = obj.edges(y, [1,2,end]);
             end
             y = unique(y(:));
+        end
+
+       
+
+        function idx = getNodeIndicesOnLineP0P1(obj, x0, y0, x1, y1, tol)
+            % getNodeIndicesOnLineP0P1
+            % Returns node indices located within tol of the line segment P0→P1.
+
+            % Handle default tolerance
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            % Handle default P1 (if user only gives one point)
+            if nargin < 5
+                x1 = 0;
+                y1 = 0;
+            end
+
+            % Construct points
+            p1 = [x0, y0];
+            p2 = [x1, y1];
+
+            % Direction unit vector
+            d = p2 - p1;
+            L = norm(d);
+
+            if L < eps
+                error('P0 and P1 are identical – line definition invalid.');
+            end
+
+            u = d / L;       % unit direction
+
+            % Node coordinates relative to P1
+            rel = obj.nodes(:,1:2) - p1;
+
+            % Projection parameter alpha
+            alpha = rel * u';     % dot product with direction
+
+            % Perpendicular distance from line
+            dist = sqrt(sum((rel - alpha*u).^2, 2));
+
+            % Indices of nodes near the line
+            idx = find(dist < tol);
+        end
+
+        function idx = getNodeIndicesOnLineP0U(obj, x0, y0, ux, uy, tol)
+            % getNodeIndicesOnLineP0U
+            % Returns node indices near the line passing through P0 = (x0,y0)
+            % in direction U = (ux,uy)
+
+            % Default tolerance
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            % Check direction vector
+            if ux == 0 && uy == 0
+                error('Direction vector U = (ux, uy) must be nonzero.');
+            end
+
+            % Compute P1 from P0 + U
+            x1 = x0 + ux;
+            y1 = y0 + uy;
+
+            % Call the P0P1 version
+            idx = obj.getNodeIndicesOnLineP0P1(x0, y0, x1, y1, tol);
+        end
+
+        function idx = getNodeIndicesOnRayP0P1(obj, x0, y0, x1, y1, tol)
+            % getNodeIndicesOnRayP0P1
+            % Returns node indices near the ray starting at P0 = (x0,y0)
+            % and going through P1 = (x1,y1).
+
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            p0 = [x0, y0];
+            p1 = [x1, y1];
+
+            d = p1 - p0;
+            L = norm(d);
+
+            if L < eps
+                error('P0 and P1 must be different to define a ray.');
+            end
+
+            u = d / L;  % unit vector
+
+            % Relative coordinates of nodes
+            rel = obj.nodes(:,1:2) - p0;
+
+            % Projection scalar (along-ray coordinate)
+            alpha = rel * u';  % dot product
+
+            % Perpendicular distance from ray axis
+            dist = sqrt(sum((rel - alpha*u).^2, 2));
+
+            % Ray condition: alpha >= 0
+            mask = alpha >= 0;
+
+            % Distance condition
+            idx = find(mask & (dist < tol));
+        end
+
+        function idx = getNodeIndicesOnRayP0U(obj, x0, y0, ux, uy, tol)
+            % getNodeIndicesOnRayP0U
+            % Returns node indices near the ray starting at P0 = (x0,y0)
+            % in direction U = (ux,uy).
+
+            % Default tolerance
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            % Check direction vector is nonzero
+            if ux == 0 && uy == 0
+                error('Direction vector U = (ux, uy) must be nonzero.');
+            end
+
+            % Compute P1 = P0 + U
+            x1 = x0 + ux;
+            y1 = y0 + uy;
+
+            % Call the ray version using P0→P1
+            idx = obj.getNodeIndicesOnRayP0P1(x0, y0, x1, y1, tol);
+        end
+
+        function idx = getNodeIndicesOnSegment(obj, x0, y0, x1, y1, tol)
+            % getNodeIndicesOnSegment
+            % Returns node indices located on the finite segment from (x0,y0) to (x1,y1)
+
+            % Handle default tolerance
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            p0 = [x0, y0];
+            p1 = [x1, y1];
+
+            d = p1 - p0;
+            L = norm(d);
+
+            if L < eps
+                error('Segment endpoints P0 and P1 must be distinct.');
+            end
+
+            u = d / L; % Unit direction vector
+
+            % Relative coordinates of nodes from P0
+            rel = obj.nodes(:,1:2) - p0;
+
+            % Projection parameter alpha (distance along the line)
+            alpha = rel * u';
+
+            % Perpendicular distance from the line
+            dist = sqrt(sum((rel - alpha * u).^2, 2));
+
+            % Conditions:
+            % 1. Within tolerance of the infinite line
+            % 2. Projection is between 0 and the length L (with a small buffer for tol)
+            mask = (dist < tol) & (alpha >= -tol) & (alpha <= L + tol);
+
+            idx = find(mask);
+        end
+
+        function idx = getNodeIndicesOnEdges(obj,eList)
+            switch obj.etype
+                case 'QL4'
+                    idx = obj.edges(eList,1:4);
+                    idx = unique(idx(:));
+            end
+        end
+
+        function idx = getNodeIndicesInCircle(obj, x0, y0, r, tol)
+            % getNodeIndicesInCircle
+            % Returns node indices located inside a circle of radius r
+            % centered at (x0, y0).
+            %
+            % A node is considered inside if:
+            %     distance(node, centre) <= r + tol
+
+            % Default tolerance
+            if nargin < 5
+                tol = obj.gleps;
+            end
+
+            if r < 0
+                error('Radius r must be non‑negative.');
+            end
+
+            % Node coordinates
+            X = obj.nodes(:,1);
+            Y = obj.nodes(:,2);
+
+            % Distance from centre
+            dist = hypot(X - x0, Y - y0);
+
+            % Inside test
+            idx = find(dist <= r + tol);
+        end
+
+        function idx = getNodeIndicesOnCircle(obj, x0, y0, r, tol)
+            % getNodeIndicesOnCircle
+            % Returns node indices lying on a circle of radius r centered at (x0, y0).
+            %
+            % A node is considered on the circle if:
+            %   |distance(node, centre) - r| < tol
+
+            % Default tolerance
+            if nargin < 5
+                tol = obj.gleps;
+            end
+
+            if r < 0
+                error('Radius r must be non‑negative.');
+            end
+
+            % Node coordinates
+            X = obj.nodes(:,1);
+            Y = obj.nodes(:,2);
+
+            % Distance from centre
+            dist = hypot(X - x0, Y - y0);
+
+            % Find nodes lying on the circle (within tolerance)
+            idx = find(abs(dist - r) < tol);
+        end
+
+        function idx = getNodeIndicesOutCircle(obj, x0, y0, r, tol)
+            % getNodeIndicesOutCircle
+            % Returns node indices located outside a circle of radius r
+            % centered at (x0, y0).
+            %
+            % A node is considered outside if:
+            %     distance(node, centre) >= r - tol
+
+            % Default tolerance
+            if nargin < 5
+                tol = obj.gleps;
+            end
+
+            if r < 0
+                error('Radius r must be non‑negative.');
+            end
+
+            % Node coordinates
+            X = obj.nodes(:,1);
+            Y = obj.nodes(:,2);
+
+            % Distance from centre
+            dist = hypot(X - x0, Y - y0);
+
+            % Outside test
+            idx = find(dist >= r - tol);
+        end
+
+        function idx = getNodeIndicesOnArcCP0P1(obj, x0, y0, x1, y1, x2, y2, tol)
+            % getNodeIndicesOnArcCP0P1
+            % Returns node indices on a CCW arc from P1 to P2 centered at (x0,y0)
+
+            % Handle default tolerance
+            if nargin < 8
+                tol = obj.gleps;
+            end
+
+            % Center and reference points
+            C = [x0, y0];
+            P1 = [x1, y1];
+            P2 = [x2, y2];
+
+            % Radius from first point
+            R = norm(P1 - C);
+
+            % Get angles of start and end points
+            v1 = P1 - C;
+            v2 = P2 - C;
+            phi1 = atan2(v1(2), v1(1));
+            phi2 = atan2(v2(2), v2(1));
+
+            % Normalize phi2 relative to phi1 for a CCW sweep
+            % This ensures the arc goes from P1 to P2 in positive direction
+            if phi2 < phi1
+                phi2 = phi2 + 2*pi;
+            end
+
+            % Node coordinates relative to center
+            rel = obj.nodes(:, 1:2) - C;
+
+            % 1. Radial distance check
+            dist = hypot(rel(:,1), rel(:,2));
+            radial_mask = abs(dist - R) < tol;
+
+            % 2. Angular sweep check
+            % Get angles of all nodes
+            node_phi = atan2(rel(:,2), rel(:,1));
+
+            % We must check node_phi, node_phi + 2*pi, and node_phi - 2*pi
+            % to see if any representation falls within [phi1, phi2]
+            % Alternatively, shift node_phi to be relative to phi1:
+            node_phi_rel = mod(node_phi - phi1, 2*pi);
+            sweep_total = phi2 - phi1;
+
+            % Account for numerical precision at boundaries
+            angular_mask = (node_phi_rel >= -tol/R) & (node_phi_rel <= sweep_total + tol/R);
+
+            % Combine masks
+            idx = find(radial_mask & angular_mask);
+        end
+
+        function idx = getNodeIndicesOnArcCP0A(obj, x0, y0, x1, y1, angle, tol)
+            % getNodeIndicesOnArcCP0A
+            % C = (x0, y0), P0 = (x1, y1), angle = sweep in radians (CCW if positive)
+
+            if nargin < 6, tol = obj.gleps; end
+
+            C = [x0, y0];
+            P0 = [x1, y1];
+
+            % Calculate radius and start angle
+            v0 = P0 - C;
+            R = norm(v0);
+            phi_start = atan2(v0(2), v0(1));
+
+            % Node coordinates relative to center
+            rel = obj.nodes(:, 1:2) - C;
+            dist = hypot(rel(:,1), rel(:,2));
+
+            % Radial mask
+            radial_mask = abs(dist - R) < tol;
+
+            % Angular mask
+            node_phi = atan2(rel(:,2), rel(:,1));
+            % Shift node angles to start at 0 from phi_start
+            % Using mod(..., 2*pi) handles the wrap-around
+            node_phi_rel = mod(node_phi - phi_start, 2*pi);
+
+            if angle >= 0
+                % Counter-clockwise sweep
+                angular_mask = (node_phi_rel <= angle + tol/R);
+            else
+                % Clockwise sweep
+                % Map [0, 2pi] to [-2pi, 0]
+                node_phi_rel_cw = node_phi_rel - 2*pi;
+                angular_mask = (node_phi_rel_cw >= angle - tol/R);
+            end
+
+            idx = find(radial_mask & angular_mask);
+        end
+
+        function idx = getEdgeIndicesOnLineP0P1(obj, x0, y0, x1, y1, tol)
+            % getEdgeIndicesOnLineP0P1
+            % Returns indices of edges that lie entirely on the line segment P0->P1.
+            % An edge is on the line if both of its nodes are on the line.
+
+            % Handle default tolerance
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            % 1. Get the indices of all nodes on this line segment
+            node_idx = obj.getNodeIndicesOnLineP0P1(x0, y0, x1, y1, tol);
+
+            % 2. Find edges where BOTH endpoints (node 1 and node 2) are in node_idx.
+            % We use a logical mask instead of ismember where possible, or use 'rows'
+            % to make ismember fast. For general sets, ismember is correct.
+            mask = ismember(obj.edges(:, 1), node_idx) & ismember(obj.edges(:, 2), node_idx);
+
+            % 3. Return the indices of those edges
+            idx = find(mask);
+        end
+
+        function idx = getEdgeIndicesOnLineP0U(obj, x0, y0, ux, uy, tol)
+            % getEdgeIndicesOnLineP0U
+            % Returns edge indices whose two end nodes lie on the line through P0
+            % in direction U.
+
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            if ux == 0 && uy == 0
+                error('Direction vector U = (ux, uy) must be nonzero.');
+            end
+
+            nodeIdx = obj.getNodeIndicesOnLineP0U(x0, y0, ux, uy, tol);
+
+            mask = ismember(obj.edges(:,1), nodeIdx) & ...
+                ismember(obj.edges(:,2), nodeIdx);
+
+            idx = find(mask);
+        end
+
+        function idx = getEdgeIndicesOnCircle(obj, x0, y0, r, tol)
+            % getEdgeIndicesOnCircle
+            % Returns indices of edges that lie on a circle of radius r
+            % centered at (x0, y0).
+            %
+            % An edge is selected if both of its end nodes are on the circle.
+
+            % Default tolerance
+            if nargin < 5
+                tol = obj.gleps;
+            end
+
+            % 1. Get indices of all nodes lying on this circle boundary
+            node_idx = obj.getNodeIndicesOnCircle(x0, y0, r, tol);
+
+            % 2. Find edges where both endpoints are in node_idx
+            mask = ismember(obj.edges(:, 1), node_idx) & ...
+                ismember(obj.edges(:, 2), node_idx);
+
+            % 3. Return the indices of those edges
+            idx = find(mask);
+        end
+
+        function idx = getEdgeIndicesInCircle(obj, x0, y0, r, tol)
+            % getEdgeIndicesInCircle
+            % Returns indices of edges that lie entirely inside (or on)
+            % a circle of radius r centered at (x0, y0).
+            %
+            % An edge is selected if both of its end nodes are within the circle.
+
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % 1. Extract the start and end node indices for all edges
+            edgeNodes = obj.edges(:, 1:2);
+
+            % 2. Retrieve coordinates of all nodes involved in the edges
+            p1 = obj.nodes(edgeNodes(:, 1), :);
+            p2 = obj.nodes(edgeNodes(:, 2), :);
+
+            % 3. Calculate Euclidean distance from center (x0, y0) to both endpoints
+            d1 = hypot(p1(:, 1) - x0, p1(:, 2) - y0);
+            d2 = hypot(p2(:, 1) - x0, p2(:, 2) - y0);
+
+            % 4. Select edges where both endpoints are within the radius (with tolerance)
+            mask = (d1 <= (r + tol)) & (d2 <= (r + tol));
+
+            % 5. Return the matching edge indices
+            idx = find(mask);
+        end
+
+        function idx = getEdgeIndicesOutCircle(obj, x0, y0, r, tol)
+            % getEdgeIndicesOutCircle
+            % Returns indices of edges that lie outside a circle of radius r
+            % centered at (x0, y0).
+            %
+            % Assumes an edge is outside if both endpoints are outside the radius.
+
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
+            end
+
+            % 1. Extract start and end nodes for all edges
+            edgeNodes = obj.edges(:, 1:2);
+
+            % 2. Get coordinates
+            p1 = obj.nodes(edgeNodes(:, 1), :);
+            p2 = obj.nodes(edgeNodes(:, 2), :);
+
+            % 3. Calculate distance from center to both endpoints
+            d1 = hypot(p1(:, 1) - x0, p1(:, 2) - y0);
+            d2 = hypot(p2(:, 1) - x0, p2(:, 2) - y0);
+
+            % 4. Select edges where both endpoints are strictly outside the radius
+            mask = (d1 >= (r - tol)) & (d2 >= (r - tol));
+
+            % 5. Return indices
+            idx = find(mask);
+        end
+
+        function idx = getEdgeIndicesOnContact(obj, mz1Name, mz2Name)
+
+            mz1Name = obj.checkMeshZoneExistence(mz1Name);
+            mz2Name = obj.checkMeshZoneExistence(mz2Name);
+
+            mask = (ismember(obj.edges(:, 3), obj.mzs.(mz1Name).zi) & ...
+                ismember(obj.edges(:, 4), obj.mzs.(mz2Name).zi)) | ...
+                (ismember(obj.edges(:, 3), obj.mzs.(mz2Name).zi) & ...
+                ismember(obj.edges(:, 4), obj.mzs.(mz1Name).zi));
+
+            idx = find(mask);
+
         end
 
         % free boundary edge index on line
@@ -3042,6 +3567,14 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             if nargout == 1, varargout{1} = agm; end
             
+        end
+
+        function aux_addShaft(obj, mzName, x0, y0, R)
+
+            mzName = obj.checkMeshZoneNonExistence(mzName);
+            idx = obj.getfbeioc(x0, y0, R);
+
+
         end
 
         function mzptr = getRectangleEnclouser(obj, x0, y0, w, h, dx, dy)

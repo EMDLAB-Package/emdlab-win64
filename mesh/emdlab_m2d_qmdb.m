@@ -652,11 +652,15 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             % element matrix
             obj.elements(:, 1:4) = [e1, e2, e3, e4];
+
+            % initialize nbs matrix
             obj.nbs = zeros(obj.Ne,4);
 
+            % edge length
             obj.edgeLength = sqrt(sum((obj.nodes(obj.edges(:,1),:) - obj.nodes(obj.edges(:,2),:)).^2, 2));
             obj.el = obj.edgeLength(abs(obj.elements(:,1:4)));
 
+            % edge unit vectors
             obj.uEdges = obj.nodes(obj.edges(:,2),:) - obj.nodes(obj.edges(:,1),:);
             obj.uEdges = obj.uEdges ./ vecnorm(obj.uEdges, 2, 2);
             obj.nEdges = [obj.uEdges(:,2), -obj.uEdges(:,1)];

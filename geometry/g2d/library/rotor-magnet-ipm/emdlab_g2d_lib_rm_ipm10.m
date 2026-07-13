@@ -12,7 +12,7 @@ if nargin == 0
     dm = 4;
     alpha_v = 150;
     wtrib = 1;
-    wrrib = 1;
+    wrrib = 0;
     bm0 = 3;
     name1 = 'rotor';
     name2 = 'magnet';
@@ -77,10 +77,11 @@ if wrrib == 0
     e10 = g.addSegment(p7,p2);
     e11 = g.addArc(p9,p8,p7,1);
     e12 = g.addSegment(p2,p10);
+    e13 = g.splitArc(e11);
 
-    l1 = g.addLoop(e1,-e12,-e10,-e11,-e8,e3,e4,e5,e6);
+    l1 = g.addLoop(e1,-e12,-e10,-e13,-e11,-e8,e3,e4,e5,e6);
     l2 = g.addLoop(e7,e8,e9,e10);
-    l3 = g.addLoop(-e9,e11);
+    l3 = g.addLoop(-e9,e11,e13);
     l4 = g.addLoop(e2,-e7,e12);
 
     g.addFace(name1, l1);
@@ -101,11 +102,12 @@ else
     e9 = g.addArc(p9,p8,p7,1);
     e10 = g.addSegment(p2,p10);
     e11 = g.addSegment(p10,p3);
+    e12 = g.splitArc(e9);
 
     l1 = g.addLoop(e1,e2,e3,e4);
-    l2 = g.addLoop(e11,e6,e9,e8,e10);
+    l2 = g.addLoop(e11,e6,e9,e12,e8,e10);
     l3 = g.addLoop(e5,e6,e7,e8);
-    l4 = g.addLoop(e9,-e7);
+    l4 = g.addLoop(e9,e12,-e7);
     l5 = g.addLoop(e11,-e5,e10);
 
     g.addFace(name1, l1,l2);

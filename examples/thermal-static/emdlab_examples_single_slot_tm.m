@@ -12,7 +12,7 @@ gv_Ns = 36; % number of stator slots
 gv_wst = 3.3; % width of stator tooth
 gv_dss = 18; % depth of stator slot [mm]
 gv_th = 4; % thickness of housing [mm]
-meshSize = 2; % mesh size [mm]
+meshSize = 1; % mesh size [mm]
 
 % dependents
 gv_alpha_s = 2*pi/gv_Ns; % stator slot pitch angle [rad]
@@ -72,7 +72,7 @@ m.aux_cmxjcrj('housing',1)
 m.aux_cmxjcrj('copper',1)
 
 % get mesh database
-m = m.aux_c2qm;
+% m = m.aux_c2qm;
 m.setMeshZoneColor('stator', 190, 190, 190);
 m.setMeshZoneColor('housing',163,73,164);
 m.setMeshZoneColor('copper',255,137,39);
@@ -91,7 +91,7 @@ m.mts.aluminium.setThermalConductivity(200);
 m.setMaterial('housing', 'aluminium');
 
 % add solver
-s = emdlab_solvers_ts2d_tn_qm(m);
+s = emdlab_solvers_ts2d_tn(m);
 s.setLengthUnit('mm');
 s.setDepth(gv_Lstk);
 

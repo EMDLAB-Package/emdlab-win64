@@ -26,7 +26,7 @@ m.setMeshZoneColor('z1', 0, 255, 255);
 m.mts.copper.setThermalConductivity(1);
 
 % add solver
-s = emdlab_solvers_ts2d_tn_qm(m);
+s = emdlab_solvers_ts2d_tn(m);
 s.setLengthUnit('m');
 s.setDepth(Z);
 
