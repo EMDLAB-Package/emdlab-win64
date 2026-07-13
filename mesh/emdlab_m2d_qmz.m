@@ -1,77 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % Quadrilateral mesh zone (2D element)
 
-classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
-
-    properties (SetAccess = private)
-
-        % mesh nodes
-        nodes (:,2) double;
-
-        % mesh connectivity list
-        cl (:,4) double;
-
-        % mesh elements
-        elements (:,4) double;
-
-        % unique edges
-        edges (:,2) double;
-
-        % list of boundary edges
-        bedges (:,1) double;
-
-    end
-    properties
-
-        % zone index
-        zi (1,1) double;
-
-        % local to global node index
-        l2g (:,1) double;
-
-        % material of zone
-        material char = 'air';
-
-        % surface color transparency
-        transparency (1,1) double = 1;
-
-        % mesh zone color
-        color = 'c';
-
-        % mesh zone properties: differs in differents solvers
-        props (1,1) struct;
-
-        % flags
-        isMoving = false;
-
-        orientation = 'global';
-
-    end
-
-    properties (Access = private)
-
-        % a vector containing area of elements
-        ea (:,1) double;
-
-        % mesh zone area
-        area (1,1) double;
-
-        % states
-        isDataSet (1,1) logical = false;
-        isAreaOfElementsEvaluated (1,1) logical = false;
-        isMeshZoneAreaEvaluated (1,1) logical = false;
-
-    end
-
-    properties (Dependent = true)
-
-        % number of mesh zone nodes
-        Nn(1, 1) double;
-
-        % number of mesh zone elements
-        Ne(1, 1) double;
-
-    end
+classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmz
 
     methods
         %% Constructor and Destructor
@@ -84,14 +14,6 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.cl = cl;
             obj = obj.setData;
 
-        end
-
-        function y = get.Nn(obj)
-            y = size(obj.nodes, 1);
-        end
-
-        function y = get.Ne(obj)
-            y = size(obj.cl, 1);
         end
 
         %% Topological Functions
@@ -149,57 +71,6 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             % change states
             obj.isDataSet = true;
-
-        end
-
-        %% Mesh Visiualization
-        function varargout = showm(obj)
-
-            f = emdlab_r2d_mesh();
-            ax = axes(f);
-            f.Name = ['[Mesh Zone][', 'Nn = ', num2str(obj.Nn), '][Ne = ', num2str(obj.Ne), ']'];
-
-            patch('Faces',obj.cl(:,1:4),'Vertices',obj.nodes,'FaceColor',...
-                obj.color,'EdgeColor','k','parent',ax);
-
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
-            set(f, 'Visible', 'on');
-
-            if nargout == 1
-                varargout{1} = f;
-            elseif nargout == 2
-                varargout{1} = f;
-                varargout{2} = ax;
-            elseif nargout > 2
-                error('Too many output argument.');
-            end
-
-        end
-
-        function varargout = showwf(obj)
-
-            f = emdlab_r2d_mesh();
-            ax = axes(f);
-
-            patch('Faces',obj.edges(find(obj.bedges),:),'Vertices',obj.nodes,...
-                'FaceColor','none','EdgeColor','k', 'parent', ax);
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
-            set(f, 'Visible', 'on');
-
-            if nargout == 1
-                varargout{1} = f;
-            elseif nargout == 2
-                varargout{1} = f;
-                varargout{2} = ax;
-            elseif nargout > 2
-                error('Too many output argument.');
-            end
 
         end
 
@@ -271,48 +142,9 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
-        %% tranforms and copy generations
-        function mirror(obj, varargin)
-            obj.nodes = ext_pmirror2(obj.nodes, varargin{:});
-            obj.cl = obj.cl(:, [1, 4, 3, 2]);
-            obj.clearSetDataFlag;
-            obj.setData;
-        end
+        
 
-        function newObj = getMirror(obj, varargin)
-            newObj = copy(obj);
-            newObj.nodes = ext_pmirror2(newObj.nodes, varargin{:});
-            newObj.cl = newObj.cl(:, [1, 4, 3, 2]);
-            newObj.clearSetDataFlag;
-            newObj.setData;
-        end
-
-        function rotate(obj, varargin)
-            if numel(varargin) == 1
-                obj.nodes = ext_protate2(obj.nodes, varargin{:});
-            else
-                if length(varargin{2}) == 2
-                    obj.nodes = ext_protate2(obj.nodes, varargin{:});
-                else
-                    obj.nodes = emdlab_g2d_rotatePoints(obj.nodes, varargin{:});
-                end
-            end
-        end
-
-        function newObj = getRotate(obj, varargin)
-            newObj = copy(obj);
-            newObj.nodes = ext_protate2(newObj.nodes, varargin{:});
-        end
-
-        function shift(obj, xShift, yShift)
-            obj.nodes(:,1) = obj.nodes(:,1) + xShift;
-            obj.nodes(:,2) = obj.nodes(:,2) + yShift;
-        end
-
-        function newObj = getShift(obj, varargin)
-            newObj = copy(obj);
-            newObj.nodes = ext_pshift2(newObj.nodes, varargin{:});
-        end
+        
 
         function mzptr = getExtrude(obj, zLevels)
             % extrude quadrilateral mesh along z-axis and construct hexahedral mesh
@@ -354,18 +186,6 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             mzptr = emdlab_m3d_hhmz(hhcl, p3);
             mzptr.color = obj.color;
-
-        end
-
-    end
-
-    methods (Access = private)
-
-        function clearSetDataFlag(obj)
-
-            obj.isDataSet = false;
-            obj.isAreaOfElementsEvaluated = false;
-            obj.isMeshZoneAreaEvaluated = false;
 
         end
 

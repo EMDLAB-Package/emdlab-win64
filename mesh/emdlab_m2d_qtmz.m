@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % Quadrilateral-Triangular mesh zone (2D element)
 
-classdef emdlab_m2d_qtmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
+classdef emdlab_m2d_qtmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmz
 
     properties (SetAccess = private)
 

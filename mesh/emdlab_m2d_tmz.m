@@ -1,91 +1,8 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % 2D triangular mesh zone
 
-classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
-    
-    properties
+classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmz
         
-        % mesh nodes
-        nodes (:,2) double;
-
-        % mesh connectivity list
-        cl (:,3) double;
-
-        % mesh elements: [edge1, edge2, edge3]
-        elements (:,3) double;
-
-        % unique edges: [node1, node2]
-        edges (:,2) double;
-
-        % list of boundary edges
-        bedges (:,1);
-
-        % Named Selections
-        nodeNamedSelections (1,1) struct;
-        edgeNamedSelections (1,1) struct;
-        
-    end
-    
-    properties
-        
-        % zone index
-        zi (1,1) double;
-
-        % local to global node index
-        l2g (:,1) double;
-
-        % material of zone
-        material char = 'air';
-
-        % mesh zone color
-        color = 'c';
-
-        % surface color transparency
-        transparency (1,1) double = 1;
-        
-        % mesh zone properties: differs in differents solvers
-        props (1,1) struct;
-
-        % flags
-        isMoving = false;
-
-        orientation = 'global';
-        
-    end
-    
-    properties (Access = private)
-        
-        % a vector containing area of elements
-        ea (:,1) double;
-
-        % mesh zone area
-        area (1,1) double;
-
-        % Q
-        Q (1,:) double;
-
-        % Weight matrix
-        Wm
-
-        % states
-        isDataSetted (1,1) logical = false;
-        is_ea_Evaluated (1,1) logical = false;
-        is_area_Evaluated (1,1) logical = false;
-        is_Wm_Evaluated (1,1) logical = false;
-        is_Q_Evaluated (1,1) logical = false;
-        
-    end
-    
-    properties (Dependent = true)
-        
-        % number of mesh zone nodes
-        Nn (1,1) double;
-
-        % number of mesh zone elements
-        Ne (1,1) double;
-        
-    end
-    
     methods        
         %% constructor and destructor
         function obj = emdlab_m2d_tmz(cl, nodes)
@@ -95,18 +12,12 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             obj.nodes = nodes;
             obj.cl = cl;
-            obj.setdata;
+            if ~isempty(cl)
+                obj.setdata;
+            end
 
         end
-        
-        function y = get.Nn(obj)
-            y = size(obj.nodes, 1);
-        end
-        
-        function y = get.Ne(obj)
-            y = size(obj.cl, 1);
-        end
-              
+            
         %% FEM preparation
         function evalAreaOfElements(obj)
 %             if obj.is_ea_Evaluated, return; end
@@ -114,7 +25,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             v13 = obj.nodes(obj.cl(:, 3), :) - obj.nodes(obj.cl(:, 1), :);
             obj.ea = 0.5 * (v12(:, 1) .* v13(:, 2) - v12(:, 2) .* v13(:, 1));
             % change states
-            obj.is_ea_Evaluated = true;
+            obj.isAreaOfElementsEvaluated = true;
         end
         
         function evalArea(obj)
@@ -122,20 +33,20 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.evalAreaOfElements;
             obj.area = sum(obj.ea);
             % change states
-            obj.is_area_Evaluated = true;
+            obj.isMeshZoneAreaEvaluated = true;
         end
         
         %% topological functions
         % setting needed data
         function setdataForce(obj)
-            obj.isDataSetted = false;
+            obj.isDataSet = false;
             obj.setdata;
         end
 
         function setdata(obj)
 
             % check if already data is set
-            if obj.isDataSetted, return; end
+            if obj.isDataSet, return; end
 
             % first edge of each triangle
             e1 = obj.cl(:, [1, 2]);
@@ -178,44 +89,8 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.elements = [e1, e2, e3];
 
             % change states
-            obj.isDataSetted = true;
+            obj.isDataSet = true;
 
-        end
-        
-        %% visiualization functions
-        function varargout = showm(obj)
-
-            f = emdlab_r2d_mesh();
-            ax = axes(f);
-            f.Name = ['[Mesh Zone][', 'Nn = ', num2str(obj.Nn), '][Ne = ', num2str(obj.Ne), ']'];
-            
-            patch('Faces', obj.cl(:, 1:3), 'Vertices', obj.nodes, 'FaceColor', ...
-                obj.color, 'EdgeColor', 'k', 'parent', ax);
-            
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
-            set(f, 'Visible', 'on');
-
-            if nargout == 1
-                varargout{1} = f;
-            elseif nargout == 2
-                varargout{1} = f;
-                varargout{2} = ax;
-            elseif nargout > 2
-                error('Too many output argument.');
-            end
-
-        end
-        
-        function f = showwf(obj)
-            f = GraphicWindow();
-            f.Name = ['[Mesh Zone Boundary Edges][', 'Nbe = ', num2str(length(obj.bedges)), ']'];
-            h = guihandles(f);
-            patch('Faces', obj.edges(obj.bedges, [1,2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'parent', h.va);
-            set(f, 'HandleVisibility', 'off', 'Visible', 'on');
         end
         
         %% Named Selections
@@ -267,15 +142,15 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 obj.nodes(inodes, :) = pnew;
                 % check for movment tolerance
                 if Mov < MovTol
-                    disp(iter);
+                    fprintf("Mesh smoothing #%d\n", iter);
                     break;
                 end
                 
             end
             
             % change states
-            obj.is_ea_Evaluated = false;
-            obj.is_area_Evaluated = false;
+            obj.isAreaOfElementsEvaluated = false;
+            obj.isMeshZoneAreaEvaluated = false;
             obj.is_Q_Evaluated = false;
         end
         
@@ -405,9 +280,9 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
     methods (Access = private)
         
         function makeFalse_isDataSetted(obj)
-            obj.isDataSetted = false;
-            obj.is_ea_Evaluated = false;
-            obj.is_area_Evaluated = false;
+            obj.isDataSet = false;
+            obj.isAreaOfElementsEvaluated = false;
+            obj.isMeshZoneAreaEvaluated = false;
             obj.is_Wm_Evaluated = false;
             obj.is_Q_Evaluated = false;
         end

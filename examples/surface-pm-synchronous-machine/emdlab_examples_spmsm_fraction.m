@@ -86,6 +86,5 @@ s.setOddPeriodicBC(km,ks);
 
 % solve and plot results
 s.solve;
-s.gui;
-
+s.plotBmagF(14);
 
