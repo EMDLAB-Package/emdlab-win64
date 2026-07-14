@@ -96,11 +96,11 @@ s.setLengthUnit('mm');
 s.setDepth(gv_Lstk);
 
 % set boundary conditions
-idx = m.getEdgeIndicesInCircle(0,0,gv_ISD/2);
-s.addHeatFluxBC('inner_surface', idx, 500);
+idx_ag = m.getEdgeIndicesOnCircle(0,0,gv_ISD/2);
+s.addHeatFlowBC('inner_surface', idx_ag, 1);
 
-idx = m.getEdgeIndicesOnCircle(0,0,gv_OSD/2 + gv_th,(gv_OSD/2 + gv_th)*(1-cos(asin(meshSize/(gv_OSD/2 + gv_th)))));
-s.addConvectionBC('outer_surface', idx, 10, 25);
+idx_h = m.getEdgeIndicesOnCircle(0,0,gv_OSD/2 + gv_th);
+s.addConvectionBC('outer_surface', idx_h, 10, 25);
 
 % solve and plot results
 s.solve;
@@ -110,3 +110,6 @@ s.plotTemperature(20);
 fprintf('Tmin = %.4f\n', min(s.results.T));
 fprintf('Tmax = %.4f\n', max(s.results.T));
 fprintf('Tavg = %.4f\n', s.getAverageTemperature);
+
+fprintf('q_ag = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_ag));
+fprintf('q_h = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_h));

@@ -41,3 +41,5 @@ s.plotTemperature(10);
 fprintf('Tmin = %.4f\n', min(s.results.T));
 fprintf('Tmax = %.4f\n', max(s.results.T));
 fprintf('Tavg = %.4f\n', s.getAverageTemperature);
+
+fprintf('q_boundary = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(m.getfbe));

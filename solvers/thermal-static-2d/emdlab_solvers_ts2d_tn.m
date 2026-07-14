@@ -305,7 +305,7 @@ classdef emdlab_solvers_ts2d_tn < handle
 
             if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
 
-                releativeError = 1e-4;
+                releativeError = 1e-3;
                 maxIteration = 200;
                 iter = 0;
                 err = inf;
@@ -318,7 +318,7 @@ classdef emdlab_solvers_ts2d_tn < handle
                     % handle anisotropy
                     if ~obj.edata.areAllIsotropic
                         for i = 1:obj.m.Ne
-                            Tij = obj.results.Tn(obj.m.cl(i,[1,2,3,4,1]));
+                            Tij = obj.results.Tn(obj.m.cl(i,[1:obj.NR,1]));
                             for j = 1:obj.NR
                                 if ~obj.m.bedges(abs(obj.m.elements(i,j)))
                                     sourceVectorU(i) = sourceVectorU(i) + z * ...
@@ -338,10 +338,118 @@ classdef emdlab_solvers_ts2d_tn < handle
                     err = norm(obj.results.T-Told,2)/norm(obj.results.T,2);
                     obj.solverHistory.relativeError(end+1) = err;
 
+                    fprintf('Iteration #%03d, Relative Error = %.2e\n', iter, err);
+
                 end
 
             end
 
+            % calculate cross heat at edges
+            Nedges = size(obj.m.edges,1);
+            obj.results.qe = zeros(Nedges,1);
+            for k = 1:Nedges
+                if ~obj.m.bedges(k)
+                    % index of left element
+                    i = obj.m.edges(k,5);
+                    % index of right element
+                    j = obj.m.edges(k,7);
+                    % net heat passing k-th internal edge
+                    obj.results.qe(k) = (obj.results.T(j) - obj.results.T(i)) * G_maxtrix(i,j);
+                end
+            end
+
+            for k = 1:numel(exNames)
+
+                exptr = obj.excitations.(exNames(k));
+                switch exptr.type
+                    
+                    case 'fixed-temperature'
+                        if isa(exptr.value, 'function_handle')
+                                Tb = exptr.value(edgeCenter(exptr.idx,1),edgeCenter(exptr.idx,2));
+                            else
+                                Tb = exptr.value*ones(length(exptr.idx),1);
+                        end
+
+                        j = 0;
+                        for i = exptr.idx(:)'
+                            j = j+1;
+
+                            if obj.m.edges(i,4)
+                                obj.results.qe(i) = (Tb(j) - obj.results.T(obj.m.edges(i,7))) / ...
+                                    resistances(obj.m.edges(i,7), obj.m.edges(i,8));
+                            else
+                                obj.results.qe(i) = (obj.results.T(obj.m.edges(i,5)) - Tb(j)) / ...
+                                    resistances(obj.m.edges(i,5), obj.m.edges(i,6));
+                            end
+                        end
+
+                    case 'convection'
+                        if isa(exptr.hValue, 'function_handle')
+                                hValue = exptr.hValue(edgeCenter(exptr.idx,1),edgeCenter(exptr.idx,2));
+                            else
+                                hValue = exptr.hValue*ones(length(exptr.idx),1);
+                        end
+
+                        j = 0;
+                        for i = exptr.idx(:)'
+                            j = j+1;
+
+                            if obj.m.edges(i,4)
+                                obj.results.qe(i) = (exptr.Tinf - obj.results.T(obj.m.edges(i,7))) / ...
+                                    (resistances(obj.m.edges(i,7), obj.m.edges(i,8)) + 1/(hValue(j)*z*obj.m.edgeLength(i)*obj.units.k_length));
+                            else
+                                obj.results.qe(i) = (obj.results.T(obj.m.edges(i,5)) - exptr.Tinf) / ...
+                                    (resistances(obj.m.edges(i,5), obj.m.edges(i,6)) + 1/(hValue(j)*z*obj.m.edgeLength(i)*obj.units.k_length));
+                            end
+                        end
+
+                    case 'radiation'
+                        [value, sourceVector] = applyConvectionBC(obj, exptr.idx, value, sourceVector, resistances, exptr.Tinf, exptr.hValue);
+                    
+                    case 'heat-flux'
+                        if isa(exptr.value, 'function_handle')
+                            qValue = exptr.value(edgeCenter(exptr.idx,1),edgeCenter(exptr.idx,2));
+                        else
+                            qValue = exptr.value*ones(length(exptr.idx),1);
+                        end
+
+                        j = 0;
+                        for i = exptr.idx(:)'
+                            j = j+1;
+
+                            if obj.m.edges(i,4)
+                                obj.results.qe(i) = qValue(j)*z*obj.m.edgeLength(i)*obj.units.k_length;
+                            else
+                                obj.results.qe(i) = -qValue(j)*z*obj.m.edgeLength(i)*obj.units.k_length;
+                            end
+                        end
+
+                end
+
+            end
+
+        end
+
+        function y = calculateNetHeatCrossingBoundaryEdges(obj, idx)
+            y = 0;
+            for i = idx(:)'
+                if obj.m.edges(i,4)
+                    y = y + obj.results.qe(i);
+                else
+                    y = y - obj.results.qe(i);
+                end
+            end
+        end
+
+        function y = calculateNetHeatCrossingContact(obj, cName)
+            y = 0;
+            for i = idx(:)'
+                if obj.m.edges(i,4)
+                    y = y + obj.results.qe(i);
+                else
+                    y = y - obj.results.qe(i);
+                end
+            end
         end
 
         function evalTn(obj)

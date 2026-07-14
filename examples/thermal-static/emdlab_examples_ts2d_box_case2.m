@@ -36,13 +36,13 @@ s.setLengthUnit('m');
 s.setDepth(1);
 
 % set boundary conditions
-idx = m.getEdgeIndicesOnLineP0U(0,0,0,1);
-s.addHeatFluxBC('left', idx,100);
+idx_left = m.getEdgeIndicesOnLineP0U(0,0,0,1);
+s.addHeatFluxBC('left', idx_left, 100);
 
-idx = m.getEdgeIndicesOnLineP0U(0,0,1,0);
-idx = [idx;m.getEdgeIndicesOnLineP0U(0,H,1,0)];
-idx = [idx;m.getEdgeIndicesOnLineP0U(W,0,0,1)];
-s.addFixedTemperatureBC('rest', idx, 0);
+idx_bottom = m.getEdgeIndicesOnLineP0U(0,0,1,0);
+idx_top = m.getEdgeIndicesOnLineP0U(0,H,1,0);
+idx_right = m.getEdgeIndicesOnLineP0U(W,0,0,1);
+s.addFixedTemperatureBC('rest', [idx_bottom;idx_top;idx_right], 0);
 
 % solve and plot results
 s.solve;
@@ -51,3 +51,8 @@ s.plotTemperature(10);
 fprintf('Tmin = %.4f\n', min(s.results.T));
 fprintf('Tmax = %.4f\n', max(s.results.T));
 fprintf('Tavg = %.4f\n', s.getAverageTemperature);
+
+fprintf('q_left = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_left));
+fprintf('q_right = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_right));
+fprintf('q_top = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_top));
+fprintf('q_bottom = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_bottom));

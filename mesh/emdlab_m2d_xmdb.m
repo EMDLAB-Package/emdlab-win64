@@ -88,7 +88,7 @@ classdef emdlab_m2d_xmdb < handle
             % show global mesh
 
             [f,ax] = emdlab_flib_fax(varargin{:}); 
-            if isfield(f,'MenuBar')
+            if isa(f,'matlab.ui.Figure')
                 f.MenuBar = "none";
             end
             
@@ -164,7 +164,7 @@ classdef emdlab_m2d_xmdb < handle
             % show global geometry
 
             [f,ax] = emdlab_flib_fax(varargin{:}); 
-            if isfield(f,'MenuBar')
+            if isa(f,'matlab.ui.Figure')
                 f.MenuBar = "none";
             end
             
@@ -431,7 +431,8 @@ classdef emdlab_m2d_xmdb < handle
             color = 'r';
             for i = sIndex:numel(varargin)
                 patch('Faces', varargin{i}, 'Vertices', obj.nodes, ...
-                    'EdgeColor', 'none', 'parent', ax, 'Marker', 'o', 'MarkerFaceColor', color);
+                    'EdgeColor', 'none', 'parent', ax, 'Marker', 'o', 'MarkerFaceColor', color,...
+                    'HitTest', 'off','PickableParts','none');
                 color = 'b';
             end
 
@@ -448,7 +449,8 @@ classdef emdlab_m2d_xmdb < handle
             [f,ax] = obj.showm;
             for i = 1:numel(varargin)
                 patch('Faces', obj.edges(varargin{i},[1,2]), 'Vertices', obj.nodes, ...
-                    'EdgeColor', 'r', 'parent', ax, 'Marker', 'o', 'MarkerFaceColor', 'r', 'LineWidth', 2);
+                    'EdgeColor', 'r', 'parent', ax, 'Marker', 'o', 'MarkerFaceColor', 'r', ...
+                    'LineWidth', 2,'HitTest', 'off','PickableParts','none');
             end
 
             if nargout == 1, varargout{1} = f;
@@ -479,8 +481,9 @@ classdef emdlab_m2d_xmdb < handle
 
             for i = 1:numel(varargin)
                 patch('Faces', obj.cl(varargin{i}, clIndex), 'Vertices', obj.nodes, ...
-                    'FaceColor', 'r', 'EdgeColor', 'r', 'parent', ax, 'Marker', 'o', ...
-                    'MarkerFaceColor', 'r', 'LineWidth', 2,'HitTest','off', 'PickableParts', 'none');
+                    'FaceColor', 'r', 'EdgeColor', 'w', 'parent', ax, 'Marker', 'o', ...
+                    'MarkerFaceColor', 'r', 'LineWidth', 2,...
+                    'HitTest','off', 'PickableParts', 'none', 'handleVisibility', 'off');
             end
 
             if nargout == 1, varargout{1} = f;

@@ -7,7 +7,7 @@ addpath(genpath('C:\emdlab-win64'));
 % design variables
 gv_ISD = 73; % inner stator diameter [mm]
 gv_OSD = 125; % outer stator diameter [mm]
-gv_Lstk = 10; % stack length [mm]
+gv_Lstk = 70; % stack length [mm]
 gv_Ns = 36; % number of stator slots
 gv_wst = 3.3; % width of stator tooth
 gv_dss = 18; % depth of stator slot [mm]
@@ -101,11 +101,11 @@ s.setLengthUnit('mm');
 s.setDepth(gv_Lstk);
 
 % set boundary conditions
-idx = m.getEdgeIndicesOnCircle(0,0,gv_ISD/2);
-s.addHeatFluxBC('inner_surface', idx, 500);
+idx_ag = m.getEdgeIndicesOnCircle(0,0,gv_ISD/2);
+s.addHeatFlowBC('inner_surface', idx_ag, 1);
 
-idx = m.getEdgeIndicesOnCircle(0,0,gv_OSD/2 + gv_th);
-s.addConvectionBC('outer_surface', idx, 10, 25);
+idx_h = m.getEdgeIndicesOnCircle(0,0,gv_OSD/2 + gv_th);
+s.addConvectionBC('outer_surface', idx_h, 10, 25);
 
 % solve and plot results
 s.solve;
@@ -114,3 +114,6 @@ s.plotTemperature(10);
 fprintf('Tmin = %.4f\n', min(s.results.T));
 fprintf('Tmax = %.4f\n', max(s.results.T));
 fprintf('Tavg = %.4f\n', s.getAverageTemperature);
+
+fprintf('q_ag = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_ag));
+fprintf('q_h = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_h));
