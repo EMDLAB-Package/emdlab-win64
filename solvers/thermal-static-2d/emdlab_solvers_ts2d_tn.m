@@ -898,7 +898,7 @@ classdef emdlab_solvers_ts2d_tn < handle
                     nbIndex = obj.m.nbs(i,j);
 
                     if nbIndex
-                        Rp(j) = resistances(i,j) + resistances(nbIndex,idx(abs(obj.m.elements(nbIndex,:)) == (abs(obj.m.elements(i,j)))));
+                        Rp(j) = resistances(i,j) + resistances(nbIndex,idx(abs(obj.m.elements(nbIndex,1:obj.NR)) == (abs(obj.m.elements(i,j)))));
                         indexJ(i,j+1) = nbIndex;
                         value(i,j+1) = -1/Rp(j);
                     else
