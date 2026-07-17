@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% a two-dimensional thermal-static solver based on thermal netwrok
+% a two-dimensional thermal-transient solver based on thermal netwrok
 
-classdef emdlab_solvers_ts2d_tn < handle
+classdef emdlab_solvers_tt2d_tn < handle
 
     properties (SetAccess = protected)
 
@@ -45,6 +45,10 @@ classdef emdlab_solvers_ts2d_tn < handle
         monitorResiduals (1,1) logical = false;
         solverIndex = 1;
 
+        simTime (:,1); % simulation time vector
+        simTimeStep (1,1) double = 1; % time step size for simulation
+        simTimeStop (1,1) double = 60; % stop time for simulation
+
         % states
         isBeEvaluated (1,1) logical = false;
         isBnEvaluated (1,1) logical = false;
@@ -65,7 +69,7 @@ classdef emdlab_solvers_ts2d_tn < handle
 
     methods
         %% Constructor and Destructor
-        function obj = emdlab_solvers_ts2d_tn(m)
+        function obj = emdlab_solvers_tt2d_tn(m)
 
             % mesh pointer
             if isa(m, 'emdlab_m2d_qmdb')
@@ -92,6 +96,7 @@ classdef emdlab_solvers_ts2d_tn < handle
 
             % default values
             obj.depth = 1;
+            %             obj.bcs = emdlab_bcs_scalarNodes('TL3');
             obj.units = emdlab_phy_units;
 
         end
@@ -118,8 +123,8 @@ classdef emdlab_solvers_ts2d_tn < handle
         function y = getDepth(obj)
             y = obj.depth * obj.units.k_length;
         end
-
         %% solver properties for mesh zones
+
         function setdp(obj, mzName)
             % set default properties of a mesh zone
 
@@ -127,6 +132,28 @@ classdef emdlab_solvers_ts2d_tn < handle
             obj.m.mzs.(mzName).props.isCoilArm = false;
             obj.m.mzs.(mzName).props.isCoilMember = false;
             obj.m.mzs.(mzName).props.isMagnetized = false;
+            obj.m.mzs.(mzName).props.initialTemperature = 25; 
+            %             obj.makeFalse_isElementDataAssigned;
+
+        end
+
+        function setMeshZoneInitialTemperature(obj, mzName, value)
+            mzName = obj.m.checkMeshZoneExistence(mzName);
+            obj.m.mzs.(mzName).props.initialTemperature = value;
+        end
+
+
+        function addmz(obj, mzName, mzValue)
+
+            obj.m.addmz(mzName, mzValue);
+            obj.setdp(mzName);
+            %             obj.makeFalse_isElementDataAssigned;
+
+        end
+
+        function removemz(obj, mzName)
+
+            obj.m.removemz(mzName);
             %             obj.makeFalse_isElementDataAssigned;
 
         end
@@ -143,6 +170,14 @@ classdef emdlab_solvers_ts2d_tn < handle
         end
 
         %% Solver Functions
+        function setSimulationStopTime(obj, value)
+            obj.simTimeStop = value;
+        end
+
+        function setSimulationTimeStep(obj, value)
+            obj.simTimeStep = value;
+        end
+
         function setSolverIndex(obj, value)
             obj.solverIndex = value;
         end
@@ -154,6 +189,8 @@ classdef emdlab_solvers_ts2d_tn < handle
 
             % allocation of memory
             obj.edata.ThermalConductivity = zeros(3, obj.m.Ne);
+            obj.edata.MassDensity = zeros(1, obj.m.Ne);
+            obj.edata.HeatCapacity = zeros(1, obj.m.Ne);
 
             % getting mesh zones
             mzNames = obj.m.getMeshZoneNames;
@@ -187,6 +224,9 @@ classdef emdlab_solvers_ts2d_tn < handle
                     end
                 end
 
+                obj.edata.MassDensity(1,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).MassDensity.value;
+                obj.edata.HeatCapacity(1,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).HeatCapacity.value;
+
             end
 
             % change states
@@ -201,6 +241,7 @@ classdef emdlab_solvers_ts2d_tn < handle
 
             % calculate resistances
             resistances = zeros(obj.m.Ne,obj.NR);
+            capacitances = zeros(obj.m.Ne,1);
             z = obj.getDepth;
 
             % loop over mesh zones
@@ -247,7 +288,11 @@ classdef emdlab_solvers_ts2d_tn < handle
                     % calculation of conductances
                     resistances(i,j) = die/(kij*z*obj.m.el(i,j) * elm(i,j));
 
+                    
+
                 end
+
+                capacitances(i) = obj.edata.MassDensity(i) * obj.edata.HeatCapacity(i) * obj.m.gea(i) * z * obj.units.k_length^2;
 
             end
 
@@ -282,49 +327,82 @@ classdef emdlab_solvers_ts2d_tn < handle
 
             % construct global matrices and solve
             G_maxtrix = sparse(indexI, indexJ, value);
-            obj.results.T = G_maxtrix\sourceVector;
-            obj.evalTn;
+
+            obj.simTime = linspace(0, obj.simTimeStop, ceil(obj.simTimeStop/obj.simTimeStep))';
+            Nt = length(obj.simTime);
+
+            for mz = mzNames
+                obj.results.(mz).T = zeros(Nt,3);
+            end
+
+            C_Matrix = sparse(1:obj.m.Ne, 1:obj.m.Ne, capacitances)/obj.simTime(2);
+            G_maxtrix = G_maxtrix + C_Matrix;
+
+            % set initial temperature
+            T_old = zeros(obj.m.Ne,1);
+            for mz = mzNames
+                T_old(obj.m.ezi(:,obj.m.mzs.(mz).zi)) = obj.m.mzs.(mz).props.initialTemperature;
+                obj.results.(mz).T(1,:) = obj.m.mzs.(mz).props.initialTemperature;
+            end
             
-            obj.solverHistory.relativeError = [];
+            obj.results.T = T_old;
 
-            if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
-
-                releativeError = 1e-3;
-                maxIteration = 200;
-                iter = 0;
-                err = inf;
+            % loop over time
+            for k = 2:Nt
                 
-                % iterative loop for solver
-                while iter<maxIteration && err>releativeError
+                obj.results.T = G_maxtrix\(sourceVector + C_Matrix * T_old);
+                obj.evalTn;
 
-                    sourceVectorU = sourceVector;
+                obj.solverHistory.relativeError = [];
 
-                    % handle anisotropy
-                    if ~obj.edata.areAllIsotropic
-                        for i = 1:obj.m.Ne
-                            Tij = obj.results.Tn(obj.m.cl(i,[1:obj.NR,1]));
-                            for j = 1:obj.NR
-                                if ~obj.m.bedges(abs(obj.m.elements(i,j)))
-                                    sourceVectorU(i) = sourceVectorU(i) + z * ...
-                                        obj.kxySV(i,j) * (Tij(j) - Tij(j+1)) * elm(i,j);
+                if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
+
+                    releativeError = 1e-3;
+                    maxIteration = 200;
+                    iter = 0;
+                    err = inf;
+
+                    % iterative loop for solver
+                    while iter<maxIteration && err>releativeError
+
+                        sourceVectorU = (sourceVector + C_Matrix * T_old);
+
+                        % handle anisotropy
+                        if ~obj.edata.areAllIsotropic
+                            for i = 1:obj.m.Ne
+                                Tij = obj.results.Tn(obj.m.cl(i,[1:obj.NR,1]));
+                                for j = 1:obj.NR
+                                    if ~obj.m.bedges(abs(obj.m.elements(i,j)))
+                                        sourceVectorU(i) = sourceVectorU(i) + z * ...
+                                            obj.kxySV(i,j) * (Tij(j) - Tij(j+1)) * elm(i,j);
+                                    end
                                 end
                             end
                         end
+
+                        Told = obj.results.T;
+
+                        % solver iteration
+                        obj.results.T = G_maxtrix\sourceVectorU;
+                        obj.evalTn;
+
+                        iter = iter + 1;
+                        err = norm(obj.results.T-Told,2)/norm(obj.results.T,2);
+                        obj.solverHistory.relativeError(end+1) = err;
+
+                        fprintf('Iteration #%03d, Relative Error = %.2e\n', iter, err);
+
                     end
 
-                    Told = obj.results.T;
-
-                    % solver iteration
-                    obj.results.T = G_maxtrix\sourceVectorU;
-                    obj.evalTn;
-
-                    iter = iter + 1;
-                    err = norm(obj.results.T-Told,2)/norm(obj.results.T,2);
-                    obj.solverHistory.relativeError(end+1) = err;
-
-                    fprintf('Iteration #%03d, Relative Error = %.2e\n', iter, err);
-
                 end
+
+                T_old = obj.results.T;
+
+                for mz = mzNames
+                    obj.results.(mz).T(k,:) = [min(T_old), max(T_old), mean(T_old)];
+                end
+
+                fprintf('simulation time step %.2e completed.\n', obj.simTime(k));
 
             end
 
@@ -723,6 +801,16 @@ classdef emdlab_solvers_ts2d_tn < handle
             end
 
             obj.m.showEdges(idx);
+
+        end
+
+        function plotMeshZoneTemperatureVsTime(obj, mzName)
+
+            figure; box on; hold on;
+             plot(obj.simTime, obj.results.(mzName).T, 'LineWidth',1.5);
+             xlabel('Time [s]')
+             ylabel('Temperature [C]');
+             legend('Min', 'Max', 'Average');
 
         end
 

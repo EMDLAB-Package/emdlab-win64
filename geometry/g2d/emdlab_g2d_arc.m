@@ -16,10 +16,10 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
         Nnodes (1,1) double = 5;
         isSetNnodes (1,1) logical = true;
         
-        maxLength (1,1) double;
+        maxLength (1,1) double = 1;
         isSetMaxLength (1,1) logical = false;
         
-        maxDegree (1,1) double;
+        maxDegree (1,1) double = deg2rad(20);
         isSetMaxDegree (1,1) logical = false;
         
         healTol (1,1) double;
@@ -78,6 +78,14 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
         
         function setMaxLength(obj, newMaxLength)
             
+            R = obj.getRadius;
+            if obj.maxDegree > obj.getAngle
+                obj.maxDegree = obj.getAngle / 3;
+            end
+            tmp_length = 2*R*sin(obj.maxDegree*0.5);
+            if newMaxLength > tmp_length
+                newMaxLength = tmp_length;
+            end
             obj.maxLength = newMaxLength;
             obj.p1.meshSize = newMaxLength; 
             obj.p2.meshSize = newMaxLength; 

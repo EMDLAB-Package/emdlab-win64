@@ -40,6 +40,14 @@ classdef emdlab_phy_material < handle
             obj.ThermalConductivity = obj.ThermalConductivity.setValue(value, unit);
         end
 
+        function setMassDensity(obj, value)
+            obj.MassDensity.value = value;
+        end
+
+        function setHeatCapacity(obj, value)
+            obj.HeatCapacity.value = value;
+        end
+
     end
 
 end
