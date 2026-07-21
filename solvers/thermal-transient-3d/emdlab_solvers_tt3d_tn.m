@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% a 3-dimensional thermal-static solver based on TN for HHM
+% A 3-dimensional thermal-transient solver based on thermal network theory
 
-classdef emdlab_solvers_ts3d_tn_hhm < handle
+classdef emdlab_solvers_tt3d_tn < handle
 
     properties (SetAccess = protected)
 
@@ -55,7 +55,7 @@ classdef emdlab_solvers_ts3d_tn_hhm < handle
 
     methods
         %% Constructor and Destructor
-        function obj = emdlab_solvers_ts3d_tn_hhm(m)
+        function obj = emdlab_solvers_tt3d_tn(m)
 
             % mesh pointer
             if ~isa(m, 'emdlab_m3d_hhmdb')
