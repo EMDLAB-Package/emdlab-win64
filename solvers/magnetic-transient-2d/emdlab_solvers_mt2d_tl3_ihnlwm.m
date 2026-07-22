@@ -483,13 +483,6 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             disp('initial geuss evaluated.')
             toc, disp('-------------------------------------------------------');
 
-            if obj.edata.areAllLinear
-                obj.evalHe;
-                obj.evalBn;
-                obj.evalHn;
-                return
-            end
-
             % loop for nonlinear solver
             tic, disp('-------------------------------------------------------');
 
@@ -541,7 +534,8 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             % loop for non-linearity
             fprintf('Iter|Error   |Residual|time\n');
-            while ((RelError > obj.solverSettings.relativeError) || (EResidual>obj.solverSettings.relativeEnergyResidual)) && (Iterations < obj.solverSettings.maxIteration)
+            while ((RelError > obj.solverSettings.relativeError) || (EResidual>obj.solverSettings.relativeEnergyResidual)) && ...
+                    (Iterations < obj.solverSettings.maxIteration) && ~obj.edata.areAllLinear && any(F)
 
                 % starting loop time
                 loopTime = tic;
@@ -851,13 +845,6 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             disp('initial geuss evaluated.')
             toc, disp('-------------------------------------------------------');
 
-            if obj.edata.areAllLinear
-                obj.evalHe;
-                obj.evalBn;
-                obj.evalHn;
-                return
-            end
-
             % loop for nonlinear solver
             tic, disp('-------------------------------------------------------');
 
@@ -909,7 +896,8 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             % loop for non-linearity
             fprintf('Iter|Error   |Residual|time\n');
-            while ((RelError > obj.solverSettings.relativeError) || (RelEResidual>obj.solverSettings.relativeEnergyResidual)) && (Iterations < obj.solverSettings.maxIteration)
+            while ((RelError > obj.solverSettings.relativeError) || (RelEResidual>obj.solverSettings.relativeEnergyResidual)) ...
+                    && (Iterations < obj.solverSettings.maxIteration) && ~obj.edata.areAllLinear && any(F)
 
                 % starting loop time
                 loopTime = tic;
