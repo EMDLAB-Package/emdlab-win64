@@ -2315,7 +2315,7 @@ classdef emdlab_solvers_ms2d_tlcp < handle
         function [Br, Bt, t] = getBrBtOnCircle(obj, xc, yc, r, N)
 
             % set default value of N
-            if nargin < 5, N = 1000; end
+            if nargin < 5, N = 1001; end
             [Br, Bt, t] = obj.getFQrFQtOnCircle(xc, yc, r, N, 'BSmooth');
 
         end

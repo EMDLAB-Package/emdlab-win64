@@ -48,7 +48,7 @@ s.setMeshZoneInitialTemperature('z1', 0);
 
 % solve and plot results
 s.setSimulationStopTime(0.5);
-s.setSimulationTimeStep(0.0025);
+s.setSimulationTimeStep(0.02);
 s.solve;
 s.plotMeshZoneTemperatureVsTime('z1');
 fprintf('Tmin = %.4f\n', min(s.results.T));
@@ -59,3 +59,4 @@ fprintf('q_left = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_left));
 fprintf('q_right = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_right));
 fprintf('q_top = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_top));
 fprintf('q_bottom = %.4f\n', s.calculateNetHeatCrossingBoundaryEdges(idx_bottom));
+

@@ -44,10 +44,10 @@ classdef emdlab_g2d_db < handle
             obj.pyPath = replace(obj.pyPath, '\', '\\');
         end
 
-        %% point methods
-        % adding a new point to data base
-        % this function returns point index and point handle
+        %% point methods        
         function varargout = addPoint(obj, varargin)
+            % adding a new point to data base
+            % this function returns point index and point handle
 
             % check the varargin type
             if numel(varargin) == 2
@@ -173,6 +173,19 @@ classdef emdlab_g2d_db < handle
         function [x,y] = getPointCoordinates(obj, pIndex)
             x = obj.points(pIndex).x;
             y = obj.points(pIndex).y;
+        end
+
+        function setPointXCoordinate(obj, pIndex, newX)
+            obj.points(pIndex).x = newX;
+        end
+
+        function setPointYCoordinate(obj, pIndex, newY)
+            obj.points(pIndex).y = newY;
+        end
+
+        function setPointCoordinates(obj, pIndex, newX, newY)
+            obj.points(pIndex).x = newX;
+            obj.points(pIndex).y = newY;
         end
 
         function alignPointsAlongYAxis(obj, varargin)
@@ -403,6 +416,11 @@ classdef emdlab_g2d_db < handle
 
         end
 
+        function u = getUnitVectorP0P1(obj, p0Index, p1Index)
+            u = obj.points(p1Index).getVector - obj.points(p0Index).getVector;
+            u = u/norm(u);
+        end
+
         %% edge methods
         % adding a new segment to data base
         % this function returns edge index and edge handle
@@ -554,7 +572,9 @@ classdef emdlab_g2d_db < handle
 
             % get an instance of edge class
             edgeHandle = emdlab_g2d_edge;
+
             % set pointer class to arc
+            if nargin<5, direction = true; end
             edgeHandle.ptr = emdlab_g2d_arc(obj.points(p0Index),obj.points(p1Index),obj.points(p2Index), direction);
             obj.edges(end+1) = edgeHandle;
 
@@ -584,6 +604,7 @@ classdef emdlab_g2d_db < handle
             p1Index = obj.addPoint(x1,y1);
             p2Index = obj.addPoint(x2,y2);
             p3Index = obj.addPoint(x3,y3);
+            if nargin<8, direction = true; end
 
             if nargout == 0
                 obj.addArc(p1Index, p2Index, p3Index, direction);
@@ -598,10 +619,33 @@ classdef emdlab_g2d_db < handle
         end
 
         function varargout = addArcByCoordinatesCPA(obj, x1, y1, x2, y2, arcAngle)
+            % CPA: center -> point -> arc
 
             p1Index = obj.addPoint(x1,y1);
             p2Index = obj.addPoint(x2,y2);
             [x3,y3] = emdlab_g2d_rotatePointsXY(x2,y2,arcAngle,x1,y1);
+            p3Index = obj.addPoint(x3,y3);
+            direction = arcAngle > 0;
+
+            if nargout == 0
+                obj.addArc(p1Index, p2Index, p3Index, direction);
+            elseif nargout == 1
+                varargout{1} = obj.addArc(p1Index, p2Index, p3Index, direction);
+            elseif nargout == 2
+                [varargout{1},varargout{2}] = obj.addArc(p1Index, p2Index, p3Index, direction);
+            elseif nargout > 2
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
+        function varargout = addArcByCoordinatesCPA2(obj, x1, y1, xc, yc, arcAngle)
+            % CPA: center -> point -> arc2 -> arc is in both directions
+
+            p1Index = obj.addPoint(x1,y1);
+            [x2,y2] = emdlab_g2d_rotatePointsXY(xc,yc,-arcAngle/2,x1,y1);
+            p2Index = obj.addPoint(x2,y2);
+            [x3,y3] = emdlab_g2d_rotatePointsXY(xc,yc,arcAngle/2,x1,y1);
             p3Index = obj.addPoint(x3,y3);
             direction = arcAngle > 0;
 
@@ -1013,6 +1057,26 @@ classdef emdlab_g2d_db < handle
 
         function y = getEdgeLength(obj, eIndex)
             y = obj.edges(eIndex).ptr.getLength;
+        end
+
+        function varargout = addCenterRectangle(obj, x0, y0, w, h)
+
+            p1Index = obj.addPoint(x0-w/2,y0-h/2);
+            p2Index = obj.addPoint(x0+w/2,y0-h/2);
+            p3Index = obj.addPoint(x0+w/2,y0+h/2);
+            p4Index = obj.addPoint(x0-w/2,y0+h/2);
+
+            e1Index = obj.addSegment(p1Index, p2Index);
+            e2Index = obj.addSegment(p2Index, p3Index);
+            e3Index = obj.addSegment(p3Index, p4Index);
+            e4Index = obj.addSegment(p4Index, p1Index);
+
+            if nargout == 1
+                varargout{1} = [e1Index, e2Index, e3Index, e4Index];
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
         end
 
         %% edge edits
@@ -1570,7 +1634,6 @@ classdef emdlab_g2d_db < handle
 
         end
 
-
         function showFaces(obj)
 
             m = obj.generateMesh('mm');
@@ -2080,12 +2143,12 @@ classdef emdlab_g2d_db < handle
             % add faces
             for i = 1:numel(obj.faces)
 
-                tmp_str = num2str(obj.getLoopIndexByTag(obj.faces(i).loops(1).tag));
-                for j = 2:length(obj.faces(i).loops)
-                    tmp_str = [tmp_str , ', ' , num2str(obj.getLoopIndexByTag(obj.faces(i).loops(j).tag))];
+                tmp_str = strings(1,length(obj.faces(i).loops));
+                for j = 1:length(obj.faces(i).loops)
+                    tmp_str(j) = string(obj.getLoopIndexByTag(obj.faces(i).loops(j).tag));
                 end
 
-                fprintf(fid, 'Plane Surface(%d) = {%s};\n', i, tmp_str);
+                fprintf(fid, 'Plane Surface(%d) = {%s};\n', i, strjoin(tmp_str,','));
                 fprintf(fid, 'Physical Surface(%d) = {%d};\n', i, i);
 
             end
@@ -2609,7 +2672,7 @@ classdef emdlab_g2d_db < handle
             ym = yc1 + a*dy/d;
 
             % Tangent case → one point
-            if abs(h) < 1e-14
+            if abs(h) < 1e-6
                 xi = xm;
                 yi = ym;
                 return;

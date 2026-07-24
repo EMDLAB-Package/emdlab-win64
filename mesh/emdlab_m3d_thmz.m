@@ -1,124 +1,35 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % Tetrahedral mesh zone (3D element)
 
-classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
-
-    properties(SetAccess = private)
-
-        % mesh nodes
-        nodes (:,3) double;
-
-        % mesh connectivity list
-        cl (:,4) double;
-
-        % mesh elements: [facet1, facet2, facet3, facet4]
-        elements (:,4) double;
-
-        % unique facets: [node1, node2, node3]
-        facets (:,3) double;
-
-        % list of boundary facets
-        bfacets (:,1);
-
-        % unique edges: [node1, node2]
-        edges (:,2);
-
-        % list of boundary edges
-        bedges (:,1);
-
-        % Named Selections
-        nodeNamedSelections (1,1) struct;
-        edgeNamedSelections (1,1) struct;
-        facetNamedSelections (1,1) struct;
-
-    end
-
-    properties
-
-        % zone index
-        zi (1,1) double;
-
-        % local to global node index
-        l2g (:,1) double;
-
-        % material of zone
-        material char = 'air';
-
-        % mesh zone color
-        color = 'c';
-
-        % surface color transparency
-        transparency (1,1) double = 1;
-
-        % mesh zone properties: differs in differents solvers
-        props (1,1) struct;
-
-    end
-
-     properties (Access = private)
-
-        % element volume
-        ev
-
-        % mesh zone volume
-        volume (1,1) double;
-        
-        % Q
-        Q
-
-        % Weight matrix
-        Wm
-
-        % states
-        isDataSet (1,1) logical = false;
-        is_ev_Evaluated (1,1) logical = false;
-        is_volume_Evaluated (1,1) logical = false;
-        is_Wm_Evaluated (1,1) logical = false;
-        is_Q_Evaluated (1,1) logical = false;
-
-    end
-
-    properties (Dependent = true)
-        
-        % number of mesh zone nodes
-        Nn (1,1) double;
-
-        % number of mesh zone elements
-        Ne (1,1) double;
-        
-    end
+classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m3d_xmz
 
     methods
-        %% constructor and destructor
+        %% Constructor and Destructor
         function obj = emdlab_m3d_thmz(cl, nodes)
 
             if nargin < 2, error('Not enough input arguments.'); end
             if nargin > 2, error('Too many input arguments.'); end
+
             obj.nodes = nodes;
-            obj.cl = cl;
+
+            obj.cl = [cl, 4*ones(size(cl,1),1)];
             obj.setData;
 
         end
 
-        function y = get.Nn(obj)
-            y = size(obj.nodes,1);
-        end
-
-        function y = get.Ne(obj)
-            y = size(obj.cl,1);
-        end
-
         %% FEM preparation
-        function evalVolumeOfElements(obj)
-            if obj.is_ev_Evaluated, return; end
+        function calculateVolumeOfElements(obj)
+
             % x, y and z coordinate of points
             xp = obj.nodes(:,1);
             yp = obj.nodes(:,2);
             zp = obj.nodes(:,3);
+
             % point coordinate of each triangle nodes
             xp = xp(obj.cl');
             yp = yp(obj.cl');
             zp = zp(obj.cl');
+
             % calculation the volume of each tetrahedras
             obj.ev = xp(1,:).*(yp(2,:).*(zp(4,:)-zp(3,:))+...
                 yp(3,:).*(zp(2,:)-zp(4,:))+yp(4,:).*(zp(3,:)-zp(2,:))) +...
@@ -128,22 +39,20 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 yp(2,:).*(zp(1,:)-zp(4,:))+yp(4,:).*(zp(2,:)-zp(1,:))) +...
                 xp(4,:).*(yp(1,:).*(zp(2,:)-zp(3,:))+...
                 yp(2,:).*(zp(3,:)-zp(1,:))+yp(3,:).*(zp(1,:)-zp(2,:)));
+            
             obj.ev = abs(obj.ev)/6;
-            % change states
-            obj.is_ev_Evaluated = true;
+
         end
 
-        function evalVolume(obj)
-            if obj.is_volume_Evaluated, return; end
-            obj.evalVolumeOfElements;
+        function calculateMeshZoneVolume(obj)
+            
+            obj.calculateVolumeOfElements;
             obj.volume = sum(obj.ev);
-            % change states
-            obj.is_volume_Evaluated = true;
+            
         end
 
         %% topological functions
-        % setting needed data
-        function setdataForce(obj)
+        function setDataForce(obj)
             obj.isDataSet = false;
             obj.setData;
         end
@@ -205,25 +114,25 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.elements = [f1,f2,f3,f4];
             
             % evaluation of area of each elements
-            obj.evalVolumeOfElements;
-            obj.facetNamedSelections.('none') = find(obj.bfacets);
+            obj.calculateVolumeOfElements;
+            obj.calculateMeshZoneVolume;
             
             % change states
             obj.isDataSet = true;
 
         end
        
-        %% visiualization functions
+        %% Visiualization Functions
         function showm(obj)
+
             obj.setData;
-            f = GraphicWindow();
-            ax = axes(f);
+            [f,ax] = emdlab_r3d_mesh;
 
             f.Name = ['[Global Mesh][','Nn = ',num2str(obj.Nn),'][Ne = ',num2str(obj.Ne),']'];
-            patch('Faces',obj.facets(obj.bfacets,1:3),'Vertices',...
-                obj.nodes,'FaceColor',...
-                obj.color,'EdgeColor','k', 'parent', ax);
+            patch('Faces', obj.facets(obj.bfacets,1:3), 'Vertices', ...
+                obj.nodes, 'FaceColor', obj.color, 'EdgeColor', 'k', 'parent', ax);
             set(f, 'Visible', 'on');
+
         end
 
         function showg(obj)
@@ -256,84 +165,19 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             set(gcf,'HandleVisibility','off', 'Visible', 'on');
         end
 
-        function showwf(obj, color)
-            if nargin<2
-                color = 'c';
-            end
-            ah = setFigure(['[Global Mesh][','Nn = ',num2str(obj.Nn),'][Ne = ',num2str(obj.Ne),']'], true);
-            patch('Faces',obj.facets(obj.bfacets,1:3),'Vertices',...
-                obj.nodes,'FaceColor',...
-                color,'EdgeColor','w',...
-                'FaceAlpha',0.5, 'parent', ah);
-            set(gcf,'HandleVisibility','off', 'Visible', 'on');
-        end
+        function showfb(obj)
 
-        function shownf(obj, name)
-            name = obj.checkFacetNamedSelectionExistence(name);
-            axis off equal;
-            patch('Faces',obj.facets(obj.facetNamedSelections.(name),1:3),'Vertices',...
-                obj.nodes,'FaceColor',...
-                'c','EdgeColor','b',...
-                'FaceAlpha',1);
-            set(gca,'Clipping','off');
-            setFigure;
-        end
+            obj.setData;
+            [f,ax] = emdlab_r3d_mesh;
 
-        function shownfs(obj)
-            axis off equal;
-            hold all;
-            nfs = fieldnames(obj.facetNamedSelections);
-            for i = 1:numel(nfs)
-                tmp = rand(1, 3);
-                patch('Faces',obj.facets(obj.facetNamedSelections.(nfs{i}),1:3),'Vertices',...
-                    obj.nodes,'FaceColor',...
-                    tmp,'EdgeColor','k',...
-                    'FaceAlpha',1);
-            end
-            legend(nfs);
-            set(gca,'Clipping','off');
-            setFigure;
+            f.Name = ['[Global Mesh][','Nn = ',num2str(obj.Nn),'][Ne = ',num2str(obj.Ne),']'];
+            patch('Faces', obj.facets(obj.bfacets,1:3), 'Vertices', ...
+                obj.nodes, 'FaceColor', obj.color, 'EdgeColor', 'k', 'faceAlpha', 0.5, 'parent', ax);
+            set(f, 'Visible', 'on');
+
         end
         
-        %% Named Selections
-        % node
-        function name = checkNodeNamedSelectionExistence(obj,name)
-            name = rmspaces(name);
-            if ~isfield(obj.nodeNamedSelections,name)
-                error('Specified node named selection does not exist.');
-            end
-        end
-        function name = checkNodeNamedSelectionNonExistence(obj,name)
-            name = rmspaces(name);
-            if isfield(obj.nodeNamedSelections,name)
-                error('Specified node named selection already exist.');
-            end
-        end
-        function addNodeNamedSelection(obj, name, indices)
-            name = obj.checkNodeNamedSelectionNonExistence(name);
-            obj.nodeNamedSelections.(name) = indices;
-        end
-        % facet
-        function name = checkFacetNamedSelectionExistence(obj,name)
-            name = rmspaces(name);
-            if ~isfield(obj.facetNamedSelections,name)
-                error('Specified facet named selection does not exist.');
-            end
-        end
-        function name = checkFacetNamedSelectionNonExistence(obj,name)
-            name = rmspaces(name);
-            if isfield(obj.facetNamedSelections,name)
-                error('Specified facet named selection already exist.');
-            end
-        end
-        function addFacetNamedSelection(obj, name, indices)
-            name = obj.checkFacetNamedSelectionNonExistence(name);
-            obj.facetNamedSelections.(name) = indices;
-            obj.facetNamedSelections.('none') = setdiff(...
-                obj.facetNamedSelections.('none'),...
-                obj.facetNamedSelections.(name));
-        end
-        %% Tools Functions
+        %% Mesh Modifications
         function moveNodes(obj,MovTol)
             if nargin<2
                 MovTol = 1e-3;
@@ -361,46 +205,8 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 end
             end
         end
-        %% Index Finding
-        function y = getfbf(obj)
-            y = find(obj.bfacets);
-        end
-        function y = getfbn(obj)
-            y = obj.getfbf;
-            y = unique(y(:));
-        end
-        function y = getbnodes(obj)
-            % getting index of boundary nodes
-            y = obj.facets(obj.bfacets,:);
-            y = unique(y(:));
-        end
-        function y = getinodes(obj)
-            % getting index of inner nodes
-            y = obj.getbnodes;
-            y = setdiff((1:obj.Nn)',y);
-        end
-        function y = getNodeIndexOnPlane(obj, p0, n)
-            y = find(abs(obj.nodes*n'-p0*n') < obj.gleps);
-        end
-        function y = getNodeIndexOnHalfPlane(obj, p0, p1, p2)
-            y = obj.getNodeIndexOnPlane(p0, cross(p1, p2));
-            tmp = obj.nodes(y,:)*p1' >= 0;
-            y = y(tmp);
-        end
-        function y = getFacetIndexOnPlane(obj, varargin)
-            y = obj.getNodeIndexOnPlane(varargin{:});
-            y = ismember(obj.facets(:,1),y)&...
-                ismember(obj.facets(:,2),y)&ismember(obj.facets(:,3),y);
-            y = find(y);
-        end
-        function y = getFacetIndexOnHalfPlane(obj, varargin)
-            y = obj.getNodeIndexOnHalfPlane(varargin{:});
-            y = ismember(obj.facets(:,1),y)&...
-                ismember(obj.facets(:,2),y)&ismember(obj.facets(:,3),y);
-            y = find(y);
-        end
-
-        %% geometrical operations
+        
+        %% Geometrical Functions
         function y = getCenterOfElements(obj)
             % get center of elements
             y = (obj.nodes(obj.cl(:,1),:) + ...
@@ -411,14 +217,14 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         
         function y = getVolumeOfElements(obj)
             obj.setData;
-            obj.evalVolumeOfElements;
+            obj.calculateVolumeOfElements;
             y = obj.ev;
         end
         
         function y = getVolume(obj)
             obj.setData;
-            obj.evalVolumeOfElements;
-            obj.evalVolume;
+            obj.calculateVolumeOfElements;
+            obj.calculateMeshZoneVolume;
             y = obj.volume;
         end
         
@@ -429,7 +235,7 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             y = 0.5*sum(sqrt(sum(y.^2,2)));
         end
         
-        %% tranforms and copy generations
+        %% Tranforms & Copy
         function mirror(obj, p0, p1)
 
             % set default plane if p0 and p1 are not provided
@@ -456,7 +262,7 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             newObj = copy(obj);
             newObj.mirror(varargin{:});
             newObj.cl = newObj.cl(:,[1,3,2,4]);
-            newObj.makeFalse_isDataSetted;
+            newObj.clearSetDataFlag;
             newObj.setData;
         end
 
@@ -556,18 +362,6 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             newObj.shift(varargin{:});
         end
     
-    end
-
-    methods (Access = private)
-
-        function makeFalse_isDataSetted(obj)
-            obj.isDataSet = false;
-            obj.is_ev_Evaluated = false;
-            obj.is_volume_Evaluated = false;
-            obj.is_Wm_Evaluated = false;
-            obj.is_Q_Evaluated = false;
-        end
-
     end
 
 end

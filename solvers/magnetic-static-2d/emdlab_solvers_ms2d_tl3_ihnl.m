@@ -174,8 +174,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
 
             end
 
-            disp('Initialization of material and force data compeleted.')
-            toc, disp('-------------------------------------------------------');
+            disp('Initialization of material and force data compeleted.'); toc;
 
             % change states
             obj.isElementDataAssigned = true;
@@ -205,8 +204,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             Iindex = obj.m.cl(:, Iindex)';
             Jindex = obj.m.cl(:, Jindex)';
             K = sparse(Iindex, Jindex, obj.edata.MagneticReluctivity .* obj.m.mtcs.Ke);
-            disp('Construction of [K] and [F] compeleted.');
-            toc, disp('-------------------------------------------------------');
+            disp('Construction of [K] and [F] compeleted.'); toc;
             tic, disp('-------------------------------------------------------');
 
             % imposing boundary conditions on [K] and [F]
@@ -234,8 +232,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
                     [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, obj.m.Nn);
             end
 
-            disp('All boundary condition imposed.');
-            toc, disp('-------------------------------------------------------');
+            disp('All boundary condition are imposed.'); toc;
 
             % solving [K][U] = [F]
             tic, disp('-------------------------------------------------------');
@@ -248,8 +245,8 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
 
             obj.results.A = full(K \ F);
             obj.evalBe;
-            disp('initial geuss evaluated.')
-            toc, disp('-------------------------------------------------------');
+            disp('Initial geuss calculation completed.'); toc;
+
             if obj.edata.areAllLinear
                 obj.evalHe;
                 obj.evalBn;
@@ -409,8 +406,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             end
 
             obj.solverHistory.iterations = Iterations;
-            disp(['Number of total iterations = ', num2str(Iterations - 1)]);
-            toc, disp('-------------------------------------------------------');
+            disp(['Number of total iterations = ', num2str(Iterations - 1)]); toc;
 
             % update magnetic flux density
             obj.evalBe;

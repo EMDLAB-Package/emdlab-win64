@@ -1,29 +1,33 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% common properties for all 2d mesh zone classes
+% common properties for all 3d mesh zone classes
 
-classdef emdlab_m2d_xmz < handle
+classdef emdlab_m3d_xmz < handle
 
     properties
 
         % mesh nodes
-        nodes (:,2) double;
+        nodes (:,3) double;
 
         % mesh connectivity list
-        % [n1, n2, n3] -> for triangular mesh
-        % [n1, n2, n3, n4] -> for quadrilateral mesh
-        % [n1, n2, n3, 0 or n4, nEdges] -> for qt mesh
-        % [n1, n2, n3, ..., nEdges] -> for arbitrary mesh
+        % [n1, n2, n3, ..., nNodes]
+        % Nnodes == 4 => tetrahedral
+        % Nnodes == 8 => hexahedral
+        % Nnodes == 6 => prism
+        % Nnodes == 5 => pyramid
+        % Nnodes = x,y,z,... => mixed types
         cl (:,:) double;
 
-        % mesh elements
-        % mesh elements: [edge1, edge2, edge3] -> for triangular mesh
-        % mesh elements: [edge1, edge2, edge3, edge4] -> for quadrilateral mesh
-        % mesh elements: [edge1, edge2, edge3, 0 or edge4, nEdges] -> for qt mesh
-        % mesh elements: [edge1, edge2, edge3, ..., nEdges] -> for arbitrary mesh
+        % mesh elements: [facet1, facet2, facet3, ..., nFacets]
         elements (:,:) double;
 
+        % unique facets: [node1, node2, node3, ..., Nnodes]
+        facets (:,:) double;
+
+        % list of boundary facets
+        bfacets (:,1);
+
         % unique edges: [node1, node2]
-        edges (:,2) double;
+        edges (:,:);
 
         % list of boundary edges
         bedges (:,1);
@@ -52,26 +56,14 @@ classdef emdlab_m2d_xmz < handle
         % mesh zone orientation
         orientation = 'global';
 
-        % a vector containing area of elements
-        ea (:,1) double;
+        % a vector containing volume of elements
+        ev (:,1) double;
 
-        % mesh zone area
-        area (1,1) double;
+        % mesh zone volume
+        volume (1,1) double;
 
         % states
         isDataSet (1,1) logical = false;
-        isAreaOfElementsEvaluated (1,1) logical = false;
-        isMeshZoneAreaEvaluated (1,1) logical = false;
-
-        % Q
-        Q (1,:) double;
-
-        % Weight matrix
-        Wm
-
-        % states
-        is_Wm_Evaluated (1,1) logical = false;
-        is_Q_Evaluated (1,1) logical = false;
 
     end
 
@@ -82,6 +74,12 @@ classdef emdlab_m2d_xmz < handle
 
         % number of mesh zone elements
         Ne (1,1) double;
+
+        % number of mesh zone facets
+        Nf (1,1) double;
+
+        % number of mesh zone edges
+        Nedges (1,1) double;
 
     end
 
@@ -95,14 +93,18 @@ classdef emdlab_m2d_xmz < handle
             y = size(obj.cl, 1);
         end
 
+        function y = get.Nf(obj)
+            y = size(obj.facets, 1);
+        end
+
+        function y = get.Nedges(obj)
+            y = size(obj.edges, 1);
+        end
+
         %% Flag manipulations
         function clearSetDataFlag(obj)
 
             obj.isDataSet = false;
-            obj.isAreaOfElementsEvaluated = false;
-            obj.isMeshZoneAreaEvaluated = false;
-            obj.is_Wm_Evaluated = false;
-            obj.is_Q_Evaluated = false;
 
         end
 

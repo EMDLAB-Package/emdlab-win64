@@ -96,7 +96,7 @@ classdef emdlab_solvers_tt2d_tn < handle
 
             % default values
             obj.depth = 1;
-            %             obj.bcs = emdlab_bcs_scalarNodes('TL3');
+            obj.solverSettings.saveFieldData = false;
             obj.units = emdlab_phy_units;
 
         end
@@ -142,6 +142,12 @@ classdef emdlab_solvers_tt2d_tn < handle
             obj.m.mzs.(mzName).props.initialTemperature = value;
         end
 
+        function setInitialTemperatureOfAllMeshZones(obj, value)
+            mzNames = obj.m.getMeshZoneNames;
+            for mzName = mzNames
+                obj.m.mzs.(mzName).props.initialTemperature = value;
+            end
+        end
 
         function addmz(obj, mzName, mzValue)
 
@@ -180,6 +186,10 @@ classdef emdlab_solvers_tt2d_tn < handle
 
         function setSolverIndex(obj, value)
             obj.solverIndex = value;
+        end
+
+        function setSaveFieldData(obj, value)
+            obj.solverSettings.saveFieldData = value;
         end
 
         function assignElementData(obj)
@@ -288,8 +298,6 @@ classdef emdlab_solvers_tt2d_tn < handle
                     % calculation of conductances
                     resistances(i,j) = die/(kij*z*obj.m.el(i,j) * elm(i,j));
 
-                    
-
                 end
 
                 capacitances(i) = obj.edata.MassDensity(i) * obj.edata.HeatCapacity(i) * obj.m.gea(i) * z * obj.units.k_length^2;
@@ -346,6 +354,14 @@ classdef emdlab_solvers_tt2d_tn < handle
             end
             
             obj.results.T = T_old;
+            if obj.solverSettings.saveFieldData
+                obj.results.hT = zeros(obj.m.Ne, Nt);
+                obj.results.hTn = zeros(obj.m.Nn, Nt);
+                obj.results.hT(:,1) = T_old;
+                obj.evalTn;
+                obj.results.hTn(:,1) = obj.results.Tn;
+            end
+
 
             % loop over time
             for k = 2:Nt
@@ -400,6 +416,12 @@ classdef emdlab_solvers_tt2d_tn < handle
 
                 for mz = mzNames
                     obj.results.(mz).T(k,:) = [min(T_old), max(T_old), mean(T_old)];
+                end
+
+                if obj.solverSettings.saveFieldData
+                    obj.results.hT(:,k) = T_old;
+                    obj.evalTn;
+                    obj.results.hTn(:,k) = obj.results.Tn;
                 end
 
                 fprintf('simulation time step %.2e completed.\n', obj.simTime(k));
@@ -717,6 +739,44 @@ classdef emdlab_solvers_tt2d_tn < handle
 
         end
 
+        function varargout = plotAverageTemperatureAnimation(obj, N, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+            if nargin<2, N=10; end
+
+            plt = patch('faces', obj.m.cl, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.hT(:,1), ...
+                'FaceColor','flat', 'edgecolor', 'none');
+            colormap(jet(N));
+            cb = colorbar;
+            cb.FontName = 'Verdana';
+            cb.FontSize = 12;
+            cb.Label.String = 'Average Temperature [C]';
+            climits = clim; 
+            cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
+            cb.Ticks(1) = cb.Ticks(1) + 0.01;
+
+            index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
+            patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            for k = 2:length(obj.simTime)
+                plt.FaceVertexCData = obj.results.hT(:,k);
+                drawnow;
+                pause(0.1);
+            end
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
         function varargout = plotTemperature(obj, N, varargin)
 
             [f,ax] = emdlab_flib_fax(varargin{:});
@@ -766,6 +826,39 @@ classdef emdlab_solvers_tt2d_tn < handle
             climits = clim; 
             cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
             cb.Ticks(1) = cb.Ticks(1) + 0.01;
+
+            index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
+            patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+
+            zoom on;
+            axis(ax, 'off');
+            axis(ax, 'equal');
+            set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function varargout = plotTemperatureTn_K(obj, N, k, varargin)
+
+            [f,ax] = emdlab_flib_fax(varargin{:});
+            if nargin<2, N=10; end
+            obj.evalTn;
+
+            patch('faces', obj.m.cl, 'Vertices', obj.m.nodes, 'FaceVertexCData', obj.results.hTn(:,k), ...
+                'FaceColor','interp', 'edgecolor', 'none');
+            colormap(jet(N));
+            cb = colorbar;
+            cb.FontName = 'Verdana';
+            cb.FontSize = 12;
+            cb.Label.String = 'Temperature [C]';
+%             climits = clim; 
+%             cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
+%             cb.Ticks(1) = cb.Ticks(1) + 0.01;
 
             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...

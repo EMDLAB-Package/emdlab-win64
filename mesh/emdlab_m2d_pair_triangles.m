@@ -1,4 +1,4 @@
-function [quads, triLeft] = emdlab_m2d_pairTriangles(tcl, pts)
+function [quads, triLeft] = emdlab_m2d_pair_triangles(tcl, pts)
 % Pair adjacent triangles into quads using a geometric quality score.
 %
 % Inputs

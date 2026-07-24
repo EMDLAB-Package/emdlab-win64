@@ -201,9 +201,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             % check states
             if obj.isJITEvaluated, return; end
-            if obj.printFlag
-                tic, disp('-------------------------------------------------------');
-            end
+            timeHolder = obj.dispLine;
 
             % prerequisite
             obj.ggmesh(mzFlag);
@@ -226,10 +224,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             % change states
             obj.isJITEvaluated = true;
-            if obj.printFlag
-                disp('Evaluation of JIT completed.');
-                toc, disp('-------------------------------------------------------');
-            end
+            obj.dispMessage('Calculation of JIT completed.', timeHolder);
 
         end
 
@@ -276,7 +271,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.ggmesh(mzFlag);
             obj.evalJIT(mzFlag);
 
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
             if obj.isKeFe_TL3_Evaluated, return; end
 
             % calculation of stiffness matrix, mass matrix and force vector
@@ -297,8 +292,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             end
 
-            disp('Calculation of [Ke], [Me], and [Fe] completed.');
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('Calculation of [Ke], [Me], and [Fe] completed.', timeHolder);
 
             % change states
             obj.isKeMeFe_TL3_Evaluated = true;

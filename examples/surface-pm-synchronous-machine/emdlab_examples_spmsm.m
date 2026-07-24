@@ -83,4 +83,4 @@ s.solve;
 % visualize solution
 m.showmzs;
 f = s.plotBmagF(14, 'rotor', 'stator', 'magnet' + string(1:gv_p));
-s.plotBrBtOnCircle(0, 0, gv_ISD/2-gv_g/2, 1000);
+s.plotBrBtOnCircle(0, 0, gv_ISD/2-gv_g/2, 1001);

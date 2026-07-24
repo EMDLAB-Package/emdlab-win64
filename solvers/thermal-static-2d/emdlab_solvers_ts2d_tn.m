@@ -725,8 +725,7 @@ classdef emdlab_solvers_ts2d_tn < handle
             obj.m.showEdges(idx);
 
         end
-
-        % show center to edge connections
+        
         function varargout = plotThermalNetwork(obj, varargin)
 
             [f,ax] = emdlab_flib_fax(varargin{:});

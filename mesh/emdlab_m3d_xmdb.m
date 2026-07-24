@@ -1,18 +1,17 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% common properties for all mesh 2d mesh zone database classes
+% common properties for all 3d mesh zone database classes
 
-classdef emdlab_m2d_xmdb < handle
+classdef emdlab_m3d_xmdb < handle
 
     properties
 
         % mesh nodes: [x,y]
-        nodes (:,2) double;
+        nodes (:,3) double;
 
         % mesh connectivity list
         cl (:,:) double;
 
-        % mesh elements: [edge1, edge2, edge3, zone index] -> triangular mesh
-        % mesh elements: [edge1, edge2, edge3, edge4, zone index] -> quadrilateral mesh
+        % mesh elements
         elements (:,:) double;
 
         % unique edges (:,8): [node1, node2, zi1, zi2, ]
@@ -78,20 +77,6 @@ classdef emdlab_m2d_xmdb < handle
 
         function setPrintFlag(obj, newValue)
             obj.printFlag = newValue;
-        end
-
-        function timeHolder = dispLine(obj)
-            if obj.printFlag
-                disp('-------------------------------------------------------');
-            end
-            timeHolder = tic;
-        end
-
-        function dispMessage(obj, txt, timeHolder)
-            if obj.printFlag
-                disp(txt);
-                toc(timeHolder);
-            end
         end
 
         function ggmesh(~)

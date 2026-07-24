@@ -384,7 +384,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             
             if nargin < 3
                 z = repmat(z, obj.Nn, 1);
-                ttmz = TTMZPC(tmzpc_getExtrude(obj.cl, obj.elements, ...
+                ttmz = emdlab_m3d_thmz(tmzpc_getExtrude(obj.cl, obj.elements, ...
                     obj.Nn, Nz - 1), [repmat(obj.nodes, Nz, 1), z(:)]);
             else
                 stepAngle = skewAngle * (pi / 180) / (Nz - 1);

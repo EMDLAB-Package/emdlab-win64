@@ -1,5 +1,5 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% a two dimensional nonlinear magnetic-transient solver
+% a two-dimensional nonlinear magnetic-transient solver
 % nonlinear solver: Newton-Raphson
 % first order triangular mesh
 % triangular lagrangian elements: 3 points per element

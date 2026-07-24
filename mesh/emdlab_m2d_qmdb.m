@@ -145,6 +145,7 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.evalezi;
             obj.gea = zeros(1,obj.Ne);
             emdlab_m2d_qmdbc_evalgea(obj.cl, obj.nodes, obj.gea);
+            obj.gea = abs(obj.gea);
 
             % change states
             obj.isGlobalMeshGenerated = true;
