@@ -1,84 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % Hexahedral mesh zone (3D element)
 
-classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
-
-    properties(SetAccess = private)
-
-        % mesh nodes
-        nodes (:,3) double;
-
-        % mesh connectivity list
-        cl (:,8) double;
-
-        % mesh elements: [facet1, facet2, facet3, facet4, facet5, facet6]
-        elements (:,6) double;
-
-        % unique facets: [node1, node2, node3, node4]
-        facets (:,4) double;
-
-        % list of boundary facets
-        bfacets (:,1);
-
-        % unique edges: [node1, node2]
-        edges (:,2);
-
-        % list of boundary edges
-        bedges (:,1);
-
-        % Named Selections
-        nodeNamedSelections (1,1) struct;
-        edgeNamedSelections (1,1) struct;
-        facetNamedSelections (1,1) struct;
-
-    end
-
-    properties
-
-        % zone index
-        zi (1,1) double;
-
-        % local to global node index
-        l2g (:,1) double;
-
-        % material of zone
-        material char = 'air';
-
-        % mesh zone color
-        color = 'c';
-
-        % surface color transparency
-        transparency (1,1) double = 1;
-
-        % mesh zone properties: differs in differents solvers
-        props (1,1) struct;
-
-    end
-
-     properties (Access = private)
-
-        % a vector containing volume of elements
-        ev (:,1) double;
-
-        % mesh zone volume
-        volume (1,1) double;
-
-        % states
-        isDataSet (1,1) logical = false;
-        isVolumeOfElementsEvaluated (1,1) logical = false;
-        isMeshZoneVolumeEvaluated (1,1) logical = false;
-
-    end
-
-    properties (Dependent = true)
-        
-        % number of mesh zone nodes
-        Nn (1,1) double;
-
-        % number of mesh zone elements
-        Ne (1,1) double;
-        
-    end
+classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m3d_xmz
 
     methods
         %% Constructor and Destructor
@@ -92,18 +15,8 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
-        function y = get.Nn(obj)
-            y = size(obj.nodes,1);
-        end
-
-        function y = get.Ne(obj)
-            y = size(obj.cl,1);
-        end
-
         %% FEM preparation
         function evalVolumeOfElements(obj)
-
-            if obj.isVolumeOfElementsEvaluated, return; end
 
             % x, y and z coordinate of points
             xp = obj.nodes(:,1);
@@ -126,19 +39,12 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 yp(2,:).*(zp(3,:)-zp(1,:))+yp(3,:).*(zp(1,:)-zp(2,:)));
             obj.ev = abs(obj.ev)/6;
 
-            % change states
-            obj.isVolumeOfElementsEvaluated = true;
-
         end
 
         function evalVolume(obj)
 
-            if obj.isMeshZoneVolumeEvaluated, return; end
             obj.evalVolumeOfElements;
             obj.volume = sum(obj.ev);
-
-            % change states
-            obj.isMeshZoneVolumeEvaluated = true;
 
         end
 
@@ -207,6 +113,10 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                 ic(4*ne+1:5*ne), ...
                 ic(5*ne+1:6*ne)
                 ];
+
+            % evaluation of area of each elements
+            obj.evalVolumeOfElements;
+            obj.evalVolume;
 
             obj.isDataSet = true;
             

@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % 2D quadrilateral mesh data base class
 
-classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp & emdlab_m2d_xmdb
+classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmdb
 
     properties (Dependent = true)
 

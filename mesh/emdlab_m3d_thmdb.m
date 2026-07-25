@@ -1,58 +1,9 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % tetrahedral mesh data base
 
-classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp
-
-    properties (SetAccess = private)
-
-        % mesh nodes: [x,y,z]
-        nodes (:,3) double;
-
-        % mesh connectivity list
-        cl (:,:) double;
-
-        % mesh elements: [facet1, facet2, facet3, facet4, zone index]
-        elements (:,5) double;
-
-        % unique edges (:,8): [index of node1, index of node2, ]
-        edges
-
-        % Unique Mesh Facets
-        facets
-
-        % Boundary Facets
-        bfacets
-
-        % jacobian inverse transpose
-        JIT (9,:) double;
-
-        % element zone index
-        ezi (:,:) logical;
-
-        % global elements volume
-        gev (1,:) double;
-
-        % auxiliary stored matricies
-        mtcs (1,1) struct;
-
-        % named selections
-        facetNamedSelections (1,1) struct;
-
-        % flag to print the elapsed times
-        printFlag (1,1) logical = true;
-
-        % element type
-        etype (1,:) char = 'TTL4';
-
-    end
+classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m3d_xmdb
 
     properties (Dependent = true)
-
-        % Number of nodes
-        Nn (1,1) double;
-
-        % Number of elements
-        Ne (1,1) double;
 
         % flags for element type
         isTTL4 (1,1) logical;
@@ -71,22 +22,10 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
     end
 
     methods
-        %% constructor and destructor
+        %% Constructor and Destructor
         function obj = emdlab_m3d_thmdb(varargin)
             % add default material
             obj.addMaterial('air');
-        end
-
-        function y = get.Nn(obj)
-            y = size(obj.nodes, 1);
-        end
-
-        function y = get.Ne(obj)
-            y = size(obj.cl, 1);
-        end
-
-        function setPrintFlag(obj, newValue)
-            obj.printFlag = newValue;
         end
 
         function delete(obj)
@@ -99,8 +38,40 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
         end
 
-        function y = getMeshZoneNames(obj)
-            y = string(fieldnames(obj.mzs))';
+        function addMeshZone(obj, varargin)
+
+            % you can pass an <emdlab_m3d_thmz> class without name
+            if nargin == 2
+
+                if ~isa(varargin{1}, 'emdlab_m3d_thmz')
+                    error('Mesh zone class must be <emdlab_m3d_thmz>.');
+                end
+                mzName = obj.getDefaultMeshZoneName;
+                mzptr = varargin{1};
+
+                % you can pass an <emdlab_m3d_thmz> mesh zone with specified name
+            elseif nargin == 3
+
+                mzName = obj.checkMeshZoneNonExistence(varargin{1});
+                if ~isa(varargin{2}, 'emdlab_m3d_thmz')
+                    error('Mesh zone class must be <emdlab_m3d_thmz>.');
+                end
+                mzptr = varargin{2};
+
+            else
+                error('Wrong number of arguments.');
+            end
+
+            % adding new mesh zone
+            obj.mzs.(mzName) = mzptr;
+
+
+            %             obj.mzs.(mzName).material = 'air';
+            %             obj.mzs.(mzName).color = rand(1,3);
+
+            % changing states
+            obj.clearGlobalMeshGenerationFlag;
+
         end
 
         function y = get.isTTL4(obj)
@@ -111,9 +82,9 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             y = strcmpi(obj.etype, 'TTL10');
         end
 
-        %% FEM preparation
-        % generate global mesh
+        %% Preparation Functions For Solver
         function ggmesh(obj, mzFlag)
+            % generate global mesh
 
             if nargin<2, mzFlag = false; end
 
@@ -162,7 +133,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 nindex = nindex + mzptr.Nn;
             end
 
-            obj.setdata;
+            obj.setData;
             obj.evalezi;
 
             if mzFlag
@@ -200,9 +171,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
             % check states
             if obj.isJITEvaluated, return; end
-            if obj.printFlag
-                tic, disp('-------------------------------------------------------');
-            end
+            timeHolder = obj.dispLine;
 
             % prerequisite
             obj.ggmesh(mzFlag);
@@ -224,10 +193,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
             % change states
             obj.isJITEvaluated = true;
-            if obj.printFlag
-                disp('Evaluation of JIT completed.');
-                toc, disp('-------------------------------------------------------');
-            end
+            obj.dispMessage('Evaluation of JIT completed.', timeHolder);
 
         end
 
@@ -617,37 +583,21 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             toc
         end
 
-        function set.etype(obj, etype)
-
-            if ~ ischar(etype)
-                error('Element type must be char.');
-            end
-
-            etype = upper(etype);
-
-            if ~ ismember(etype, {'TTL4', 'TTL8'})
-                error('Element type does not defined.');
-            end
-
-            obj.etype = etype;
-        end
-
         %% Topological Functions
-        % setting needed data
-        function obj = setdata(obj)
-            % first facet of each triangle
+        function obj = setData(obj)
+
+            % tetrahedral facets
             f1 = obj.cl(:, [1, 2, 3]);
-            % second facet of each triangle
             f2 = obj.cl(:, [2, 4, 3]);
-            % third facet of each triangle
             f3 = obj.cl(:, [3, 4, 1]);
-            % forth facet of each triangle
             f4 = obj.cl(:, [1, 4, 2]);
+
             % sorting for lower index
             [f1, s1] = sort(f1, 2);
             [f2, s2] = sort(f2, 2);
             [f3, s3] = sort(f3, 2);
             [f4, s4] = sort(f4, 2);
+
             % specefying changed facet index
             s1 = ((s1(:, 1) == 1) & (s1(:, 2) == 3)) | ...
                 ((s1(:, 1) == 3) & (s1(:, 2) == 2)) | ...
@@ -661,32 +611,61 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             s4 = ((s4(:, 1) == 1) & (s4(:, 2) == 3)) | ...
                 ((s4(:, 1) == 3) & (s4(:, 2) == 2)) | ...
                 ((s4(:, 1) == 2) & (s4(:, 2) == 1));
+
             % unification of facets
             [obj.facets, ~, ic] = unique([f1; f2; f3; f4], 'rows');
+
             % getting number of elements
             ne = obj.Ne;
+
             % getting index of facets corresponding to each elements
             f1 = ic(1:ne);
             f2 = ic(1 + ne:2 * ne);
             f3 = ic(1 + 2 * ne:3 * ne);
             f4 = ic(1 + 3 * ne:4 * ne);
-            % specefying boundary facets
-            obj.bfacets = sparse([f1, f2, f3, f4], ones(4 * ne, 1), ones(4 * ne, 1));
-            obj.bfacets = full(obj.bfacets == 1);
+
             % specefying trace direction
             f1(s1) = -f1(s1);
             f2(s2) = -f2(s2);
             f3(s3) = -f3(s3);
             f4(s4) = -f4(s4);
+
             % element matrix
             obj.elements(:, 1:4) = [f1, f2, f3, f4];
-            % edge element
-            obj.facets = [obj.facets, zeros(size(obj.facets, 1), 2)];
-            ttmdbc_evalfe(obj.facets, obj.elements);
+
+            % calculate facet areas & centers
+            p12 = obj.nodes(obj.facets(:,2),:) - obj.nodes(obj.facets(:,1),:);
+            p13 = obj.nodes(obj.facets(:,3),:) - obj.nodes(obj.facets(:,1),:);
+            obj.facetNormal = cross(p12,p13);
+            obj.facetArea = 0.5 * vecnorm(obj.facetNormal,2,2);
+            obj.facetNormal = obj.facetNormal ./ (2 * obj.facetArea);
+            obj.fa = obj.facetArea(abs(obj.elements(:,1:4)));
+            obj.facetCenter = (obj.nodes(obj.facets(:,1),:) + obj.nodes(obj.facets(:,2),:) + obj.nodes(obj.facets(:,3),:))/3;
+            obj.xfc = obj.facetCenter(abs(obj.elements(:,1:4)),1);
+            obj.yfc = obj.facetCenter(abs(obj.elements(:,1:4)),2);
+            obj.zfc = obj.facetCenter(abs(obj.elements(:,1:4)),3);
+
+            % calculate element centers
+            obj.elementCenter = (obj.nodes(obj.cl(:,1),:) + obj.nodes(obj.cl(:,2),:) + obj.nodes(obj.cl(:,3),:) + obj.nodes(obj.cl(:,4),:))/4;
+
+            % set nbs & facets
+            obj.nbs = zeros(obj.Ne,4);
+            obj.facets = [obj.facets, zeros(size(obj.facets,1), 6)];
+            emdlab_m3d_thmdbc_evalfe(obj.facets, obj.elements, obj.nbs);
             obj.facetNamedSelections.('none') = find(obj.bfacets);
+
+            % find boundary facets
+            obj.bfacets = bitor(obj.facets(:,4) == 0, obj.facets(:,5) == 0);
+
+            % last element of cl refers to mesh element type
+            obj.cl(:,end+1) = 4;
+
+            % last element of elements matrix refers to number of facets
+            obj.elements(:,end+1) = 4;
+
         end
 
-        %% mesh visiualization
+        %% Mesh Visiualization
         function varargout = showwf(obj)
             obj.ggmesh;
 
@@ -694,8 +673,6 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             f.Name = 'Wire Frame Mesh';
             h = guihandles(f);
             delete(h.bg);
-
-
 
             index = obj.facets(:, 4) ~= obj.facets(:, 5);
             patch('Faces', obj.facets(index, 1:3), 'Vertices', ...
@@ -710,79 +687,6 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 error('Too many output argument.');
             end
 
-
-        end
-
-        function varargout = showfb(obj)
-            obj.ggmesh;
-
-
-
-            f = GraphicWindow();
-            %             f.Name = ['[Number of Mesh Zones: ', num2str(numel(mzNames)), ']'];
-            h = guihandles(f);
-
-            patch('Faces', obj.facets(obj.bfacets, 1:3), 'Vertices', obj.nodes, ...
-                'FaceColor', 'b', 'EdgeColor', 'k', ...
-                'FaceAlpha', 0.1, 'parent', h.va);
-            set(f, 'Visible', 'on');
-
-            if nargout == 1
-                varargout{1} = f;
-            elseif nargout > 1
-                error('Too many output argument.');
-            end
-
-        end
-
-        function f = showm(obj)
-            f = emdlab_r3d_geometry();
-            f.Name = 'Global Mesh';
-            h = guihandles(f);
-            mzNames = fieldnames(obj.mzs);
-
-            for i = 1:numel(mzNames)
-                mzptr = obj.mzs.(mzNames{i});
-                mzptr.setData;
-
-                if isequal(mzptr.color, 'none')
-                    edgeColor = 'none';
-                else
-                    edgeColor = [0.1, 0.1, 0.1];
-                end
-
-                patch(h.va, 'Faces', mzptr.facets(mzptr.bfacets, :), ...
-                    'Vertices', mzptr.nodes, 'FaceColor', ...
-                    'c', 'EdgeColor', edgeColor, ...
-                    'FaceAlpha', 0.8, 'tag', mzNames{i}, 'ButtonDownFcn', @selectPatchCallback);
-            end
-
-            set(f, 'Visible', 'on');
-        end
-
-        function showmzs(obj)
-            mzNames = fieldnames(obj.mzs);
-            f = emdlab_r3d_geometry();
-            f.Name = ['[Number of Mesh Zones: ', num2str(numel(mzNames)), ']'];
-            h = guihandles(f);
-
-            for i = 1:numel(mzNames)
-                mzptr = obj.mzs.(mzNames{i});
-                mzptr.setData;
-
-                if isequal(mzptr.color, 'none')
-                    edgeColor = 'none';
-                else
-                    edgeColor = [0.1, 0.1, 0.1];
-                end
-
-                patch(h.va, 'Faces', mzptr.facets(mzptr.bfacets, :), ...
-                    'Vertices', mzptr.nodes, 'FaceColor', ...
-                    mzptr.color, 'EdgeColor', edgeColor, ...
-                    'FaceAlpha', mzptr.transparency, 'tag', mzNames{i});
-            end
-
-            set(f, 'Visible', 'on');
         end
 
         function showmz(obj, mzName)
@@ -805,31 +709,6 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 mzptr.color, 'EdgeColor', [0.1, 0.1, 0.1], ...
                 'Parent', a, 'FaceAlpha', 1);
             set(gcf, 'HandleVisibility', 'off', 'Visible', 'on');
-        end
-
-        function showg(obj)
-            mzNames = fieldnames(obj.mzs);
-            f = GraphicWindow();
-            f.Name = ['[Number of Mesh Zones: ', num2str(numel(mzNames)), ']'];
-            h = guihandles(f);
-
-            for i = 1:numel(mzNames)
-                mzptr = obj.mzs.(mzNames{i});
-                mzptr.setdata;
-
-                if isequal(mzptr.color, 'none')
-                    edgeColor = 'none';
-                else
-                    edgeColor = [0.1, 0.1, 0.1];
-                end
-                
-                patch(h.va, 'Faces', mzptr.facets(mzptr.bfacets, :), ...
-                    'Vertices', mzptr.nodes, 'FaceColor', ...
-                    mzptr.color, 'EdgeColor', mzptr.color, ...
-                    'FaceAlpha', mzptr.transparency, 'tag', mzNames{i});
-            end
-
-            set(f, 'Visible', 'on');
         end
 
         function showmzss(obj)
@@ -915,7 +794,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
         end
 
-         %% tools: copy and transform
+        %% tools: copy and transform
         % copy and transform
         function copyMirrorMeshZone(obj, nmzName, mzName, varargin)
             mzName = obj.checkMeshZoneExistence(mzName);
@@ -1000,10 +879,10 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 error('You have to specify one mesh zone at least.');
             end
 
-            % find total number of mesh zones need to be joined            
+            % find total number of mesh zones need to be joined
             for i = 1:Nmzs
                 mzNames(i) = obj.checkMeshZoneExistence(mzNames(i));
-            end            
+            end
 
             % store number of nodes and mesh zones of each element
             Nn_tmp = zeros(1, Nmzs);
@@ -1032,7 +911,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
             % get material and color of first mesh zone
             material = obj.mzs.(mzNames(1)).material;
-            color = obj.mzs.(mzNames(1)).color; 
+            color = obj.mzs.(mzNames(1)).color;
             transparency = obj.mzs.(mzNames(1)).transparency;
 
             % removing old mesh zones
@@ -1046,7 +925,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             % adding new mz
             obj.mzs.(newMeshZoneName) = emdlab_m3d_thmz(e_nmz, n_nmz);
             obj.mzs.(newMeshZoneName).material = material;
-            obj.mzs.(newMeshZoneName).color = color;  
+            obj.mzs.(newMeshZoneName).color = color;
             obj.mzs.(newMeshZoneName).transparency = transparency;
 
         end
@@ -1055,18 +934,49 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             joinMeshZones(varargin{:});
         end
 
-        function getQuality(obj)
-            obj.ggmesh;
-            % edges length
-            el = sqrt(sum((obj.nodes(obj.edges(:, 1), :) - ...
-                obj.nodes(obj.edges(:, 2), :)).^2, 2));
-            b1 = el(abs(obj.elements(:, 1)));
-            b2 = el(abs(obj.elements(:, 2)));
-            b3 = el(abs(obj.elements(:, 3)));
-            % mesh quality
-            y = ((b1 + b2 - b3) .* (b1 - b2 + b3) .* (-b1 + b2 + b3)) ./ (b1 .* b2 .* b3);
-            fprintf('Average Quality = %f\n', mean(y));
-            fprintf('Minimum Quality = %f\n', min(y));
+        function quality = getQuality(obj)
+            % getQuality: Computes the quality of each tetrahedron in the mesh.
+            % Returns a vector 'quality' of size (num_tets x 1) where 1.0 is perfect.
+
+            % Extract vertex indices for all tetrahedra
+            p1 = obj.cl(:, 1);
+            p2 = obj.cl(:, 2);
+            p3 = obj.cl(:, 3);
+            p4 = obj.cl(:, 4);
+
+            % Get coordinates of the four vertices
+            v1 = obj.nodes(p1, :);
+            v2 = obj.nodes(p2, :);
+            v3 = obj.nodes(p3, :);
+            v4 = obj.nodes(p4, :);
+
+            % Step 1: Compute edge vectors
+            e1 = v2 - v1;
+            e2 = v3 - v1;
+            e3 = v4 - v1;
+            e4 = v3 - v2;
+            e5 = v4 - v2;
+            e6 = v4 - v3;
+
+            % Step 2: Compute Volumes (using scalar triple product)
+            % Volume = |(e1 x e2) . e3| / 6
+            cp = cross(e1, e2, 2);
+            vol = abs(sum(cp .* e3, 2)) / 6.0;
+
+            % Step 3: Compute sum of squares of edge lengths
+            % This is used for the Normalized Volume-to-Edge length ratio
+            sum_L_sq = sum(e1.^2, 2) + sum(e2.^2, 2) + sum(e3.^2, 2) + ...
+                sum(e4.^2, 2) + sum(e5.^2, 2) + sum(e6.^2, 2);
+
+            % Step 4: Calculate Normalized Quality (0 to 1)
+            % For a regular tetrahedron, Vol = (L^3) / (6 * sqrt(2))
+            % The constant 72*sqrt(3) normalizes the result so equilateral tet = 1.0
+            quality = (72 * sqrt(3) * vol) ./ (sum_L_sq.^(1.5));
+
+            % Handle potential division by zero for degenerate elements
+            quality(isnan(quality)) = 0;
+
+            quality = mean(quality);
         end
 
         function gq(varargin)
@@ -1239,7 +1149,7 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             end
 
             % change states
-            obj.makeFalse_isGlobalMeshGenerated;
+            obj.clearGlobalMeshGenerationFlag;
 
         end
 
@@ -1263,8 +1173,8 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             elseif nargout > 1, error('Too many output arguments.'); end
         end
 
-        %% flag functions
-        function makeFalse_isGlobalMeshGenerated(obj)
+        %% Flag Functions
+        function clearGlobalMeshGenerationFlag(obj)
             obj.isGlobalMeshGenerated = false;
             obj.isJITEvaluated = false;
             obj.isKeMeFe_TTL4_Evaluated = false;

@@ -100,7 +100,9 @@ classdef emdlab_g3d_db < handle
             fid = fopen("C:\emdlab-win64\tmp\emdlab_gmsh_geoFile.geo", 'a');
             fprintf(fid, "Extrude {0, 0, %.16f} {Surface{%s};}\n", z2-z1, join(string(1:numel(g.faces)),','));            
             fprintf(fid, "Translate {0, 0, %.16f} {Volume{%d};}\n", z1, index);
-            fprintf(fid, "Recursive Delete { Volume{%s};}\n", join(string(setdiff(1:numel(g.faces), index)),','));
+            if numel(g.faces)>1
+                fprintf(fid, "Recursive Delete { Volume{%s};}\n", join(string(setdiff(1:numel(g.faces), index)),','));
+            end
             fprintf(fid, 'Coherence;\n');            
             fclose(fid);
 

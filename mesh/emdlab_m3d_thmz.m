@@ -11,8 +11,7 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             if nargin > 2, error('Too many input arguments.'); end
 
             obj.nodes = nodes;
-
-            obj.cl = [cl, 4*ones(size(cl,1),1)];
+            obj.cl = cl;
             obj.setData;
 
         end
@@ -206,6 +205,102 @@ classdef emdlab_m3d_thmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
         end
         
+        function obj = laplacianSmoothTetMesh(obj, num_iters, lambda)
+    % laplacianSmoothTetMesh: Iterative Laplacian smoothing for 3D tetrahedra
+    % Usage: obj = obj.laplacianSmoothTetMesh(5, 0.5);
+
+    if nargin < 2, num_iters = 5; end
+    if nargin < 3, lambda = 0.5; end
+
+    nodes = obj.nodes;
+    tets = obj.cl;
+    num_nodes = size(nodes, 1);
+    num_tets = size(tets, 1);
+
+    % Step 1: Identify boundary nodes to freeze them
+    % A face is a boundary face if it is shared by only 1 tetrahedron.
+    all_faces = [tets(:, [1,2,3]); tets(:, [1,2,4]); tets(:, [1,3,4]); tets(:, [2,3,4])];
+    all_faces = sort(all_faces, 2); % Sort indices to match orientation-independently
+    
+    % Group identical faces to find unique ones
+    [unique_faces, ~, ic] = unique(all_faces, 'rows');
+    face_counts = accumarray(ic, 1);
+    boundary_faces = unique_faces(face_counts == 1, :);
+    
+    % Boundary nodes are those belonging to boundary faces
+    is_boundary = false(num_nodes, 1);
+    is_boundary(unique(boundary_faces(:))) = true;
+    internal_nodes = find(~is_boundary);
+
+    % Step 2: Build Node-to-Node Adjacency using a sparse matrix
+    edges = [tets(:, [1,2]); tets(:, [1,3]); tets(:, [1,4]); ...
+             tets(:, [2,3]); tets(:, [2,4]); tets(:, [3,4])];
+    
+    adj = sparse([edges(:,1); edges(:,2)], [edges(:,2); edges(:,1)], 1, num_nodes, num_nodes);
+    adj = double(adj > 0); % Binary adjacency matrix
+
+    % Step 3: Build Node-to-Tetrahedron mapping for local volume validation
+    node_tets = cell(num_nodes, 1);
+    for t = 1:num_tets
+        for v = 1:4
+            node_tets{tets(t, v)} = [node_tets{tets(t, v)}, t];
+        end
+    end
+
+    % Step 4: Iterative Smoothing loop
+    for iter = 1:num_iters
+        nodes_new = nodes;
+        
+        for i = internal_nodes'
+            % Get connected neighbour nodes
+            neighbours = find(adj(i, :));
+            if isempty(neighbours), continue; end
+            
+            % Geometric centroid of neighbours
+            centroid = mean(nodes(neighbours, :), 1);
+            
+            % Proposed update step
+            delta = centroid - nodes(i, :);
+            proposed_pos = nodes(i, :) + lambda * delta;
+            
+            % Validate movement against local element inversion (negative volume)
+            connected_tets = node_tets{i};
+            is_valid_move = true;
+            
+            for t = connected_tets
+                tet_nodes = tets(t, :);
+                % Retrieve current node coordinates of this tetrahedron
+                coords = nodes(tet_nodes, :);
+                % Substitute proposed coordinates for the active node
+                coords(tet_nodes == i, :) = proposed_pos;
+                
+                % Compute volume of the modified tet
+                % Volume = det([A-D; B-D; C-D]) / 6
+                vol = det([coords(1,:) - coords(4,:); ...
+                           coords(2,:) - coords(4,:); ...
+                           coords(3,:) - coords(4,:)]) / 6.0;
+                
+                % Prevent flat/flipped elements (allow threshold headroom)
+                if vol <= 1e-10
+                    is_valid_move = false;
+                    break;
+                end
+            end
+            
+            % Commit update if valid
+            if is_valid_move
+                nodes_new(i, :) = proposed_pos;
+            end
+        end
+        
+        % Update coordinates for next iteration
+        nodes = nodes_new;
+    end
+
+    % Write back smoothed nodes to the object
+    obj.nodes = nodes;
+end
+
         %% Geometrical Functions
         function y = getCenterOfElements(obj)
             % get center of elements

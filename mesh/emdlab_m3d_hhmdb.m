@@ -1,80 +1,13 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % Hexahedral mesh data base (3D element)
 
-classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp
-
-    properties (SetAccess = private)
-
-        % mesh nodes: [x,y,z]
-        nodes (:,3) double;
-
-        % mesh connectivity list
-        cl (:,:) double;
-
-        % mesh elements: [facet1, facet2, facet3, facet4, facet5, facet6, zone index]
-        elements (:,7) double;
-
-        % unique facets: [node1, node2, node3, node4]
-        facets;
-
-        % list of boundary facets
-        bfacets;
-
-        % edge length
-        facetArea (:,1) double;
-        fa (:,6) double;
-        xfc (:,1) double;
-        yfc (:,1) double;
-        zfc (:,1) double;
-        facetCenter (:,3) double;
-
-        % neighborhood elements
-        nbs (:,6) double;
-
-        % jacobian inverse transpose
-        JIT (9,:) double;
-
-        % element zone index
-        ezi (:,:) logical;
-
-        % global elements volume
-        gev (1,:) double;
-
-        % auxiliary stored matricies
-        mtcs (1,1) struct;
-
-        % named selections
-        facetNamedSelections (1,1) struct;
-
-        % flag to print the elapsed times
-        printFlag (1,1) logical = true;
-
-        % element type
-        etype (1,:) char = 'TTL4';
-
-    end
+classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m3d_xmdb
 
     properties (Dependent = true)
-
-        % Number of nodes
-        Nn (1,1) double;
-
-        % Number of elements
-        Ne (1,1) double;
 
         % flags for element type
         isTTL4 (1,1) logical;
         isTTL10 (1,1) logical;
-
-    end
-
-    properties (Access = private)
-
-        % states
-        isd2ElementsGenerated (1,1) logical = false;
-        isd3ElementsGenerated (1,1) logical = false;
-        isJITEvaluated = false;
-        isKeMeFe_TTL4_Evaluated (1,1) logical = false;
 
     end
 
@@ -116,18 +49,6 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             % changing states
             %             obj.makeFalse_isGlobalMeshGenerated;
 
-        end
-
-        function y = get.Nn(obj)
-            y = size(obj.nodes, 1);
-        end
-
-        function y = get.Ne(obj)
-            y = size(obj.cl, 1);
-        end
-
-        function setPrintFlag(obj, newValue)
-            obj.printFlag = newValue;
         end
 
         function delete(obj)
@@ -229,7 +150,7 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             obj.ezi = false(obj.Ne, obj.Nmzs);
 
             for i = 1:obj.Nmzs
-                obj.ezi(:, i) = obj.elements(:, 5) == i;
+                obj.ezi(:, i) = obj.elements(:, 7) == i;
             end
 
         end
@@ -658,23 +579,7 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             toc
         end
 
-        function set.etype(obj, etype)
-
-            if ~ ischar(etype)
-                error('Element type must be char.');
-            end
-
-            etype = upper(etype);
-
-            if ~ ismember(etype, {'TTL4', 'TTL8'})
-                error('Element type does not defined.');
-            end
-
-            obj.etype = etype;
-        end
-
         %% Topological Functions
-        % setting needed data
         function obj = setData(obj)
 
             % Hex faces
@@ -716,10 +621,6 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 ic(5*ne+1:6*ne)
                 ];
 
-            % specefying boundary facets
-            obj.bfacets = sparse(obj.elements(:,1:6),ones(6*ne,1),ones(6*ne,1));
-            obj.bfacets = full(obj.bfacets == 1);
-
             ic(s) = -ic(s);
 
             % Face index per element
@@ -736,6 +637,8 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             p12 = obj.nodes(obj.facets(:,2),:) - obj.nodes(obj.facets(:,1),:);
             p13 = obj.nodes(obj.facets(:,3),:) - obj.nodes(obj.facets(:,1),:);
             p14 = obj.nodes(obj.facets(:,4),:) - obj.nodes(obj.facets(:,1),:);
+            obj.facetNormal = 0.5*(cross(p12,p13) + cross(p13,p14));
+            obj.facetNormal = obj.facetNormal ./ vecnorm(obj.facetNormal,2,2);
             obj.facetArea = 0.5*(vecnorm(cross(p12,p13),2,2) + vecnorm(cross(p13,p14),2,2));
             obj.fa = obj.facetArea(abs(obj.elements(:,1:6))); 
             obj.facetCenter = (obj.nodes(obj.facets(:,1),:)+obj.nodes(obj.facets(:,2),:)+...
@@ -744,10 +647,26 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             obj.yfc = obj.facetCenter(abs(obj.elements(:,1:6)),2);
             obj.zfc = obj.facetCenter(abs(obj.elements(:,1:6)),3);
 
+            % calculate element centers
+            obj.elementCenter = (obj.nodes(obj.cl(:,1),:) + obj.nodes(obj.cl(:,2),:) + obj.nodes(obj.cl(:,3),:) + obj.nodes(obj.cl(:,4),:) + ...
+                obj.nodes(obj.cl(:,5),:) + obj.nodes(obj.cl(:,6),:) + obj.nodes(obj.cl(:,7),:) + obj.nodes(obj.cl(:,8),:))/8;
+            
+            % set nbs & facets
             obj.nbs = zeros(obj.Ne,6);
-            % edge element
             obj.facets = [obj.facets, zeros(size(obj.facets,1), 6)];
             emdlab_m3d_hhmdbc_evalfe(obj.facets, obj.elements, obj.nbs);
+            obj.facetNamedSelections.('none') = find(obj.bfacets);
+
+            % find boundary facets
+            obj.bfacets = bitor(obj.facets(:,5) == 0, obj.facets(:,6) == 0);
+
+            % last element of cl refers to mesh element type
+            obj.cl(:,end+1) = 8;    
+
+            % last element of elements matrix refers to number of facets
+            obj.elements(:,end+1) = 6;
+
+            obj.evalezi;
 
         end
 
@@ -832,14 +751,12 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 error('Too many output argument.');
             end
 
-
         end
 
         function varargout = showfb(obj)
 
             obj.ggmesh;
             [f,ax] = emdlab_r3d_geometry(1,0);
-            %             f.Name = ['[Number of Mesh Zones: ', num2str(numel(mzNames)), ']'];
 
             patch('Faces', obj.facets(obj.bfacets, 1:4), 'Vertices', obj.nodes, ...
                 'FaceColor', 'b', 'EdgeColor', 'k', ...
@@ -1481,7 +1398,6 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             % Return facet indices
             idx = find(mask);
         end
-
 
         function y = getfb(obj)
             y = obj.facets(obj.bfacets, 1:3);

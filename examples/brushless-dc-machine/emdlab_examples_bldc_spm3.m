@@ -22,8 +22,8 @@ gv_tta = 15; % tooth tip angle of stator slot [deg]
 gv_Dsh = 38; % shaft diameter [mm]
 gv_dm = 5; % magnet depth [mm]
 gv_gap = 1; % airgap thickness [mm]
-gv_Nagl = 2;
-gv_gg = 2;
+gv_Nagl = 2; % number of airgap mesh layers
+gv_gg = 2; % airgap ratio >= 1
 gv_embrace = 0.85; % magnet embrace ratio -> lower than one
 gv_Hc = -922100; % magnet coercive force [A/m]
 

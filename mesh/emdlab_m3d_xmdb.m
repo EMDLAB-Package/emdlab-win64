@@ -1,30 +1,36 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % common properties for all 3d mesh zone database classes
 
-classdef emdlab_m3d_xmdb < handle
+classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
 
     properties
 
         % mesh nodes: [x,y]
         nodes (:,3) double;
 
-        % mesh connectivity list
+        % mesh connectivity list: [n1, n2, n3, ...]
         cl (:,:) double;
 
-        % mesh elements
+        % mesh elements: [facet1, facet2, facet3, ...]
         elements (:,:) double;
 
-        % unique edges (:,8): [node1, node2, zi1, zi2, ]
-        edges
+        % Unique Mesh Facets
+        facets (:,:) double;
 
-        % list of boundary edges
-        bedges
+        % Boundary Facets
+        bfacets (:,1) logical;
 
         % edge length
-        edgeLength (:,1) double;
-        el (:,:) double;
-        uEdges (:,2) double;
-        nEdges (:,2) double;
+        facetArea (:,1) double;
+        fa (:,:) double;
+        xfc (:,1) double;
+        yfc (:,1) double;
+        zfc (:,1) double;
+        facetCenter (:,3) double;
+        facetNormal (:,3) double;
+
+        % center of elements
+        elementCenter (:,3) double;
 
         % neighborhood elements
         nbs (:,:) double;
@@ -32,8 +38,8 @@ classdef emdlab_m3d_xmdb < handle
         % jacobian inverse transpose
         JIT (:,:) double;
 
-        % global element area
-        gea (1,:) double;
+        % global elements volume
+        gev (1,:) double;
 
         % element zone index
         ezi (:,:) logical;
@@ -45,10 +51,7 @@ classdef emdlab_m3d_xmdb < handle
         mtcs (1,1) struct;
 
         % named selections
-        edgeNamedSelections (1,1) struct;
-
-        % flag to print the elapsed times
-        printFlag (1,1) logical = true;
+        facetNamedSelections (1,1) struct;
 
         % element type
         etype (1,:) char = '';
@@ -75,216 +78,77 @@ classdef emdlab_m3d_xmdb < handle
             y = size(obj.cl, 1);
         end
 
-        function setPrintFlag(obj, newValue)
-            obj.printFlag = newValue;
-        end
-
         function ggmesh(~)
         end
 
         %% Visualization Functions
         function varargout = showm(obj, varargin)
-            % show global mesh
 
-            [f,ax] = emdlab_flib_fax(varargin{:}); 
-            if isa(f,'matlab.ui.Figure')
-                f.MenuBar = "none";
-            end
-            
+            [f,ax] = emdlab_r3d_geometry(1,1);
             obj.ggmesh;
             mzNames = string(fieldnames(obj.mzs)');
 
             for mzName = mzNames
                 mzptr = obj.mzs.(mzName);
-                if isa(mzptr, 'emdlab_m2d_tmz') || isa(mzptr, 'emdlab_m2d_qmz')
-                    plt = patch(ax,'Faces', mzptr.cl, ...
-                        'Vertices', mzptr.nodes, 'FaceColor', ...
-                        'c', 'EdgeColor', [0.2, 0.2, 0.2], ...
-                        'FaceAlpha', 0.7, ...
-                        'HitTest','on','PickableParts','visible');
+                if isa(mzptr, 'emdlab_m3d_thmz')
+                    plt = patch(ax,'Faces', obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3), ...
+                        'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
+                        obj.mzs.(mzName).color, 'EdgeColor', [0.2,0.2,0.2], ...
+                        'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
                 end
-                plt.UserData = mzName;
+                plt.UserData.Tag = mzName;
+                plt.UserData.c = obj.mzs.(mzName).color;
             end
-
-            index = obj.edges(:, 3) ~= obj.edges(:, 4);
-            patch(ax,'Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5,'HitTest','off','PickableParts','none');
-
-            zoom on;box on;
-            ax.Color = [0.86,0.86,0.86];
-            grid on;
-            grid minor;
-            axis(ax, 'equal');
-            ax.Toolbar.Visible = 'off';
-            ax.GridColor      = [0.7 0.7 0.7];
-            ax.MinorGridColor = [0.5 0.5 0.5];
-            ax.GridAlpha      = 1;
-            ax.MinorGridAlpha = 1;
-
-            set(gcf,'WindowButtonMotionFcn',@hoverFcn);
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
             elseif nargout > 1, error('Too many output argument.');
-            end
-
-            function hoverFcn(src,~)
-                h = hittest(src);
-                for i = 1:numel(ax.Children)
-                    if isequal(h,ax.Children(i))
-                        if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
-                            e.Button = 1;
-                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
-                            return;
-                        end
-                    end
-                end
-                for i = 1:numel(ax.Children)
-                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
-                        if ischar(ax.Children(i).FaceColor)
-                            if strcmpi(ax.Children(i).FaceColor, 'c')
-                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.7);
-                                drawnow;
-                            end
-                        else
-                            if any(ax.Children(i).FaceColor ~= [0,1,1])
-                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.7);
-                                drawnow;
-                            end
-                        end
-                    end
-                end
-                title(ax,'');
             end
 
         end
 
         function varargout = showgg(obj, varargin)
-            % show global geometry
 
-            [f,ax] = emdlab_flib_fax(varargin{:}); 
-            if isa(f,'matlab.ui.Figure')
-                f.MenuBar = "none";
-            end
-            
+            [f,ax] = emdlab_r3d_geometry(1,1);
             obj.ggmesh;
             mzNames = string(fieldnames(obj.mzs)');
 
             for mzName = mzNames
                 mzptr = obj.mzs.(mzName);
-                if isa(mzptr, 'emdlab_m2d_tmz') || isa(mzptr, 'emdlab_m2d_qmz')
-                plt = patch(ax,'Faces', mzptr.cl, ...
-                    'Vertices', mzptr.nodes, 'FaceColor', ...
-                    'c', 'EdgeColor', 'none', ...
-                    'FaceAlpha', 0.5, ...
-                    'HitTest','on','PickableParts','visible');
+                if isa(mzptr, 'emdlab_m3d_thmz')
+                    plt = patch(ax,'Faces', obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3), ...
+                        'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
+                        obj.mzs.(mzName).color, 'EdgeColor', 'none', ...
+                        'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
                 end
-                plt.UserData = mzName;
+                plt.UserData.Tag = mzName;
+                plt.UserData.c = obj.mzs.(mzName).color;
             end
-
-            index = obj.edges(:, 3) ~= obj.edges(:, 4);
-            patch(ax,'Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5,'HitTest','off','PickableParts','none');
-
-            zoom on;box on;
-            ax.Color = [0.86,0.86,0.86];
-            grid on;
-            grid minor;
-            axis(ax, 'equal');
-            ax.Toolbar.Visible = 'off';
-            ax.GridColor      = [0.4 0.4 0.4];
-            ax.MinorGridColor = [0.2 0.2 0.2];
-            ax.GridAlpha      = 1;
-            ax.MinorGridAlpha = 1;
-
-            set(gcf,'WindowButtonMotionFcn',@hoverFcn);
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
             elseif nargout > 1, error('Too many output argument.');
-            end
-
-            function hoverFcn(src,~)
-                h = hittest(src);
-                for i = 1:numel(ax.Children)
-                    if isequal(h,ax.Children(i))
-                        if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
-                            e.Button = 1;
-                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
-                            updateXLabel;
-                            return;
-                        end
-                    end
-                end
-                for i = 1:numel(ax.Children)
-                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
-                        if ischar(ax.Children(i).FaceColor)
-                            if strcmpi(ax.Children(i).FaceColor, 'c')
-                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.5);
-                                drawnow;
-                            end
-                        else
-                            if any(ax.Children(i).FaceColor ~= [0,1,1])
-                                set(ax.Children(i), 'FaceColor', 'c', 'FaceAlpha', 0.5);
-                                drawnow;
-                            end
-                        end
-                    end
-                end
-                title(ax,'');
-                updateXLabel;
-
-                function updateXLabel()
-                    % Get cursor position in axes units
-                    cp = ax.CurrentPoint;
-                    x = cp(1,1);
-                    y = cp(1,2);
-
-                    % Check if cursor is inside axes limits
-                    xl = ax.XLim;
-                    yl = ax.YLim;
-
-                    if x < xl(1) || x > xl(2) || y < yl(1) || y > yl(2)
-                        return
-                    end
-
-                    % Update xlabel
-                    xlabel(ax, sprintf('X = %.2f ,  Y = %.2f ,  R = %.2f ,  D = %.2f',...
-                        x, y, norm([x,y]), 2*norm([x,y])), 'Interpreter','none');
-                end
-
             end
 
         end
 
         function varargout = showg(obj, varargin)
-            % show geometry
 
-            [f,ax] = emdlab_flib_fax(varargin{:});
+            [f,ax] = emdlab_r3d_geometryNEW(1,0);
             obj.ggmesh;
-            mzNames = fieldnames(obj.mzs);
-            if isfield(f,'Name')
-                f.Name = "Number of mesh zones = " + string(numel(mzNames));
-            end
+            mzNames = string(fieldnames(obj.mzs)');
 
-            for i = 1:numel(mzNames)
-                mzptr = obj.mzs.(mzNames{i});
-                if isa(mzptr, 'emdlab_m2d_tmz') || isa(mzptr, 'emdlab_m2d_qmz')
-                plt = patch('Faces', mzptr.cl, 'Vertices', mzptr.nodes, 'FaceColor', ...
-                    mzptr.color, 'EdgeColor', 'none', ...
-                    'FaceAlpha', 1, 'Parent', ax);
+            for mzName = mzNames
+                mzptr = obj.mzs.(mzName);
+                if isa(mzptr, 'emdlab_m3d_thmz')
+                    plt = patch(ax,'Faces', obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3), ...
+                        'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
+                        obj.mzs.(mzName).color, 'EdgeColor', 'none', ...
+                        'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
                 end
-                plt.UserData.color = mzptr.color;
+                plt.UserData.Tag = mzName;
+                plt.UserData.c = obj.mzs.(mzName).color;
             end
-
-            index = obj.edges(:, 3) ~= obj.edges(:, 4);
-            patch('Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 0.1, 'parent', ax, 'FaceAlpha', 0.95);
-
-            zoom(ax,'on');
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
@@ -293,27 +157,24 @@ classdef emdlab_m3d_xmdb < handle
 
         end
 
-        function varargout = showfb(obj, varargin)
-            % show free boundary
+        function varargout = showfb(obj)
 
-            [f,ax] = emdlab_flib_fax(varargin{:});
             obj.ggmesh;
+            [f,ax] = emdlab_r3d_geometry(1,0);
 
-            patch('Faces', obj.edges(obj.bedges, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.5, 'parent', ax);
+            patch('Faces', obj.facets(obj.bfacets, 1:3), 'Vertices', obj.nodes, ...
+                'FaceColor', 'b', 'EdgeColor', 'k', ...
+                'FaceAlpha', 0.1, 'parent', ax);
+            set(f, 'Visible', 'on');
 
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
-
-            if nargout == 1, varargout{1} = f;
-            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
-            elseif nargout > 1, error('Too many output argument.');
+            if nargout == 1
+                varargout{1} = f;
+            elseif nargout > 1
+                error('Too many output argument.');
             end
 
         end
-        
+
         function varargout = showwf(obj, varargin)
             % show wire frame mesh
 
@@ -339,32 +200,10 @@ classdef emdlab_m3d_xmdb < handle
         function varargout = showmzs(obj, varargin)
             % show mesh zones
 
-            [f,ax] = emdlab_flib_fax(varargin{:});
-            mzNames = fieldnames(obj.mzs);
-            if isfield(f,'Name')
-                f.Name = "Number of mesh zones = " + string(numel(mzNames));
-            end
+            obj.showm;
 
-            for i = 1:numel(mzNames)
-                mzptr = obj.mzs.(mzNames{i});
-                patch('Faces', mzptr.cl, ...
-                    'Vertices', mzptr.nodes, 'FaceColor', ...
-                    mzptr.color, 'linewidth', 0.05 ,'EdgeColor', [0, 0, 0], ...
-                    'FaceAlpha', 1, 'Parent', ax);
-            end
+        end
 
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
-
-            if nargout == 1, varargout{1} = f;
-            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
-            elseif nargout > 1, error('Too many output argument.');
-            end
-
-        end     
-        
         function varargout = showmd(obj, varargin)
             % show mesh degree
 
@@ -425,7 +264,7 @@ classdef emdlab_m3d_xmdb < handle
             if isnumeric(varargin{1})
                 sIndex = 1;
             else
-                sIndex = 2; 
+                sIndex = 2;
             end
             color = 'r';
             for i = sIndex:numel(varargin)
@@ -483,6 +322,22 @@ classdef emdlab_m3d_xmdb < handle
                     'FaceColor', 'r', 'EdgeColor', 'w', 'parent', ax, 'Marker', 'o', ...
                     'MarkerFaceColor', 'r', 'LineWidth', 2,...
                     'HitTest','off', 'PickableParts', 'none', 'handleVisibility', 'off');
+            end
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function varargout = showFacets(obj, varargin)
+
+            [f,ax] = obj.showm;
+            for i = 1:numel(varargin)
+                patch('Faces', obj.facets(varargin{i},[1,2,3]), 'Vertices', obj.nodes, ...
+                    'FaceColor', 'r', 'EdgeColor', 'w', 'parent', ax, 'Marker', 'none', ...
+                    'PickableParts', 'none', 'MarkerFaceColor', 'none', 'LineWidth', 1);
             end
 
             if nargout == 1, varargout{1} = f;
@@ -586,17 +441,33 @@ classdef emdlab_m3d_xmdb < handle
 
         function varargout = showContact(obj, mz1Name, mz2Name)
 
+            mz1Name = obj.checkMeshZoneExistence(mz1Name);
+            mz2Name = obj.checkMeshZoneExistence(mz2Name);
+
+            zi1 = obj.mzs.(mz1Name).zi;
+            zi2 = obj.mzs.(mz2Name).zi;
+
+            [f,ax] = emdlab_r3d_geometry(0,0);
             obj.ggmesh;
-            idx = obj.getEdgeIndicesOnContact(mz1Name, mz2Name);
-            [f,ax] = obj.showgg;
 
-            patch('Faces', obj.edges(idx,1:2), 'Vertices', obj.nodes, ...
-                'EdgeColor', 'b', 'parent', ax, 'Marker', 'none', 'MarkerFaceColor', 'none', ...
-                'LineWidth', 3, 'PickableParts','none');
+            idx = ((obj.facets(:, 4) == zi1) & (obj.facets(:, 5) == zi2)) | ...
+                ((obj.facets(:, 4) == zi2) & (obj.facets(:, 5) == zi1));
 
-            if nargout == 1, varargout{1} = f;
-            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
-            elseif nargout > 1, error('Too many output argument.');
+            index = obj.facets(:, 4) ~= obj.facets(:, 5);
+            patch('Faces', obj.facets(index, 1:3), 'Vertices', ...
+                obj.nodes, 'FaceColor', ...
+                'c', 'EdgeColor', 'none', ...
+                'FaceAlpha', 0.2, 'parent', ax);
+
+            patch('Faces', obj.facets(idx, 1:3), 'Vertices', ...
+                obj.nodes, 'FaceColor', ...
+                'y', 'EdgeColor', 'none', ...
+                'FaceAlpha', 1, 'parent', ax);
+
+            if nargout == 1
+                varargout{1} = f;
+            elseif nargout > 1
+                error('Too many output argument.');
             end
 
         end
@@ -746,480 +617,205 @@ classdef emdlab_m3d_xmdb < handle
         end
 
         %% Index Finding Functions
-        function y = getfbe(obj)
-            % get indices of free boundary edges
+        function y = getfbf(obj)
+            % get indices of free boundary facets
             obj.ggmesh;
-            y = find(obj.bedges);
+            y = find(obj.facets);
         end
 
-        function idx = getNodeIndicesOnLineP0P1(obj, x0, y0, x1, y1, tol)
-            % getNodeIndicesOnLineP0P1
-            % Returns node indices located within tol of the line segment P0→P1.
+        function y = getfbn(obj)
+            y = obj.getfbf;
+            y = obj.facets(y, 1:max(obj.elements(:,end)));
+            y = unique(y(:));
+            y = y(y~=0);
+        end
 
-            % Handle default tolerance
-            if nargin < 6
+        function idx = getNodeIndicesOnPlane(obj, p0, n, tol)
+            %GETNODEINDICESONPLANE Indices of nodes lying on a plane.
+            % Plane defined by point p0 and normal n.
+
+            if nargin < 4 || isempty(tol)
                 tol = obj.gleps;
             end
 
-            % Handle default P1 (if user only gives one point)
-            if nargin < 5
-                x1 = 0;
-                y1 = 0;
-            end
+            % Ensure n is a column vector and p0 is a row vector for dot product
+            n = n(:);
+            p0 = p0(:).';
 
-            % Construct points
-            p1 = [x0, y0];
-            p2 = [x1, y1];
+            % Compute dot product: Nodes * Normal - Point * Normal
+            % This is the projection distance (scaled by ||n||)
+            d = obj.nodes * n - (p0 * n);
 
-            % Direction unit vector
-            d = p2 - p1;
-            L = norm(d);
-
-            if L < eps
-                error('P0 and P1 are identical – line definition invalid.');
-            end
-
-            u = d / L;       % unit direction
-
-            % Node coordinates relative to P1
-            rel = obj.nodes(:,1:2) - p1;
-
-            % Projection parameter alpha
-            alpha = rel * u';     % dot product with direction
-
-            % Perpendicular distance from line
-            dist = sqrt(sum((rel - alpha*u).^2, 2));
-
-            % Indices of nodes near the line
-            idx = find(dist < tol);
+            idx = find(abs(d) < tol);
         end
 
-        function idx = getNodeIndicesOnLineP0U(obj, x0, y0, ux, uy, tol)
-            % getNodeIndicesOnLineP0U
-            % Returns node indices near the line passing through P0 = (x0,y0)
-            % in direction U = (ux,uy)
+        function idx = getNodeIndicesOnHalfPlane(obj, p0, n, v_dir, tol)
+            %GETNODEINDICESONHALFPLANE Indices of nodes on a half-plane.
+            %
+            % p0    - Point on the boundary line of the half-plane (1x3)
+            % n     - Normal vector of the plane (1x3)
+            % v_dir - Vector pointing into the active half of the plane (1x3)
+            % tol   - Tolerance
 
-            % Default tolerance
-            if nargin < 6
+            if nargin < 5 || isempty(tol)
                 tol = obj.gleps;
             end
 
-            % Check direction vector
-            if ux == 0 && uy == 0
-                error('Direction vector U = (ux, uy) must be nonzero.');
-            end
+            % Force row vectors
+            p0 = p0(:).';
+            n = n(:).';
+            v_dir = v_dir(:).';
 
-            % Compute P1 from P0 + U
-            x1 = x0 + ux;
-            y1 = y0 + uy;
+            % Normalize vectors to make physical sense of tolerance
+            n = n / norm(n);
+            % Project v_dir to ensure it is orthogonal to the normal n
+            v_dir = v_dir - (v_dir * n.') * n;
+            v_dir = v_dir / norm(v_dir);
 
-            % Call the P0P1 version
-            idx = obj.getNodeIndicesOnLineP0P1(x0, y0, x1, y1, tol);
+            % Vectors from p0 to all nodes (N x 3)
+            V = obj.nodes - p0;
+
+            % 1. Distance to the infinite plane (must be near 0)
+            dist_to_plane = V * n.';
+
+            % 2. Projection along the half-plane direction (must be >= 0)
+            dist_along_half = V * v_dir.';
+
+            % Nodes must lie on the plane AND on the positive side of the boundary line
+            on_plane = abs(dist_to_plane) < tol;
+            in_half = dist_along_half >= -tol; % allow tolerance at the boundary edge
+
+            idx = find(on_plane & in_half);
         end
 
-        function idx = getNodeIndicesOnRayP0P1(obj, x0, y0, x1, y1, tol)
-            % getNodeIndicesOnRayP0P1
-            % Returns node indices near the ray starting at P0 = (x0,y0)
-            % and going through P1 = (x1,y1).
+        function idx = getNodeIndicesOnCylinder(obj, p0, p1, h, tol)
+            %GETNODEINDICESONCYLINDER Indices of nodes lying on a cylinder's lateral surface.
+            % Cylinder axis goes from point p0 to point p1, with radius h.
 
-            if nargin < 6
+            if nargin < 5 || isempty(tol)
                 tol = obj.gleps;
             end
 
-            p0 = [x0, y0];
-            p1 = [x1, y1];
+            % Ensure row vectors for vectorised calculations (1x3)
+            p0 = p0(:).';
+            p1 = p1(:).';
 
-            d = p1 - p0;
-            L = norm(d);
+            % Axis vector and its length
+            axis_vec = p1 - p0;
+            L = norm(axis_vec);
 
-            if L < eps
-                error('P0 and P1 must be different to define a ray.');
+            if L < 1e-12
+                error('Points p0 and p1 must be distinct to define a cylinder axis.');
             end
 
-            u = d / L;  % unit vector
+            % Unit vector along the cylinder axis
+            u = axis_vec / L;
 
-            % Relative coordinates of nodes
-            rel = obj.nodes(:,1:2) - p0;
+            % Vectors from p0 to all nodes (N x 3)
+            V = obj.nodes - p0;
 
-            % Projection scalar (along-ray coordinate)
-            alpha = rel * u';  % dot product
+            % Projection of vectors onto the axis (N x 1)
+            d_axial = V * u.';
 
-            % Perpendicular distance from ray axis
-            dist = sqrt(sum((rel - alpha*u).^2, 2));
+            % Squared distance to the axis: ||V||^2 - d_axial^2
+            % sum(V.^2, 2) calculates the squared norm of each row
+            d_perp_sq = sum(V.^2, 2) - d_axial.^2;
 
-            % Ray condition: alpha >= 0
-            mask = alpha >= 0;
-
-            % Distance condition
-            idx = find(mask & (dist < tol));
-        end
-
-        function idx = getNodeIndicesOnRayP0U(obj, x0, y0, ux, uy, tol)
-            % getNodeIndicesOnRayP0U
-            % Returns node indices near the ray starting at P0 = (x0,y0)
-            % in direction U = (ux,uy).
-
-            % Default tolerance
-            if nargin < 6
-                tol = obj.gleps;
-            end
-
-            % Check direction vector is nonzero
-            if ux == 0 && uy == 0
-                error('Direction vector U = (ux, uy) must be nonzero.');
-            end
-
-            % Compute P1 = P0 + U
-            x1 = x0 + ux;
-            y1 = y0 + uy;
-
-            % Call the ray version using P0→P1
-            idx = obj.getNodeIndicesOnRayP0P1(x0, y0, x1, y1, tol);
-        end
-
-        function idx = getNodeIndicesOnSegment(obj, x0, y0, x1, y1, tol)
-            % getNodeIndicesOnSegment
-            % Returns node indices located on the finite segment from (x0,y0) to (x1,y1)
-
-            % Handle default tolerance
-            if nargin < 6
-                tol = obj.gleps;
-            end
-
-            p0 = [x0, y0];
-            p1 = [x1, y1];
-
-            d = p1 - p0;
-            L = norm(d);
-
-            if L < eps
-                error('Segment endpoints P0 and P1 must be distinct.');
-            end
-
-            u = d / L; % Unit direction vector
-
-            % Relative coordinates of nodes from P0
-            rel = obj.nodes(:,1:2) - p0;
-
-            % Projection parameter alpha (distance along the line)
-            alpha = rel * u';
-
-            % Perpendicular distance from the line
-            dist = sqrt(sum((rel - alpha * u).^2, 2));
+            % Ensure no negative values due to minor numerical precision limits
+            d_perp = sqrt(max(d_perp_sq, 0));
 
             % Conditions:
-            % 1. Within tolerance of the infinite line
-            % 2. Projection is between 0 and the length L (with a small buffer for tol)
-            mask = (dist < tol) & (alpha >= -tol) & (alpha <= L + tol);
+            % 1. Radial distance must match radius h within tol
+            % 2. Node must lie within the axial limits [0, L] of the cylinder
+            on_lateral_surface = (abs(d_perp - h) < tol);
+            within_bounds = (d_axial >= -tol) & (d_axial <= L + tol);
 
-            idx = find(mask);
+            idx = find(on_lateral_surface & within_bounds);
         end
 
-        function idx = getNodeIndicesOnEdges(obj,eList)
-            switch obj.etype
-                case 'QL4'
-                    idx = obj.edges(eList,1:4);
-                    idx = unique(idx(:));
-            end
-        end
-
-        function idx = getNodeIndicesInCircle(obj, x0, y0, r, tol)
-            % getNodeIndicesInCircle
-            % Returns node indices located inside a circle of radius r
-            % centered at (x0, y0).
-            %
-            % A node is considered inside if:
-            %     distance(node, centre) <= r + tol
-
-            % Default tolerance
-            if nargin < 5
-                tol = obj.gleps;
-            end
-
-            if r < 0
-                error('Radius r must be non‑negative.');
-            end
-
-            % Node coordinates
-            X = obj.nodes(:,1);
-            Y = obj.nodes(:,2);
-
-            % Distance from centre
-            dist = hypot(X - x0, Y - y0);
-
-            % Inside test
-            idx = find(dist <= r + tol);
-        end
-
-        function idx = getNodeIndicesOnCircle(obj, x0, y0, r, tol)
-            % getNodeIndicesOnCircle
-            % Returns node indices lying on a circle of radius r centered at (x0, y0).
-            %
-            % A node is considered on the circle if:
-            %   |distance(node, centre) - r| < tol
-
-            % Default tolerance
-            if nargin < 5
-                tol = obj.gleps;
-            end
-
-            if r < 0
-                error('Radius r must be non‑negative.');
-            end
-
-            % Node coordinates
-            X = obj.nodes(:,1);
-            Y = obj.nodes(:,2);
-
-            % Distance from centre
-            dist = hypot(X - x0, Y - y0);
-
-            % Find nodes lying on the circle (within tolerance)
-            idx = find(abs(dist - r) < tol);
-        end
-
-        function idx = getNodeIndicesOutCircle(obj, x0, y0, r, tol)
-            % getNodeIndicesOutCircle
-            % Returns node indices located outside a circle of radius r
-            % centered at (x0, y0).
-            %
-            % A node is considered outside if:
-            %     distance(node, centre) >= r - tol
-
-            % Default tolerance
-            if nargin < 5
-                tol = obj.gleps;
-            end
-
-            if r < 0
-                error('Radius r must be non‑negative.');
-            end
-
-            % Node coordinates
-            X = obj.nodes(:,1);
-            Y = obj.nodes(:,2);
-
-            % Distance from centre
-            dist = hypot(X - x0, Y - y0);
-
-            % Outside test
-            idx = find(dist >= r - tol);
-        end
-
-        function idx = getNodeIndicesOnArcCP0P1(obj, x0, y0, x1, y1, x2, y2, tol)
-            % getNodeIndicesOnArcCP0P1
-            % Returns node indices on a CCW arc from P1 to P2 centered at (x0,y0)
+        function idx = getFacetIndicesOnPlane(obj, p0, n, tol)
+            %GETFACETINDICESONPLANE Returns indices of facets lying entirely on a plane.
+            % A facet is on the plane if all of its nodes are on the plane.
 
             % Handle default tolerance
-            if nargin < 8
+            if nargin < 4 || isempty(tol)
                 tol = obj.gleps;
             end
 
-            % Center and reference points
-            C = [x0, y0];
-            P1 = [x1, y1];
-            P2 = [x2, y2];
+            % Get indices of all nodes on the plane
+            node_idx = obj.getNodeIndicesOnPlane(p0, n, tol);
 
-            % Radius from first point
-            R = norm(P1 - C);
+            % Find facets whose all nodes are in node_idx
 
-            % Get angles of start and end points
-            v1 = P1 - C;
-            v2 = P2 - C;
-            phi1 = atan2(v1(2), v1(1));
-            phi2 = atan2(v2(2), v2(1));
+            mask = all(ismember(obj.facets(:,1:3), node_idx), 2);
 
-            % Normalize phi2 relative to phi1 for a CCW sweep
-            % This ensures the arc goes from P1 to P2 in positive direction
-            if phi2 < phi1
-                phi2 = phi2 + 2*pi;
-            end
-
-            % Node coordinates relative to center
-            rel = obj.nodes(:, 1:2) - C;
-
-            % 1. Radial distance check
-            dist = hypot(rel(:,1), rel(:,2));
-            radial_mask = abs(dist - R) < tol;
-
-            % 2. Angular sweep check
-            % Get angles of all nodes
-            node_phi = atan2(rel(:,2), rel(:,1));
-
-            % We must check node_phi, node_phi + 2*pi, and node_phi - 2*pi
-            % to see if any representation falls within [phi1, phi2]
-            % Alternatively, shift node_phi to be relative to phi1:
-            node_phi_rel = mod(node_phi - phi1, 2*pi);
-            sweep_total = phi2 - phi1;
-
-            % Account for numerical precision at boundaries
-            angular_mask = (node_phi_rel >= -tol/R) & (node_phi_rel <= sweep_total + tol/R);
-
-            % Combine masks
-            idx = find(radial_mask & angular_mask);
-        end
-
-        function idx = getNodeIndicesOnArcCP0A(obj, x0, y0, x1, y1, angle, tol)
-            % getNodeIndicesOnArcCP0A
-            % C = (x0, y0), P0 = (x1, y1), angle = sweep in radians (CCW if positive)
-
-            if nargin < 6, tol = obj.gleps; end
-
-            C = [x0, y0];
-            P0 = [x1, y1];
-
-            % Calculate radius and start angle
-            v0 = P0 - C;
-            R = norm(v0);
-            phi_start = atan2(v0(2), v0(1));
-
-            % Node coordinates relative to center
-            rel = obj.nodes(:, 1:2) - C;
-            dist = hypot(rel(:,1), rel(:,2));
-
-            % Radial mask
-            radial_mask = abs(dist - R) < tol;
-
-            % Angular mask
-            node_phi = atan2(rel(:,2), rel(:,1));
-            % Shift node angles to start at 0 from phi_start
-            % Using mod(..., 2*pi) handles the wrap-around
-            node_phi_rel = mod(node_phi - phi_start, 2*pi);
-
-            if angle >= 0
-                % Counter-clockwise sweep
-                angular_mask = (node_phi_rel <= angle + tol/R);
-            else
-                % Clockwise sweep
-                % Map [0, 2pi] to [-2pi, 0]
-                node_phi_rel_cw = node_phi_rel - 2*pi;
-                angular_mask = (node_phi_rel_cw >= angle - tol/R);
-            end
-
-            idx = find(radial_mask & angular_mask);
-        end
-
-        function idx = getEdgeIndicesOnLineP0P1(obj, x0, y0, x1, y1, tol)
-            % getEdgeIndicesOnLineP0P1
-            % Returns indices of edges that lie entirely on the line segment P0->P1.
-            % An edge is on the line if both of its nodes are on the line.
-
-            % Handle default tolerance
-            if nargin < 6
-                tol = obj.gleps;
-            end
-
-            % 1. Get the indices of all nodes on this line segment
-            node_idx = obj.getNodeIndicesOnLineP0P1(x0, y0, x1, y1, tol);
-
-            % 2. Find edges where BOTH endpoints (node 1 and node 2) are in node_idx.
-            % We use a logical mask instead of ismember where possible, or use 'rows'
-            % to make ismember fast. For general sets, ismember is correct.
-            mask = ismember(obj.edges(:, 1), node_idx) & ismember(obj.edges(:, 2), node_idx);
-
-            % 3. Return the indices of those edges
+            % Return facet indices
             idx = find(mask);
         end
 
-        function idx = getEdgeIndicesOnLineP0U(obj, x0, y0, ux, uy, tol)
-            % getEdgeIndicesOnLineP0U
-            % Returns edge indices whose two end nodes lie on the line through P0
-            % in direction U.
-
-            if nargin < 6
-                tol = obj.gleps;
-            end
-
-            if ux == 0 && uy == 0
-                error('Direction vector U = (ux, uy) must be nonzero.');
-            end
-
-            nodeIdx = obj.getNodeIndicesOnLineP0U(x0, y0, ux, uy, tol);
-
-            mask = ismember(obj.edges(:,1), nodeIdx) & ...
-                ismember(obj.edges(:,2), nodeIdx);
-
-            idx = find(mask);
-        end
-
-        function idx = getEdgeIndicesOnCircle(obj, x0, y0, r, tol)
-            % getEdgeIndicesOnCircle
-            % Returns indices of edges that lie on a circle of radius r
-            % centered at (x0, y0).
+        function idx = getFacetIndicesOnAnnulus(obj, p0, n, c0, rin, rout, tol)
+            %GETFACETINDICESONANNULUS Returns indices of facets lying entirely on
+            % an annular region of a plane.
             %
-            % An edge is selected if both of its end nodes are on the circle.
+            % A facet is selected if all of its nodes:
+            %   1) lie on the plane defined by point p0 and normal n
+            %   2) lie between radii rin and rout from centre c0
+            %
+            % Inputs:
+            %   p0   : 1x3 point on plane
+            %   n    : 1x3 plane normal
+            %   c0   : 1x3 centre of annulus (must lie on plane)
+            %   rin  : inner radius
+            %   rout : outer radius
+            %   tol  : tolerance (optional)
+            %
+            % Output:
+            %   idx  : indices of facets satisfying the condition
 
             % Default tolerance
-            if nargin < 5
+            if nargin < 7 || isempty(tol)
                 tol = obj.gleps;
             end
 
-            % 1. Get indices of all nodes lying on this circle boundary
-            node_idx = obj.getNodeIndicesOnCircle(x0, y0, r, tol);
+            % Normalise normal vector
+            n = n(:).';
+            n = n / norm(n);
 
-            % 2. Find edges where both endpoints are in node_idx
-            mask = ismember(obj.edges(:, 1), node_idx) & ...
-                ismember(obj.edges(:, 2), node_idx);
+            % Node coordinates
+            % Assumes obj.nodes is Nx3
+            X = obj.nodes;
 
-            % 3. Return the indices of those edges
-            idx = find(mask);
-        end
+            % Vector from plane point to nodes
+            XP = X - p0;
 
-        function idx = getEdgeIndicesInCircle(obj, x0, y0, r, tol)
-            % getEdgeIndicesInCircle
-            % Returns indices of edges that lie entirely inside (or on)
-            % a circle of radius r centered at (x0, y0).
-            %
-            % An edge is selected if both of its end nodes are within the circle.
+            % Signed distance of each node from plane
+            d = XP * n.';
 
-            if nargin < 5 || isempty(tol)
-                tol = obj.gleps;
-            end
+            % Nodes on plane
+            onPlane = abs(d) <= tol;
 
-            % 1. Extract the start and end node indices for all edges
-            edgeNodes = obj.edges(:, 1:2);
+            % Vector from annulus centre to nodes
+            XC = X - c0;
 
-            % 2. Retrieve coordinates of all nodes involved in the edges
-            p1 = obj.nodes(edgeNodes(:, 1), :);
-            p2 = obj.nodes(edgeNodes(:, 2), :);
+            % Remove normal component to get in-plane vector
+            XC_plane = XC - (XC * n.') * n;
 
-            % 3. Calculate Euclidean distance from center (x0, y0) to both endpoints
-            d1 = hypot(p1(:, 1) - x0, p1(:, 2) - y0);
-            d2 = hypot(p2(:, 1) - x0, p2(:, 2) - y0);
+            % In-plane radial distance from annulus centre
+            r = sqrt(sum(XC_plane.^2, 2));
 
-            % 4. Select edges where both endpoints are within the radius (with tolerance)
-            mask = (d1 <= (r + tol)) & (d2 <= (r + tol));
+            % Nodes inside annulus
+            inAnnulus = (r >= rin - tol) & (r <= rout + tol);
 
-            % 5. Return the matching edge indices
-            idx = find(mask);
-        end
+            % Final node mask
+            validNode = onPlane & inAnnulus;
 
-        function idx = getEdgeIndicesOutCircle(obj, x0, y0, r, tol)
-            % getEdgeIndicesOutCircle
-            % Returns indices of edges that lie outside a circle of radius r
-            % centered at (x0, y0).
-            %
-            % Assumes an edge is outside if both endpoints are outside the radius.
+            % Facet node indices (assuming triangular facets)
+            F = obj.facets(:,1:3);
 
-            if nargin < 5 || isempty(tol)
-                tol = obj.gleps;
-            end
+            % Keep facets whose all nodes are valid
+            mask = all(validNode(F), 2);
 
-            % 1. Extract start and end nodes for all edges
-            edgeNodes = obj.edges(:, 1:2);
-
-            % 2. Get coordinates
-            p1 = obj.nodes(edgeNodes(:, 1), :);
-            p2 = obj.nodes(edgeNodes(:, 2), :);
-
-            % 3. Calculate distance from center to both endpoints
-            d1 = hypot(p1(:, 1) - x0, p1(:, 2) - y0);
-            d2 = hypot(p2(:, 1) - x0, p2(:, 2) - y0);
-
-            % 4. Select edges where both endpoints are strictly outside the radius
-            mask = (d1 >= (r - tol)) & (d2 >= (r - tol));
-
-            % 5. Return indices
+            % Return facet indices
             idx = find(mask);
         end
 

@@ -6,7 +6,7 @@ classdef emdlab_solvers_ts3d_tn < handle
     properties (SetAccess = protected)
 
         % solver mesh
-        m (1,1) emdlab_m3d_hhmdb;
+        m (1,1);
 
         % internal & boundary conditions
         excitations (1,1) struct;
@@ -20,7 +20,11 @@ classdef emdlab_solvers_ts3d_tn < handle
         % results
         results (1,1) struct;
 
-        kxySV (:,1) double;
+        % matrix containing source terms due to aisotropy
+        kxyzSV (:,:) double;
+
+        % initial temperature assumption for iterative solver
+        initialTemperature (1,1) double = 25;
 
     end
 
@@ -44,6 +48,9 @@ classdef emdlab_solvers_ts3d_tn < handle
         isElementDataAssigned (1,1) logical = false;
         isResultsValid (1,1) logical = false;
 
+        meshType (1,:) char = '';
+        NR (1,1) double;
+
     end
 
     properties (Dependent = true)
@@ -57,22 +64,27 @@ classdef emdlab_solvers_ts3d_tn < handle
         %% Constructor and Destructor
         function obj = emdlab_solvers_ts3d_tn(m)
 
-            % mesh pointer
-            if ~isa(m, 'emdlab_m3d_hhmdb')
-                error('Mesh class must be <emdlab_m3d_hhmdb>');
-            end
             m.ggmesh;
             obj.m = m;
+            % mesh pointer
+            switch class(m)
+                case 'emdlab_m3d_thmdb'
+                    obj.meshType = 'thm';
+                    % eval JIT and gea for later use
+                    obj.m.evalJIT;
+                case 'emdlab_m3d_hhmdb'
+                    obj.meshType = 'hhm';
+                otherwise
+                    error('Mesh class must be <emdlab_m3d_thmdb> or <emdlab_m3d_hhmdb>');
+            end
+            
 
             % set default properties of mesh zones
-            mzNames = obj.m.getMeshZoneNames;
-
-            for mz = mzNames
-                obj.setdp(mz);
+            for mzName = obj.m.getMeshZoneNames
+                obj.setdp(mzName);
             end
 
             % default values
-            %             obj.bcs = emdlab_bcs_scalarNodes('TL3');
             obj.units = emdlab_phy_units;
 
         end
@@ -194,65 +206,55 @@ classdef emdlab_solvers_ts3d_tn < handle
             obj.assignElementData;
 
             % calculate resistances
-            resistances = zeros(obj.m.Ne,3);
+            obj.NR = max(obj.m.elements(:,end));
+            resistances = zeros(obj.m.Ne,obj.NR);
 
-%             ec = obj.m.getCenterOfEdges;
-%             xec = ec(:,1);
-%             yec = ec(:,2);
-%             xec = xec(abs(obj.m.elements(:,1:4)));
-%             yec = yec(abs(obj.m.elements(:,1:4)));
-% 
-%             ux = zeros(obj.m.Ne,3);
-%             uy = zeros(obj.m.Ne,3);
-% 
-%             mzNames = obj.m.getMeshZoneNames;
-%             for mz = mzNames
-%                 mzptr = obj.m.mzs.(mz);
-%                 
-%                 ux(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).ux,mzptr.Ne,1);
-%                 uy(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).uy,mzptr.Ne,1);
-%             end
-% 
-%             obj.kxySV = zeros(obj.m.Ne,1);
+            % loop over mesh zones
+            mzNames = obj.m.getMeshZoneNames;
+            ux = zeros(obj.m.Ne,3);
+            uy = zeros(obj.m.Ne,3);
+            uz = zeros(obj.m.Ne,3);
+            for mz = mzNames
+                mzptr = obj.m.mzs.(mz);
+                ux(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).ux,mzptr.Ne,1);
+                uy(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).uy,mzptr.Ne,1);
+                uz(obj.m.ezi(:,mzptr.zi),:) = repmat(obj.m.cs.(mzptr.orientation).uz,mzptr.Ne,1);
+            end
 
-el1 = vecnorm(obj.m.nodes(obj.m.cl(:,1),:)-obj.m.nodes(obj.m.cl(:,2),:),2,2);
-el2 = vecnorm(obj.m.nodes(obj.m.cl(:,2),:)-obj.m.nodes(obj.m.cl(:,3),:),2,2);
-el3 = vecnorm(obj.m.nodes(obj.m.cl(:,3),:)-obj.m.nodes(obj.m.cl(:,4),:),2,2);
-el4 = vecnorm(obj.m.nodes(obj.m.cl(:,4),:)-obj.m.nodes(obj.m.cl(:,1),:),2,2);
-el5 = vecnorm(obj.m.nodes(obj.m.cl(:,5),:)-obj.m.nodes(obj.m.cl(:,6),:),2,2);
-el6 = vecnorm(obj.m.nodes(obj.m.cl(:,6),:)-obj.m.nodes(obj.m.cl(:,7),:),2,2);
-el7 = vecnorm(obj.m.nodes(obj.m.cl(:,7),:)-obj.m.nodes(obj.m.cl(:,8),:),2,2);
-el8 = vecnorm(obj.m.nodes(obj.m.cl(:,8),:)-obj.m.nodes(obj.m.cl(:,5),:),2,2);
-el9 = vecnorm(obj.m.nodes(obj.m.cl(:,1),:)-obj.m.nodes(obj.m.cl(:,5),:),2,2);
-el10 = vecnorm(obj.m.nodes(obj.m.cl(:,2),:)-obj.m.nodes(obj.m.cl(:,6),:),2,2);
-el11 = vecnorm(obj.m.nodes(obj.m.cl(:,3),:)-obj.m.nodes(obj.m.cl(:,7),:),2,2);
-el12 = vecnorm(obj.m.nodes(obj.m.cl(:,4),:)-obj.m.nodes(obj.m.cl(:,8),:),2,2);
+            % store source term due to anisotropy
+            obj.kxyzSV = zeros(obj.m.Ne,obj.NR);
 
-len1 = (el9 + el10 + el11 + el12)/4;
-len2 = (el2 + el4 + el6 + el8)/4;
-len3 = (el1 + el3 + el5 + el7)/4;
+            % distance modifier
+            elm = zeros(obj.m.Ne,obj.NR);
 
-            % loop over elements to calculate conductances of each element
+            % loop over elements to calculate resistances of each element
             for i = 1:obj.m.Ne
 
-                kx = 1;
+                kx = obj.edata.ThermalConductivity(1,i);
                 ky = obj.edata.ThermalConductivity(2,i);
                 kz = obj.edata.ThermalConductivity(3,i);
 
-%                 u13 = [xec(i,3),yec(i,3),0] - [xec(i,1),yec(i,1),0];
-%                 u24 = [xec(i,4),yec(i,4),0] - [xec(i,2),yec(i,2),0];
-%                 u13 = u13 / norm(u13);
-%                 u24 = u24 / norm(u24);
-% 
-%                 k13 = kx * dot(ux(i,:),u13).^2 + ky * dot(uy(i,:),u13).^2;
-%                 k24 = kx * dot(ux(i,:),u24).^2 + ky * dot(uy(i,:),u24).^2;
-%                 obj.kxySV(i) = (kx-ky) * (dot(ux(i,:),u13)*dot(uy(i,:),u13) - dot(ux(i,:),u24)*dot(uy(i,:),u24))/2;
+                for j = 1:obj.m.elements(i,end)
 
+                    % direction vector from cell center i to cell center j
+                    if obj.m.nbs(i,j)
+                        uij = obj.m.elementCenter(obj.m.nbs(i,j), :) - obj.m.elementCenter(i,:);
+                        die = 0.5 * norm(uij);
+                    else
+                        uij = obj.m.facetCenter(abs(obj.m.elements(i,j)),:) - obj.m.elementCenter(i,:);
+                        die = norm(uij);
+                    end                    
+                    uij = uij / norm(uij);
 
-                % calculation of conductances
-                resistances(i,1) = len1(i)*2/(kx*(obj.m.fa(i,1) + obj.m.fa(i,2)));
-                resistances(i,2) = len2(i)*2/(kx*(obj.m.fa(i,3) + obj.m.fa(i,5)));
-                resistances(i,3) = len3(i)*2/(kx*(obj.m.fa(i,4) + obj.m.fa(i,6)));
+                    kij = kx*(ux(i,:)*uij').^2 + ky*(uy(i,:)*uij').^2 + kz*(uz(i,:)*uij').^2;
+%                     obj.kxySV(i,j) = (kx-ky) * (ux(i,1:2) * uij') * (uy(i,1:2) * uij');
+
+                    elm(i,j) = abs(uij * obj.m.facetNormal(abs(obj.m.elements(i,j)),:)');
+
+                    % calculation of conductances
+                    resistances(i,j) = die/(kij * elm(i,j) * obj.m.fa(i,j));
+
+                end
 
             end
 
@@ -447,9 +449,16 @@ len3 = (el1 + el3 + el5 + el7)/4;
             [f,ax] = emdlab_r3d_geometry(1,0);
             if nargin<2, N=10; end
 
+            switch obj.meshType
+                case 'thm'
+                    idx = obj.m.facets(obj.m.bfacets,6) + obj.m.facets(obj.m.bfacets,8);
+            patch('faces', obj.m.facets(obj.m.bfacets,1:3), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(idx), ...
+                'FaceColor','flat', 'edgecolor', 'w');
+                case 'hhm'
             idx = obj.m.facets(obj.m.bfacets,7) + obj.m.facets(obj.m.bfacets,9);
             patch('faces', obj.m.facets(obj.m.bfacets,1:4), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(idx), ...
                 'FaceColor','flat', 'edgecolor', 'w');
+            end
 
             colormap(jet(N));
             cb = colorbar;
@@ -511,7 +520,7 @@ len3 = (el1 + el3 + el5 + el7)/4;
         end
 
         function y = getAverageTemperature(obj)
-            y = obj.m.gea * obj.results.T / sum(obj.m.gea);
+            y = obj.m.gev * obj.results.T / sum(obj.m.gev);
         end
 
     end
@@ -560,11 +569,12 @@ len3 = (el1 + el3 + el5 + el7)/4;
 
         function [indexI,indexJ,value,sourceVector] = buildGMatrixSVector(obj, resistances)
 
-            indexI = zeros(obj.m.Ne,7);
-            indexJ = zeros(obj.m.Ne,7);
-            value = zeros(obj.m.Ne,7);
+            indexI = zeros(obj.m.Ne,obj.NR+1);
+            indexJ = zeros(obj.m.Ne,obj.NR+1);
+            value = zeros(obj.m.Ne,obj.NR+1);
             sourceVector = zeros(obj.m.Ne,1);
-            absElements = abs(obj.m.elements(:,1:6));
+            Rp = zeros(1,obj.NR);
+            idx = 1:obj.NR;
 
             % loop over elements to construct G_matrix
             for i = 1:obj.m.Ne
@@ -572,110 +582,25 @@ len3 = (el1 + el3 + el5 + el7)/4;
                 % constructing i-th row
                 indexI(i,:) = i;
 
-                % conductance between cell P and 1 nb
-                nbIndex = obj.m.nbs(i,1);
-                if nbIndex
-                    if ismember(absElements(i,1),absElements(nbIndex,[1,2]))
-                        Rp1 = resistances(i,1)/2 + resistances(nbIndex,1)/2;
-                    elseif ismember(absElements(i,1),absElements(nbIndex,[3,5]))
-                        Rp1 = resistances(i,1)/2 + resistances(nbIndex,2)/2;
-                    else
-                        Rp1 = resistances(i,1)/2 + resistances(nbIndex,3)/2;
-                    end
-                    indexJ(i,2) = nbIndex;
-                    value(i,2) = -1/Rp1;
-                else
-                    Rp1 = inf;
-                    indexJ(i,2) = i;
-                end
+                % conductance between cell P and j-th nb
+                for j = 1:obj.m.elements(i,end)
 
-                % conductance between cell P and 2 nb
-                nbIndex = obj.m.nbs(i,2);
-                if nbIndex
-                    if ismember(absElements(i,2),absElements(nbIndex,[1,2]))
-                        Rp2 = resistances(i,1)/2 + resistances(nbIndex,1)/2;
-                    elseif ismember(absElements(i,2),absElements(nbIndex,[3,5]))
-                        Rp2 = resistances(i,1)/2 + resistances(nbIndex,2)/2;
-                    else
-                        Rp2 = resistances(i,1)/2 + resistances(nbIndex,3)/2;
-                    end
-                    indexJ(i,3) = nbIndex;
-                    value(i,3) = -1/Rp2;
-                else
-                    Rp2 = inf;
-                    indexJ(i,3) = i;
-                end
+                    % index of j-th neighbor
+                    nbIndex = obj.m.nbs(i,j);
 
-                % conductance between cell P and 3 nb
-                nbIndex = obj.m.nbs(i,3);
-                if nbIndex
-                    if ismember(absElements(i,3),absElements(nbIndex,[1,2]))
-                        Rp3 = resistances(i,2)/2 + resistances(nbIndex,1)/2;
-                    elseif ismember(absElements(i,3),absElements(nbIndex,[3,5]))
-                        Rp3 = resistances(i,2)/2 + resistances(nbIndex,2)/2;
+                    if nbIndex
+                        Rp(j) = resistances(i,j) + resistances(nbIndex,idx(abs(obj.m.elements(nbIndex,1:obj.NR)) == (abs(obj.m.elements(i,j)))));
+                        indexJ(i,j+1) = nbIndex;
+                        value(i,j+1) = -1/Rp(j);
                     else
-                        Rp3 = resistances(i,2)/2 + resistances(nbIndex,3)/2;
+                        Rp(j) = inf;
+                        indexJ(i,j+1) = i;
                     end
-                    indexJ(i,4) = nbIndex;
-                    value(i,4) = -1/Rp3;
-                else
-                    Rp3 = inf;
-                    indexJ(i,4) = i;
-                end
-
-                % conductance between cell P and 4 nb
-                nbIndex = obj.m.nbs(i,4);
-                if nbIndex
-                    if ismember(absElements(i,4),absElements(nbIndex,[1,2]))
-                        Rp4 = resistances(i,3)/2 + resistances(nbIndex,1)/2;
-                    elseif ismember(absElements(i,1),absElements(nbIndex,[3,5]))
-                        Rp4 = resistances(i,3)/2 + resistances(nbIndex,2)/2;
-                    else
-                        Rp4 = resistances(i,3)/2 + resistances(nbIndex,3)/2;
-                    end
-                    indexJ(i,5) = nbIndex;
-                    value(i,5) = -1/Rp4;
-                else
-                    Rp4 = inf;
-                    indexJ(i,5) = i;
-                end
-
-                % conductance between cell P and 5 nb
-                nbIndex = obj.m.nbs(i,5);
-                if nbIndex
-                    if ismember(absElements(i,5),absElements(nbIndex,[1,2]))
-                        Rp5 = resistances(i,2)/2 + resistances(nbIndex,1)/2;
-                    elseif ismember(absElements(i,5),absElements(nbIndex,[3,5]))
-                        Rp5 = resistances(i,2)/2 + resistances(nbIndex,2)/2;
-                    else
-                        Rp5 = resistances(i,2)/2 + resistances(nbIndex,3)/2;
-                    end
-                    indexJ(i,6) = nbIndex;
-                    value(i,6) = -1/Rp5;
-                else
-                    Rp5 = inf;
-                    indexJ(i,6) = i;
-                end
-
-                % conductance between cell P and 6 nb
-                nbIndex = obj.m.nbs(i,6);
-                if nbIndex
-                    if ismember(absElements(i,6),absElements(nbIndex,[1,2]))
-                        Rp6 = resistances(i,3)/2 + resistances(nbIndex,1)/2;
-                    elseif ismember(absElements(i,6),absElements(nbIndex,[3,5]))
-                        Rp6 = resistances(i,3)/2 + resistances(nbIndex,2)/2;
-                    else
-                        Rp6 = resistances(i,3)/2 + resistances(nbIndex,3)/2;
-                    end
-                    indexJ(i,7) = nbIndex;
-                    value(i,7) = -1/Rp6;
-                else
-                    Rp6 = inf;
-                    indexJ(i,7) = i;
+                    
                 end
 
                 indexJ(i,1) = i;
-                value(i,1) = 1/Rp1 + 1/Rp2 + 1/Rp3 + 1/Rp4 + 1/Rp5 + 1/Rp6;
+                value(i,1) = sum(1 ./ Rp);
 
             end
 
@@ -683,46 +608,63 @@ len3 = (el1 + el3 + el5 + el7)/4;
 
         function [value, sourceVector] = applyFixedTemperatureBC(obj, idx, value, sourceVector, resistances, TValue)
 
-            if iscolumn(idx), idx = idx'; end
+            % make idx as a row vector
+            idx = idx(:)';
+            Nidx = length(idx);
 
-            for index = idx
-
-                if isa(TValue,'function_handle')
-                    tvbc = TValue(obj.m.facetCenter(index,1),obj.m.facetCenter(index,2),obj.m.facetCenter(index,3));
-                else
-                    tvbc = TValue;
+            % calculate temperature value at facet centers -> tvfc            
+            if isa(TValue,'function_handle')
+                tvfc = zeros(1,Nidx);
+                for i = 1:Nidx
+                    tvfc(i) = TValue(obj.m.facetCenter(idx(i),1),obj.m.facetCenter(idx(i),2),obj.m.facetCenter(idx(i),3));
                 end
+            else
+                tvfc = TValue * ones(1,Nidx);
+            end
 
-                if obj.m.facets(index,7)
+            % check mesh type to find proper indices
+            switch obj.meshType
 
-                    eIndex = obj.m.facets(index,7);
-                    if ismember(obj.m.facets(index,8),[1,2])
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,1);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,1);
-                    elseif ismember(obj.m.facets(index,8),[3,5])
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,2);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,2);
-                    else
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,3);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,3);
+                % tetrahedral mesh
+                case 'thm'
+
+                    for i = 1:Nidx
+                        if obj.m.facets(idx(i),6)
+
+                            eIndex = obj.m.facets(idx(i),6);
+                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),7));
+                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),7));
+
+                        else
+
+                            eIndex = obj.m.facets(idx(i),8);
+                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),9));
+                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),9));
+
+                        end
                     end
 
-                else
+                    % hexahedral mesh
+                case 'hhm'
 
-                   eIndex = obj.m.facets(index,9);
-                    if ismember(obj.m.facets(index,10),[1,2])
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,1);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,1);
-                    elseif ismember(obj.m.facets(index,10),[3,5])
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,2);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,2);
-                    else
-                        value(eIndex,1) = value(eIndex,1) + 2/resistances(eIndex,3);
-                        sourceVector(eIndex) = sourceVector(eIndex) + tvbc*2/resistances(eIndex,3);
+                    for i = 1:Nidx
+                        if obj.m.facets(idx(i),7)
+
+                            eIndex = obj.m.facets(idx(i),7);
+                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),8));
+                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),8));
+
+                        else
+
+                            eIndex = obj.m.facets(idx(i),9);
+                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),10));
+                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),10));
+
+                        end
                     end
 
-                end
-
+                otherwise
+                    error('Mesh type is not supported.');
             end
 
         end
@@ -771,29 +713,66 @@ len3 = (el1 + el3 + el5 + el7)/4;
 
         function sourceVector = applyHeatFluxBC(obj, idx, sourceVector, HFValue)
 
-            if iscolumn(idx), idx = idx'; end
+            % make idx as a row vector
+            idx = idx(:)';
+            Nidx = length(idx);
 
-            for index = idx
-
-                if isa(HFValue,'function_handle')
-                    hfbc = HFValue(obj.m.facetCenter(index,1),obj.m.facetCenter(index,2),obj.m.facetCenter(index,3));
-                else
-                    hfbc = HFValue;
+            % calculate heat flux at facet centers -> hffc            
+            if isa(HFValue,'function_handle')
+                hffc = zeros(1,Nidx);
+                for i = 1:Nidx
+                    hffc(i) = HFValue(obj.m.facetCenter(idx(i),1),obj.m.facetCenter(idx(i),2),obj.m.facetCenter(idx(i),3));
                 end
-
-                if obj.m.facets(index,7)
-
-                    eIndex = obj.m.facets(index,7);
-                    sourceVector(eIndex) = sourceVector(eIndex) + hfbc*obj.m.facetArea(index);
-
-                else
-
-                    eIndex = obj.m.facets(index,9);
-                    sourceVector(eIndex) = sourceVector(eIndex) + hfbc*obj.m.facetArea(index);
-
-                end
-
+            else
+                hffc = HFValue * ones(1,Nidx);
             end
+
+            % check mesh type to find proper indices
+            switch obj.meshType
+
+                % tetrahedral mesh
+                case 'thm'
+
+                    for i = 1:Nidx
+
+                        if obj.m.facets(idx(i),6)
+
+                            eIndex = obj.m.facets(idx(i),6);
+                            sourceVector(eIndex) = sourceVector(eIndex) + hffc(i)*obj.m.facetArea(idx(i));
+
+                        else
+
+                            eIndex = obj.m.facets(idx(i),8);
+                            sourceVector(eIndex) = sourceVector(eIndex) + hffc(i)*obj.m.facetArea(idx(i));
+
+                        end
+
+                    end
+
+                    % hexahedral mesh
+                case 'hhm'
+
+                    for i = 1:Nidx
+
+                        if obj.m.facets(idx(i),7)
+
+                            eIndex = obj.m.facets(idx(i),7);
+                            sourceVector(eIndex) = sourceVector(eIndex) + hffc(i)*obj.m.facetArea(idx(i));
+
+                        else
+
+                            eIndex = obj.m.facets(idx(i),9);
+                            sourceVector(eIndex) = sourceVector(eIndex) + hffc(i)*obj.m.facetArea(idx(i));
+
+                        end
+
+                    end
+
+                otherwise
+                    error('Mesh type is not supported.');
+            end
+
+            
 
         end
 

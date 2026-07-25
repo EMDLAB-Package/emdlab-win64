@@ -1,5 +1,5 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% a two-dimensional thermal-static solver based on thermal netwrok
+% a 2-dimensional thermal-static solver based on thermal netwrok theory
 
 classdef emdlab_solvers_ts2d_tn < handle
 
@@ -84,10 +84,8 @@ classdef emdlab_solvers_ts2d_tn < handle
             obj.m = m;
 
             % set default properties of mesh zones
-            mzNames = obj.m.getMeshZoneNames;
-
-            for mz = mzNames
-                obj.setdp(mz);
+            for mzName = obj.m.getMeshZoneNames
+                obj.setdp(mzName);
             end
 
             % default values
@@ -221,7 +219,7 @@ classdef emdlab_solvers_ts2d_tn < handle
             edgeCenter = obj.m.getCenterOfEdges;
             elm = zeros(obj.m.Ne,obj.NR);
 
-            % loop over elements to calculate conductances of each element
+            % loop over elements to calculate resistances of each element
             for i = 1:obj.m.Ne
 
                 kx = obj.edata.ThermalConductivity(1,i);

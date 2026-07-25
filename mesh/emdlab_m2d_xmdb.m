@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % common properties for all mesh 2d mesh zone database classes
 
-classdef emdlab_m2d_xmdb < handle
+classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
 
     properties
 
@@ -48,9 +48,6 @@ classdef emdlab_m2d_xmdb < handle
         % named selections
         edgeNamedSelections (1,1) struct;
 
-        % flag to print the elapsed times
-        printFlag (1,1) logical = true;
-
         % element type
         etype (1,:) char = '';
 
@@ -76,25 +73,14 @@ classdef emdlab_m2d_xmdb < handle
             y = size(obj.cl, 1);
         end
 
-        function setPrintFlag(obj, newValue)
-            obj.printFlag = newValue;
-        end
-
-        function timeHolder = dispLine(obj)
-            if obj.printFlag
-                disp('-------------------------------------------------------');
-            end
-            timeHolder = tic;
-        end
-
-        function dispMessage(obj, txt, timeHolder)
-            if obj.printFlag
-                disp(txt);
-                toc(timeHolder);
-            end
-        end
-
         function ggmesh(~)
+        end
+
+        function area = getMeshZoneArea(obj, mzName)
+
+            mzName = obj.checkMeshZoneExistence(mzName);
+            area = sum(obj.gea(obj.ezi(:,obj.mzs.(mzName).zi)));
+
         end
 
         %% Visualization Functions

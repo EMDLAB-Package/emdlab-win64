@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % 2D triangular mesh data base class
 
-classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_mdb_cp & emdlab_m2d_xmdb
+classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmdb
 
     properties (Dependent = true)
 
@@ -1153,21 +1153,19 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
-        function getMeshZoneExtrude(obj, ttmptr, mzName, z, skewAngle)
-            mzName = obj.checkMeshZoneExistence(mzName);
+        function mzptr = getMeshZoneExtrude(obj, mzName, z, skewAngle)
 
-            if iscolumn(z)
-                z = z';
-            end
+            mzName = obj.checkMeshZoneExistence(mzName);
+            z = z(:)';
 
             Nz = length(z);
             mzptr = obj.mzs.(mzName);
             ztmp = repmat(z, mzptr.Nn, 1);
 
             if nargin < 5
-                ttmptr.addmz(mzName, emdlab_m3d_ttmz(tmzpc_getExtrude(...
+                mzptr = emdlab_m3d_thmz(tmzpc_getExtrude(...
                     mzptr.cl, obj.elements(obj.ezi(:, mzptr.zi), 1:3), ...
-                    mzptr.Nn, Nz - 1), [repmat(mzptr.nodes, Nz, 1), ztmp(:)]));
+                    mzptr.Nn, Nz - 1), [repmat(mzptr.nodes, Nz, 1), ztmp(:)]);
             else
                 stepAngle = skewAngle * (pi / 180) / (Nz - 1);
                 p = zeros(mzptr.Nn * Nz, 3);
@@ -1182,7 +1180,9 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
                     mzptr.Nn, Nz - 1), p));
             end
 
-            ttmptr.mzs.(mzName).material = mzptr.material;
+            mzptr.color = obj.mzs.(mzName).color;
+            mzptr.material = obj.mzs.(mzName).material;
+
         end
 
         %% Index Finding Functions
