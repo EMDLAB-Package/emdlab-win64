@@ -640,7 +640,7 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             obj.facetNormal = 0.5*(cross(p12,p13) + cross(p13,p14));
             obj.facetNormal = obj.facetNormal ./ vecnorm(obj.facetNormal,2,2);
             obj.facetArea = 0.5*(vecnorm(cross(p12,p13),2,2) + vecnorm(cross(p13,p14),2,2));
-            obj.fa = obj.facetArea(abs(obj.elements(:,1:6))); 
+            obj.fa = obj.facetArea(abs(obj.elements(:,1:6)));
             obj.facetCenter = (obj.nodes(obj.facets(:,1),:)+obj.nodes(obj.facets(:,2),:)+...
                 obj.nodes(obj.facets(:,3),:)+obj.nodes(obj.facets(:,4),:))/4;
             obj.xfc = obj.facetCenter(abs(obj.elements(:,1:6)),1);
@@ -650,7 +650,7 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             % calculate element centers
             obj.elementCenter = (obj.nodes(obj.cl(:,1),:) + obj.nodes(obj.cl(:,2),:) + obj.nodes(obj.cl(:,3),:) + obj.nodes(obj.cl(:,4),:) + ...
                 obj.nodes(obj.cl(:,5),:) + obj.nodes(obj.cl(:,6),:) + obj.nodes(obj.cl(:,7),:) + obj.nodes(obj.cl(:,8),:))/8;
-            
+
             % set nbs & facets
             obj.nbs = zeros(obj.Ne,6);
             obj.facets = [obj.facets, zeros(size(obj.facets,1), 6)];
@@ -661,13 +661,91 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             obj.bfacets = bitor(obj.facets(:,5) == 0, obj.facets(:,6) == 0);
 
             % last element of cl refers to mesh element type
-            obj.cl(:,end+1) = 8;    
+            obj.cl(:,end+1) = 8;
 
             % last element of elements matrix refers to number of facets
             obj.elements(:,end+1) = 6;
 
             obj.evalezi;
+            obj.calculateHexVolumes;
 
+        end
+
+        function calculateHexVolumes(obj)
+            %HEXVOLUMES Compute volume of 8-node hexahedral elements
+            %
+            % Inputs:
+            %   cl    : Ne x 8 connectivity
+            %   nodes : Nn x 3 nodal coordinates
+            %
+            % Output:
+            %   V     : Ne x 1 element volumes
+
+            Ne = size(obj.cl, 1);
+            V  = zeros(Ne, 1);
+
+            % 2-point Gauss quadrature
+            g = 1/sqrt(3);
+            gp = [-g -g -g;
+                g -g -g;
+                g  g -g;
+                -g  g -g;
+                -g -g  g;
+                g -g  g;
+                g  g  g;
+                -g  g  g];
+            w = ones(8,1); % all weights = 1
+
+            for e = 1:Ne
+                Xe = obj.nodes(obj.cl(e,1:8), :);   % 8 x 3 coordinates of current element
+                Ve = 0;
+
+                for k = 1:8
+                    xi   = gp(k,1);
+                    eta  = gp(k,2);
+                    zeta = gp(k,3);
+
+                    % Derivatives of shape functions wrt xi, eta, zeta
+                    dN_dxi = 1/8 * [
+                        -(1-eta)*(1-zeta)
+                        (1-eta)*(1-zeta)
+                        (1+eta)*(1-zeta)
+                        -(1+eta)*(1-zeta)
+                        -(1-eta)*(1+zeta)
+                        (1-eta)*(1+zeta)
+                        (1+eta)*(1+zeta)
+                        -(1+eta)*(1+zeta)];
+
+                    dN_deta = 1/8 * [
+                        -(1-xi)*(1-zeta)
+                        -(1+xi)*(1-zeta)
+                        (1+xi)*(1-zeta)
+                        (1-xi)*(1-zeta)
+                        -(1-xi)*(1+zeta)
+                        -(1+xi)*(1+zeta)
+                        (1+xi)*(1+zeta)
+                        (1-xi)*(1+zeta)];
+
+                    dN_dzeta = 1/8 * [
+                        -(1-xi)*(1-eta)
+                        -(1+xi)*(1-eta)
+                        -(1+xi)*(1+eta)
+                        -(1-xi)*(1+eta)
+                        (1-xi)*(1-eta)
+                        (1+xi)*(1-eta)
+                        (1+xi)*(1+eta)
+                        (1-xi)*(1+eta)];
+
+                    % Jacobian
+                    J = [dN_dxi'; dN_deta'; dN_dzeta'] * Xe;   % 3x3
+
+                    Ve = Ve + w(k) * det(J);
+                end
+
+                % Use abs in case connectivity orientation is reversed
+                V(e) = abs(Ve);
+            end
+            obj.gev = V(:)';
         end
 
         %% mesh visiualization
@@ -1140,18 +1218,58 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             joinMeshZones(varargin{:});
         end
 
-        function getQuality(obj)
-            obj.ggmesh;
-            % edges length
-            el = sqrt(sum((obj.nodes(obj.edges(:, 1), :) - ...
-                obj.nodes(obj.edges(:, 2), :)).^2, 2));
-            b1 = el(abs(obj.elements(:, 1)));
-            b2 = el(abs(obj.elements(:, 2)));
-            b3 = el(abs(obj.elements(:, 3)));
-            % mesh quality
-            y = ((b1 + b2 - b3) .* (b1 - b2 + b3) .* (-b1 + b2 + b3)) ./ (b1 .* b2 .* b3);
-            fprintf('Average Quality = %f\n', mean(y));
-            fprintf('Minimum Quality = %f\n', min(y));
+        function q = getQuality(obj)
+            % Per-element scaled Jacobian quality for hexahedral mesh.
+
+            X = obj.nodes;
+            C = obj.cl(:,1:8);
+
+            if size(X,2) ~= 3 && size(X,1) == 3
+                X = X.';
+            end
+
+            Ne = size(C,1);
+            qelem = zeros(Ne,1);
+
+            for e = 1:Ne
+                xe = X(C(e,:), :);
+
+                p1 = xe(1,:); p2 = xe(2,:); p3 = xe(3,:); p4 = xe(4,:);
+                p5 = xe(5,:); p6 = xe(6,:); p7 = xe(7,:); p8 = xe(8,:);
+
+                qc = zeros(8,1);
+
+                qc(1) = cornerSJ(p2-p1, p4-p1, p5-p1);
+                qc(2) = cornerSJ(p3-p2, p1-p2, p6-p2);
+                qc(3) = cornerSJ(p4-p3, p2-p3, p7-p3);
+                qc(4) = cornerSJ(p1-p4, p3-p4, p8-p4);
+
+                qc(5) = cornerSJ(p8-p5, p6-p5, p1-p5);
+                qc(6) = cornerSJ(p5-p6, p7-p6, p2-p6);
+                qc(7) = cornerSJ(p6-p7, p8-p7, p3-p7);
+                qc(8) = cornerSJ(p7-p8, p5-p8, p4-p8);
+
+                qelem(e) = min(qc);
+            end
+
+            q.elem = qelem;
+            q.min  = min(qelem);
+            q.max  = max(qelem);
+            q.avg  = mean(qelem);
+
+            function val = cornerSJ(a,b,c)
+                na = norm(a);
+                nb = norm(b);
+                nc = norm(c);
+
+                if na == 0 || nb == 0 || nc == 0
+                    val = -1;
+                    return;
+                end
+
+                val = dot(a, cross(b,c)) / (na * nb * nc);
+                val = max(-1, min(1, val));
+            end
         end
 
         function gq(varargin)

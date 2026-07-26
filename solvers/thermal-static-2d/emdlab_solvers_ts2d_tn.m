@@ -26,10 +26,6 @@ classdef emdlab_solvers_ts2d_tn < handle
         % initial temperature assumption for iterative solver
         initialTemperature (1,1) double = 25;
 
-    end
-
-    properties (SetAccess = protected)
-
         % depth of problem
         depth (1,1) double {mustBePositive} = 1;
 
@@ -793,7 +789,7 @@ classdef emdlab_solvers_ts2d_tn < handle
             patch(Xall, Yall, 'w', ...
                 'EdgeColor', 'b', ...
                 'FaceColor', 'none', ...
-                'LineWidth', 1);
+                'LineWidth', 0.5);
 
 %             plot(P(:,1), P(:,2), 'ro', 'MarkerFaceColor', 'r');
 %             text(P(:,1), P(:,2), compose(' %d',1:size(P,1)));

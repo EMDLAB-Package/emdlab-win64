@@ -26,10 +26,6 @@ classdef emdlab_solvers_ts3d_tn < handle
         % initial temperature assumption for iterative solver
         initialTemperature (1,1) double = 25;
 
-    end
-
-    properties (SetAccess = protected)
-
         % units
         units (1,1) emdlab_phy_units;
 
