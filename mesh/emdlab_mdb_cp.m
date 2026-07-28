@@ -1,7 +1,7 @@
 % EMDLAB: Electrical Machines Design Laboratory
 % common properties for all mesh database classes
 
-classdef emdlab_mdb_cp < handle
+classdef emdlab_mdb_cp < handle & emdlab_ui_console
 
     properties
 
@@ -26,9 +26,6 @@ classdef emdlab_mdb_cp < handle
         % coordinate systems
         cs (1,1) struct;
 
-        % flag to print the elapsed times
-        printFlag (1,1) logical = true;
-
     end
 
     properties (Dependent = true)
@@ -47,24 +44,6 @@ classdef emdlab_mdb_cp < handle
             obj.cs.global = emdlab_m3d_cs;
         end
 
-        function setPrintFlag(obj, newValue)
-            obj.printFlag = newValue;
-        end
-
-        function timeHolder = dispLine(obj)
-            if obj.printFlag
-                disp('-------------------------------------------------------');
-            end
-            timeHolder = tic;
-        end
-
-        function dispMessage(obj, txt, timeHolder)
-            if obj.printFlag
-                disp(txt);
-                toc(timeHolder);
-            end
-        end
-        
         function y = get.Nmzs(obj)
             y = numel(fieldnames(obj.mzs));
         end

@@ -1,8 +1,11 @@
 %{
-Solving 3D heat diffusion equation in box with
-input heat-flux at left face and zero temperature for 
-the rest -> using hexahedron mesh
-Tavg = 3.43612
+Solving the 3D heat diffusion equation in a box with
+a non-zero temperature at the left face and zero temperature on
+the remaining faces, using a hexahedral mesh.
+
+Analytical solution:
+Tavg = 0.8905
+Qin = 18.01
 %}
 
 % initialization
@@ -15,7 +18,7 @@ addpath(genpath('C:\emdlab-win64'));
 W = 1; % width of the box
 H = 1; % height of the box
 Z = 1; % depth of the problem
-meshSize = 0.04; % maximum mesh size
+meshSize = 0.1; % maximum mesh size
 
 % define geometry
 g = emdlab_g2d_db;
@@ -27,7 +30,7 @@ qm.addMeshZone('z1', g.getQMeshByEdges(1,2,3,4,ceil(W/meshSize),ceil(H/meshSize)
 
 % extrude quadrilateral mesh to generate hexahedron mesh
 m = emdlab_m3d_hhmdb;
-m.addMeshZone('z1', qm.mzs.z1.getExtrude(linspace(0,1,ceil(1/meshSize))));
+m.addMeshZone('z1', qm.mzs.z1.getExtrude(linspace(0,1,ceil(1/meshSize)+1)));
 
 % add & set materials
 m.addMaterial('copper', emdlab_mlib_copper);
@@ -39,7 +42,7 @@ s = emdlab_solvers_ts3d_tn(m);
 
 % set left face boundary condition
 left_idx = m.getFacetIndicesOnPlane([0,0,0],[1,0,0]);
-s.addHeatFluxBC('left', left_idx, 100);
+s.addFixedTemperatureBC('left', left_idx, @(x,y,z) 10*sin(pi*y).*sin(pi*z));
 
 % set boundary condition for the rest faces
 rest_idx = setdiff(m.getfbf, left_idx);
@@ -47,7 +50,11 @@ s.addFixedTemperatureBC('rest', rest_idx, 0);
 
 % solve & plot results
 s.solve
-s.plotAverageTemperature;
-fprintf('Tmin = %.4f\n', min(s.results.T));
-fprintf('Tmax = %.4f\n', max(s.results.T));
+s.plotTemperature;
+fprintf('Tmin = %.4f\n', s.getMinimumTemperature);
+fprintf('Tmax = %.4f\n', s.getMaximumTemperature);
 fprintf('Tavg = %.4f\n', s.getAverageTemperature);
+fprintf('Qin = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(left_idx));
+fprintf('Qout = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(rest_idx));
+right_idx = m.getFacetIndicesOnPlane([1,0,0],[1,0,0]);
+fprintf('Qright_face = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(right_idx));

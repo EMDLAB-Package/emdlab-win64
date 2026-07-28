@@ -265,6 +265,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % triangular elements: first order
         function evalKeMeFe_TL3(obj, mzFlag)
 
+            % check moving zone flag
             if nargin<2, mzFlag = false; end
 
             % prerequests

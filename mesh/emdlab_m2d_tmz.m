@@ -2,8 +2,8 @@
 % 2D triangular mesh zone
 
 classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmz
-        
-    methods        
+
+    methods
         %% constructor and destructor
         function obj = emdlab_m2d_tmz(cl, nodes)
 
@@ -17,25 +17,25 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             end
 
         end
-            
+
         %% FEM preparation
         function evalAreaOfElements(obj)
-%             if obj.is_ea_Evaluated, return; end
+            %             if obj.is_ea_Evaluated, return; end
             v12 = obj.nodes(obj.cl(:, 2), :) - obj.nodes(obj.cl(:, 1), :);
             v13 = obj.nodes(obj.cl(:, 3), :) - obj.nodes(obj.cl(:, 1), :);
             obj.ea = 0.5 * (v12(:, 1) .* v13(:, 2) - v12(:, 2) .* v13(:, 1));
             % change states
             obj.isAreaOfElementsEvaluated = true;
         end
-        
+
         function evalArea(obj)
-%             if obj.is_area_Evaluated, return; end
+            %             if obj.is_area_Evaluated, return; end
             obj.evalAreaOfElements;
             obj.area = sum(obj.ea);
             % change states
             obj.isMeshZoneAreaEvaluated = true;
         end
-        
+
         %% topological functions
         % setting needed data
         function setdataForce(obj)
@@ -64,7 +64,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             s1 = s1(:, 1) == 2;
             s2 = s2(:, 1) == 2;
             s3 = s3(:, 1) == 2;
-            
+
             % unification of edges
             [obj.edges, ~, ic] = unique([e1; e2; e3], 'rows');
 
@@ -92,39 +92,39 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             obj.isDataSet = true;
 
         end
-        
+
         %% Named Selections
         function mzname = checkNodeNamedSelectionExistence(obj, mzname)
             mzname = rmspaces(mzname);
-            
+
             if ~ isfield(obj.mzs, mzname)
                 error('Specified node named selection does not exist.');
             end
-            
+
         end
-        
+
         function mzname = checkNodeNamedSelectionNonExistence(obj, mzname)
             mzname = rmspaces(mzname);
-            
+
             if isfield(obj.mzs, mzname)
                 error('Specified node named selection already exist.');
             end
-            
+
         end
-        
+
         function addNodeNamedSelection(obj, name, indices)
             name = obj.checkNodeNamedSelectionNonExistence(name);
             obj.nodeNamedSelections.(name) = indices;
         end
-        
+
         %% Tools Functions
         function moveNodes(obj, MovTol)
             obj.setdata;
-            
+
             if nargin < 2
                 MovTol = 1e-3;
             end
-            
+
             % connectivity matrix for nodes
             Con = sparse(double(obj.edges(:, 1)), double(obj.edges(:, 2)), 1, obj.Nn, obj.Nn);
             Con = Con + Con';
@@ -132,7 +132,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             inodes = obj.getinodes;
             % weight matrix
             weight = diag(1 ./ sum(Con(inodes, :), 2));
-            
+
             for iter = 1:100
                 % getting position of new nodes
                 pnew = Con(inodes, :) * obj.nodes;
@@ -145,29 +145,29 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
                     fprintf("Mesh smoothing #%d\n", iter);
                     break;
                 end
-                
+
             end
-            
+
             % change states
             obj.isAreaOfElementsEvaluated = false;
             obj.isMeshZoneAreaEvaluated = false;
             obj.is_Q_Evaluated = false;
         end
-        
+
         function y = getbnodes(obj)
             % getting index of boundary nodes
             y = obj.edges(obj.bedges, :);
             y = unique(y(:));
         end
-        
+
         function y = getinodes(obj)
             % getting index of inner nodes
             y = obj.getbnodes;
             y = setdiff((1:obj.Nn)', y);
         end
-        
+
         function strefine(obj)
-            
+
             % number of nodes in old mesh
             NnOld = obj.Nn;
             % nodes of new mesh
@@ -182,9 +182,9 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             % setting data of new mesh
             obj.makeFalse_isDataSetted;
             obj.setdata;
-            
+
         end
-        
+
         %% tranforms and copy generations
         function mirror(obj, varargin)
             obj.nodes = ext_pmirror2(obj.nodes, varargin{:});
@@ -192,7 +192,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             obj.makeFalse_isDataSetted;
             obj.setdata;
         end
-        
+
         function newObj = getMirror(obj, varargin)
             newObj = copy(obj);
             newObj.nodes = ext_pmirror2(newObj.nodes, varargin{:});
@@ -212,7 +212,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
                 end
             end
         end
-        
+
         function newObj = getRotate(obj, varargin)
             newObj = copy(obj);
             newObj.nodes = ext_protate2(newObj.nodes, varargin{:});
@@ -222,35 +222,35 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             obj.nodes(:,1) = obj.nodes(:,1) + xShift;
             obj.nodes(:,2) = obj.nodes(:,2) + yShift;
         end
-        
+
         function newObj = getShift(obj, varargin)
             newObj = copy(obj);
             newObj.nodes = ext_pshift2(newObj.nodes, varargin{:});
         end
-                       
+
         function evalQ(obj)
-%             if obj.is_Q_Evaluated, return; end
+            %             if obj.is_Q_Evaluated, return; end
             obj.Q = sparse(double(obj.cl'), repmat(1:obj.Ne, 3, 1), ones(1, 3 * obj.Ne), ...
                 obj.Nn, obj.Ne) * obj.ea;
             obj.Q = obj.Q' / 3 / obj.area;
             % change states
             obj.is_Q_Evaluated = true;
         end
-        
+
         function evalWm(obj)
-%             if obj.is_Wm_Evaluated, return; end
+            %             if obj.is_Wm_Evaluated, return; end
             obj.Wm = sparse(double(obj.cl(:)), repmat((1:obj.Ne)', 3, 1), 1);
             % change states
             obj.is_Wm_Evaluated = true;
         end
-        
+
         function smoothPlot(obj, value)
             [xdim, ydim] = size(value);
-            
+
             if (xdim ~= obj.Ne) || (ydim ~= 1)
                 error('Improper value, value must be a [Ne x 1] matrix.')
             end
-            
+
             f = GraphicWindow(false);
             f.Name = 'Loss Density';
             h = guihandles(f);
@@ -260,25 +260,25 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             f.Renderer = 'painters';
             f.Units = 'centimeters';
             f.Position = [10,10,13,13];
-            
+
             patch('Faces', obj.cl, 'Vertices', obj.nodes, ...
                 'FaceColor', 'interp', 'FaceVertexCdata', ...
                 (obj.getWm * (value .* obj.getAreaOfElements))...
                 ./ (obj.getWm * obj.getAreaOfElements), ...
                 'EdgeColor', 'none', 'parent', h.va);
-            
+
             patch('Faces', obj.edges(obj.bedges, :), 'Vertices', obj.nodes, ...
                 'FaceColor', 'none', 'EdgeColor', 'k', 'parent', h.va);
-            
+
             AddColorBar(f, min(value), max(value), 'loss density [W/Kg]', 8);
             set(f, 'Visible', 'on');
-            
+
         end
-        
+
     end
-    
+
     methods (Access = private)
-        
+
         function makeFalse_isDataSetted(obj)
             obj.isDataSet = false;
             obj.isAreaOfElementsEvaluated = false;
@@ -286,31 +286,31 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             obj.is_Wm_Evaluated = false;
             obj.is_Q_Evaluated = false;
         end
-        
+
     end
-    
+
     %% Getters
     methods
-        
+
         function y = getAreaOfElements(obj)
             obj.setdata;
             obj.evalAreaOfElements;
             y = obj.ea;
         end
-        
+
         function y = getArea(obj)
             obj.setdata;
             obj.evalAreaOfElements;
             obj.evalArea;
             y = obj.area;
         end
-        
+
         function y = getWm(obj)
             obj.setdata;
             obj.evalWm;
             y = obj.Wm;
         end
-        
+
         function y = getQ(obj)
             obj.setdata;
             obj.evalAreaOfElements;
@@ -318,19 +318,19 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             obj.evalQ;
             y = obj.Q;
         end
-        
+
         function y = getCenterOfElements(obj)
             % get center of elements
             y = (obj.nodes(obj.cl(:, 1), :) + ...
                 obj.nodes(obj.cl(:, 2), :) + ...
                 obj.nodes(obj.cl(:, 3), :)) / 3;
         end
-        
+
         function y = getCenterOfEdges(obj)
             % get center of elements
             y = (obj.nodes(obj.edges(:, 1), :) + obj.nodes(obj.edges(:, 2), :)) / 2;
         end
-        
+
         function y = getQuality(obj)
             % edges length
             el = sqrt(sum((obj.nodes(obj.edges(:, 1), :) - ...
@@ -343,7 +343,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             fprintf('Average Quality = %f\n', mean(y));
             fprintf('Minimum Quality = %f\n', min(y));
         end
-        
+
         function y = getAspectRatio(obj)
             % edges length
             el = sqrt(sum((obj.nodes(obj.edges(:, 1), :) - ...
@@ -353,13 +353,13 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             b3 = el(abs(obj.elements(:, 3)));
             y = max([b1, b2, b3], [], 2) ./ min([b1, b2, b3], [], 2);
         end
-        
+
         function y = getEdgeLength(obj)
             % edges length
             y = sqrt(sum((obj.nodes(obj.edges(:, 1), :) - ...
                 obj.nodes(obj.edges(:, 2), :)).^2, 2));
         end
-        
+
         function y = getMaxEdgeLength(obj)
             % edges length
             el = sqrt(sum((obj.nodes(obj.edges(:, 1), :) - ...
@@ -369,19 +369,19 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             b3 = el(abs(obj.elements(:, 3)));
             y = max([b1, b2, b3], [], 2);
         end
-        
+
         function y = getCopy(obj)
             y = copy(obj);
         end
-        
+
         function ttmz = getExtrude(obj, z, skewAngle)
-            
+
             if iscolumn(z)
                 z = z';
             end
-            
+
             Nz = length(z);
-            
+
             if nargin < 3
                 z = repmat(z, obj.Nn, 1);
                 ttmz = emdlab_m3d_thmz(tmzpc_getExtrude(obj.cl, obj.elements, ...
@@ -389,63 +389,181 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             else
                 stepAngle = skewAngle * (pi / 180) / (Nz - 1);
                 p = zeros(obj.Nn * Nz, 3);
-                
+
                 for i = 1:Nz
                     p((i - 1) * obj.Nn + 1:i * obj.Nn, 1:3) = ...
                         ext_protate3z([obj.nodes, repmat(z(i), obj.Nn, 1)], (i - 1) * stepAngle);
                 end
-                
+
                 ttmz = TTMZPC(tmzpc_getExtrude(obj.cl, obj.elements, ...
                     obj.Nn, Nz - 1), p);
             end
-            
+
         end
-        
+
+        function thmz = buildTetrahedralMeshByExtrusion(obj, z, skewAngle)
+
+            if iscolumn(z)
+                z = z';
+            end
+
+            Nz = length(z);
+            if Nz < 2
+                error('At least two z-levels are required to extrude.');
+            end
+
+            Ne2d = size(obj.cl, 1);
+            Nlayers = Nz - 1;
+
+            if nargin < 3 || isempty(skewAngle) || skewAngle == 0
+                z3d = repmat(z, obj.Nn, 1);
+                nodes3d = [repmat(obj.nodes, Nz, 1), z3d(:)];
+            else
+                stepAngle = skewAngle * (pi / 180) / (Nz - 1);
+                nodes3d = zeros(obj.Nn * Nz, 3);
+
+                for i = 1:Nz
+                    p = [obj.nodes, repmat(z(i), obj.Nn, 1)];
+                    ang = (i - 1) * stepAngle;
+
+                    c = cos(ang);
+                    s = sin(ang);
+
+                    nodes3d((i - 1) * obj.Nn + 1:i * obj.Nn, :) = ...
+                        [p(:,1) * c - p(:,2) * s, ...
+                        p(:,1) * s + p(:,2) * c, ...
+                        p(:,3)];
+                end
+            end
+
+            % Each extruded triangle layer becomes one prism.
+            % Each prism is split into 3 tetrahedra.
+            cl3d = zeros(Ne2d * Nlayers * 3, 4);
+
+            for k = 0:Nlayers-1
+                e2d_idx = k * Ne2d + (1:Ne2d);
+                nshift = k * obj.Nn;
+
+                b1 = obj.cl(:,1) + nshift;
+                b2 = obj.cl(:,2) + nshift;
+                b3 = obj.cl(:,3) + nshift;
+
+                t1 = b1 + obj.Nn;
+                t2 = b2 + obj.Nn;
+                t3 = b3 + obj.Nn;
+
+                base = (k * Ne2d * 3);
+
+                % Prism [b1 b2 b3 t1 t2 t3] split into 3 tetrahedra:
+                % T1 = [b1 b2 b3 t1]
+                % T2 = [b2 b3 t2 t1]
+                % T3 = [b3 t2 t3 t1]
+                cl3d(base + (1:Ne2d), :) = [b1, b2, b3, t1];
+                cl3d(base + Ne2d + (1:Ne2d), :) = [b2, b3, t2, t1];
+                cl3d(base + 2*Ne2d + (1:Ne2d), :) = [b3, t2, t3, t1];
+            end
+
+            thmz = emdlab_m3d_thmz(cl3d, nodes3d);
+
+        end
+
+
+        function mzptr = buildPrismMeshByExtrusion(obj, z, skewAngle)
+
+            if iscolumn(z)
+                z = z';
+            end
+
+            Nz = length(z);
+            if Nz < 2
+                error('At least two z-levels are required to extrude.');
+            end
+
+            Ne2d = size(obj.cl, 1);
+            Nlayers = Nz - 1;
+
+            % Build prism connectivity
+            cl3d = zeros(Ne2d * Nlayers, 6);
+            for k = 0:Nlayers-1
+                idx = k * Ne2d + (1:Ne2d);
+                shift = k * obj.Nn;
+
+                cl3d(idx,1:3) = obj.cl + shift;
+                cl3d(idx,4:6) = obj.cl + shift + obj.Nn;
+            end
+
+            if nargin < 3 || isempty(skewAngle) || skewAngle == 0
+                z3d = repmat(z, obj.Nn, 1);
+                nodes3d = [repmat(obj.nodes, Nz, 1), z3d(:)];
+            else
+                stepAngle = skewAngle * (pi / 180) / (Nz - 1);
+                nodes3d = zeros(obj.Nn * Nz, 3);
+
+                for i = 1:Nz
+                    p = [obj.nodes, repmat(z(i), obj.Nn, 1)];
+                    ang = (i - 1) * stepAngle;
+
+                    c = cos(ang);
+                    s = sin(ang);
+
+                    nodes3d((i-1)*obj.Nn + 1:i*obj.Nn, :) = ...
+                        [p(:,1) * c - p(:,2) * s, ...
+                        p(:,1) * s + p(:,2) * c, ...
+                        p(:,3)];
+                end
+            end
+
+            mzptr = emdlab_m3d_pmz(cl3d, nodes3d);
+            mzptr.color = obj.color;
+            mzptr.material = obj.material;
+
+        end
+
         function ttmz = getRotateZ(obj, Angle, Nlayer)
             Angle = Angle * pi / 180;
             Angle = Angle / (Nlayer - 1);
             p = zeros(Nlayer * obj.Nn, 3);
             p(1:obj.Nn, 1:2) = obj.nodes;
-            
+
             for i = 2:Nlayer
                 p((1:obj.Nn) + (i - 1) * obj.Nn, :) = ...
                     ext_protate3z(p((1:obj.Nn) + (i - 2) * obj.Nn, :), Angle);
             end
-            
+
             ttmz = TTMZPC(tmzpc_getExtrude(obj.cl, obj.elements, ...
                 obj.Nn, Nlayer - 1), p);
         end
-        
+
         function ttmz = getRotateY(obj, Angle, Nlayer)
             Angle = Angle * pi / 180;
             Angle = Angle / (Nlayer - 1);
             p = zeros(Nlayer * obj.Nn, 3);
             p(1:obj.Nn, 1:2) = obj.nodes;
-            
+
             for i = 2:Nlayer
                 p((1:obj.Nn) + (i - 1) * obj.Nn, :) = ...
                     ext_protate3y(p((1:obj.Nn) + (i - 2) * obj.Nn, :), Angle);
             end
-            
+
             ttmz = TTMZPC(tmzpc_getExtrude(obj.cl, obj.elements, ...
                 obj.Nn, Nlayer - 1), p);
         end
-        
+
         function ttmz = getRotateX(obj, Angle, Nlayer)
             Angle = Angle * pi / 180;
             Angle = Angle / (Nlayer - 1);
             p = zeros(Nlayer * obj.Nn, 3);
             p(1:obj.Nn, 1:2) = obj.nodes;
-            
+
             for i = 2:Nlayer
                 p((1:obj.Nn) + (i - 1) * obj.Nn, :) = ...
                     ext_protate3x(p((1:obj.Nn) + (i - 2) * obj.Nn, :), Angle);
             end
-            
+
             ttmz = TTMZPC(tmzpc_getExtrude(obj.cl, obj.elements, ...
                 obj.Nn, Nlayer - 1), p);
         end
-        
+
     end
-    
+
 end

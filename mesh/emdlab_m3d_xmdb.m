@@ -28,12 +28,18 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
         zfc (:,1) double;
         facetCenter (:,3) double;
         facetNormal (:,3) double;
+        NF (1,1) double; % maximum number of facets for one mesh element
+        NFN (1,1) double; % maximum number of nodes for one mesh facet
 
         % center of elements
         elementCenter (:,3) double;
 
         % neighborhood elements
         nbs (:,:) double;
+
+        % 
+        uij (:,:) double;
+        dij (:,:) double;
 
         % jacobian inverse transpose
         JIT (:,:) double;
@@ -82,7 +88,10 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
         end
 
         %% Visualization Functions
-        function varargout = showm(obj, varargin)
+        function varargout = showm(obj, mzColorFlag)
+
+            % colored mesh zones flag
+            if nargin == 1, mzColorFlag = false; end
 
             [f,ax] = emdlab_r3d_geometry(1,1);
             obj.ggmesh;
@@ -90,14 +99,29 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
 
             for mzName = mzNames
                 mzptr = obj.mzs.(mzName);
-                if isa(mzptr, 'emdlab_m3d_thmz')
-                    plt = patch(ax,'Faces', obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3), ...
+                switch class(mzptr)
+                    case 'emdlab_m3d_thmz'
+                        cl_facets = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3);
+                    case 'emdlab_m3d_hhmz'
+                        cl_facets = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:4);
+                    case 'emdlab_m3d_pmz'
+                        cl_facets = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:4);
+                        cl_facets(cl_facets==0) = nan;
+                end
+                if mzColorFlag
+                    plt = patch(ax,'Faces', cl_facets, ...
                         'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
                         obj.mzs.(mzName).color, 'EdgeColor', [0.2,0.2,0.2], ...
                         'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
+                    plt.UserData.c = obj.mzs.(mzName).color;
+                else
+                    plt = patch(ax,'Faces', cl_facets, ...
+                        'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
+                        'c', 'EdgeColor', [0.2,0.2,0.2], ...
+                        'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
+                    plt.UserData.c = 'c';
                 end
                 plt.UserData.Tag = mzName;
-                plt.UserData.c = obj.mzs.(mzName).color;
             end
 
             if nargout == 1, varargout{1} = f;
@@ -105,6 +129,15 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
             elseif nargout > 1, error('Too many output argument.');
             end
 
+        end
+
+        function varargout = showmzs(obj, varargin)
+            % show mesh zones
+            if nargout == 0, obj.showm(true);
+            elseif nargout == 1, varargout{1} = obj.showm(true);
+            elseif nargout == 2, [varargout{1},varargout{2}] = obj.showm(true);
+            elseif nargout > 1, error('Too many output argument.');
+            end
         end
 
         function varargout = showgg(obj, varargin)
@@ -197,12 +230,7 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
 
         end
 
-        function varargout = showmzs(obj, varargin)
-            % show mesh zones
-
-            obj.showm;
-
-        end
+        
 
         function varargout = showmd(obj, varargin)
             % show mesh degree

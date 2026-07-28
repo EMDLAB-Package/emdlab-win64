@@ -12,34 +12,60 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
     end
 
     methods
-        %% constructor and destructor
+        %% Constructor and Destructor
         function obj = emdlab_m3d_hhmdb(varargin)
             % add default material
             obj.addMaterial('air');
         end
 
         function addMeshZone(obj, varargin)
+            % adding a new mesh zone to mesh database
 
-            % you can pass an <emdlab_m3d_hhmz> class without name
-            if nargin == 2
+            % ipnut arguments check
+            switch nargin
 
-                if ~isa(varargin{1}, 'emdlab_m3d_hhmz')
-                    error('Mesh zone class must be <emdlab_m2d_qmz>.');
-                end
-                mzName = obj.getDefaultMeshZoneName;
-                mzptr = varargin{1};
+                case 2
+                    % you can pass an <emdlab_m3d_hhmz> class without a name
+                    % a default name will be considered in this case
+                    if ~isa(varargin{1}, 'emdlab_m3d_hhmz')
+                        error('Mesh zone class must be <emdlab_m3d_hhmz>.');
+                    end
+                    mzName = obj.getDefaultMeshZoneName;
+                    mzptr = varargin{1};
 
-                % you can pass an <emdlab_m3d_hhmz> mesh zone with specified name
-            elseif nargin == 3
+                    
+                case 3
+                    % you can pass an <emdlab_m3d_hhmz> mesh zone with a specified name
+                    if ischar(varargin{1}) || isstring(varargin{1})
 
-                mzName = obj.checkMeshZoneNonExistence(varargin{1});
-                if ~isa(varargin{2}, 'emdlab_m3d_hhmz')
-                    error('Mesh zone class must be <emdlab_m3d_hhmz>.');
-                end
-                mzptr = varargin{2};
+                        mzName = obj.checkMeshZoneNonExistence(varargin{1});
+                        if ~isa(varargin{2}, 'emdlab_m3d_hhmz')
+                            error('Mesh zone class must be <emdlab_m3d_hhmz>.');
+                        end
+                        mzptr = varargin{2};
 
-            else
-                error('Wrong number of arguments.');
+                    elseif isnumeric(varargin{1}) && isnumeric(varargin{2})
+                        % add a new mesh zone by direct passing connectivity list and points
+                        % considering a default mesh zone name
+                        mzName = obj.getDefaultMeshZoneName;
+                        mzptr = emdlab_m3d_hhmz(varargin{1},varargin{2});
+
+                    else
+                        error('Wrong input type.')
+                    end
+
+                case 4
+                    % add a new mesh zone by direct passing name and connectivity list and points
+                    mzName = obj.checkMeshZoneNonExistence(varargin{1});
+                    if isnumeric(varargin{2}) && isnumeric(varargin{3})
+                        mzptr = emdlab_m3d_hhmz(varargin{2},varargin{3});
+                    else
+                        error('Wrong input type.')
+                    end
+
+                otherwise
+                    error('Wrong inputs.');
+
             end
 
             % adding new mesh zone
@@ -47,22 +73,16 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             obj.mzs.(mzName).material = 'air';
 
             % changing states
-            %             obj.makeFalse_isGlobalMeshGenerated;
+            obj.isGlobalMeshGenerated = false;
 
         end
 
         function delete(obj)
 
-            mzNames = fieldnames(obj.mzs);
-
-            for i = 1:numel(mzNames)
-                delete(obj.mzs.(mzNames{i}));
+            for mzName = obj.getMeshZoneNames
+                delete(obj.mzs.(mzName));
             end
 
-        end
-
-        function y = getMeshZoneNames(obj)
-            y = string(fieldnames(obj.mzs))';
         end
 
         function y = get.isTTL4(obj)
@@ -73,9 +93,9 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             y = strcmpi(obj.etype, 'TTL10');
         end
 
-        %% FEM preparation
-        % generate global mesh
+        %% Solver Preparation Functions        
         function ggmesh(obj, mzFlag)
+            % generate global mesh
 
             if nargin<2, mzFlag = false; end
 
@@ -582,7 +602,10 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
         %% Topological Functions
         function obj = setData(obj)
 
-            % Hex faces
+            % getting the number of elements
+            ne = obj.Ne;
+
+            % hexahedron facets
             f1 = obj.cl(:, [1,2,3,4]);
             f2 = obj.cl(:, [5,8,7,6]);
             f3 = obj.cl(:, [1,5,6,2]);
@@ -590,48 +613,32 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             f5 = obj.cl(:, [3,7,8,4]);
             f6 = obj.cl(:, [4,8,5,1]);
 
-            % Stack all faces
-            allFaces = [f1; f2; f3; f4; f5; f6];
+            % stack all facets
+            allFacets = [f1; f2; f3; f4; f5; f6];
 
-            [~,idx] = min(allFaces,[],2);
-            for i = 1:length(idx)
-                allFaces(i,:) = circshift(allFaces(i,:), 1-idx(i));
-            end
+            % set all facets in canonical form
+            %             [~,idx] = min(allFacets,[],2);
+            %             for i = 1:6*ne
+            %                 allFacets(i,:) = circshift(allFacets(i,:), 1-idx(i));
+            %             end
+            emdlab_mex_m3d_makeFacetsCanonical(allFacets);
 
-            % Canonical form for uniqueness
-            [sortedFaces,s] = sort(allFaces, 2);
-
-            % facet path
-            s = s(:,2) < s(:,3);
+            % canonical form for uniqueness
+            sortedFacets = allFacets;
+            s = false(size(allFacets,1),1);
+            idx = allFacets(:,2) > allFacets(:,4);
+            sortedFacets(idx,2) = allFacets(idx,4);
+            sortedFacets(idx,4) = allFacets(idx,2);
+            s(idx) = true;
 
             % unification of facets
-            [~, ia, ic] = unique(sortedFaces, 'rows');
-            obj.facets = allFaces(ia,:);
+            [obj.facets, ~, ic] = unique(sortedFacets, 'rows');
 
-            % getting number of elements
-            ne = obj.Ne;
-
-            % Face index per element
-            obj.elements(:,1:6) = [
-                ic(1:ne), ...
-                ic(ne+1:2*ne), ...
-                ic(2*ne+1:3*ne), ...
-                ic(3*ne+1:4*ne), ...
-                ic(4*ne+1:5*ne), ...
-                ic(5*ne+1:6*ne)
-                ];
-
+            % use negative sign for reverse facets
             ic(s) = -ic(s);
 
-            % Face index per element
-            obj.elements(:,1:6) = [
-                ic(1:ne), ...
-                ic(ne+1:2*ne), ...
-                ic(2*ne+1:3*ne), ...
-                ic(3*ne+1:4*ne), ...
-                ic(4*ne+1:5*ne), ...
-                ic(5*ne+1:6*ne)
-                ];
+            % face index per element
+            obj.elements(:,1:6) = reshape(ic, ne, 6);
 
             % calculate facet areas
             p12 = obj.nodes(obj.facets(:,2),:) - obj.nodes(obj.facets(:,1),:);
@@ -666,6 +673,11 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             % last element of elements matrix refers to number of facets
             obj.elements(:,end+1) = 6;
 
+            % last element of facets matrix refers to number of facet points
+            obj.facets(:,end+1) = 4;
+
+            obj.NFN = 4;
+            obj.NF = 6;
             obj.evalezi;
             obj.calculateHexVolumes;
 
@@ -749,32 +761,7 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
         end
 
         %% mesh visiualization
-        function varargout = showm(obj, varargin)
-
-            %             [f,ax] = emdlab_flib_fax(varargin{:});
-            %             if isa(f,"matlab.ui.Figure")
-            %                 f.MenuBar = "none";
-            %             end
-            [f,ax] = emdlab_r3d_geometry(1,1);
-            obj.ggmesh;
-            mzNames = string(fieldnames(obj.mzs)');
-
-            for mzName = mzNames
-                plt = patch(ax,'Faces', obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,:), ...
-                    'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
-                    obj.mzs.(mzName).color, 'EdgeColor', [0.2,0.2,0.2], ...
-                    'FaceAlpha', 1, ...
-                    'HitTest','on','PickableParts','visible');
-                plt.UserData.Tag = mzName;
-                plt.UserData.c = obj.mzs.(mzName).color;
-            end
-
-            if nargout == 1, varargout{1} = f;
-            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
-            elseif nargout > 1, error('Too many output argument.');
-            end
-
-        end
+        
 
         function varargout = showwf(obj)
 
@@ -872,10 +859,6 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             end
 
             set(f, 'Visible', 'on');
-        end
-
-        function showmzs(obj)
-            obj.showm;
         end
 
         function showmz(obj, mzName)
@@ -1309,7 +1292,7 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 obj.facetNamedSelections.(name));
         end
 
-        %% Index Finding
+        %% Index Finding Functions
         function y = getfbf(obj)
             obj.ggmesh;
             y = find(obj.bfacets);

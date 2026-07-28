@@ -2,7 +2,7 @@
 % magnetic-static two-dimensional tl3
 % triangular lagrangian elements common properties
 
-classdef emdlab_solvers_ms2d_tlcp < handle
+classdef emdlab_solvers_ms2d_tlcp < handle & emdlab_ui_console
 
     properties (SetAccess = protected)
 

@@ -663,6 +663,9 @@ classdef emdlab_m3d_thmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             % last element of elements matrix refers to number of facets
             obj.elements(:,end+1) = 4;
 
+            % last element of facets matrix refers to number of facet points
+            obj.facets(:,end+1) = 3;
+
         end
 
         %% Mesh Visiualization

@@ -45,7 +45,8 @@ classdef emdlab_solvers_ts3d_tn < handle
         isResultsValid (1,1) logical = false;
 
         meshType (1,:) char = '';
-        NR (1,1) double;
+        NR (1,1) double; % number of resistances per element
+        Nfn (1,1) double; % maximum number of nodes of one mesh facet
 
     end
 
@@ -60,20 +61,26 @@ classdef emdlab_solvers_ts3d_tn < handle
         %% Constructor and Destructor
         function obj = emdlab_solvers_ts3d_tn(m)
 
-            m.ggmesh;
-            obj.m = m;
             % mesh pointer
             switch class(m)
                 case 'emdlab_m3d_thmdb'
                     obj.meshType = 'thm';
-                    % eval JIT and gea for later use
-                    obj.m.evalJIT;
+                    obj.NR = 4;
+                    obj.Nfn = 3;
                 case 'emdlab_m3d_hhmdb'
                     obj.meshType = 'hhm';
+                    obj.NR = 6;
+                    obj.Nfn = 4;
+                case 'emdlab_m3d_pmdb'
+                    obj.meshType = 'pm';
+                    obj.NR = 5;
+                    obj.Nfn = 4;
                 otherwise
-                    error('Mesh class must be <emdlab_m3d_thmdb> or <emdlab_m3d_hhmdb>');
+                    error('Mesh type is not supported.');
             end
-            
+            m.ggmesh; % generate global mesh
+            obj.m = m;
+            if isa(m, 'emdlab_m3d_thmdb'); m.evalJIT; end
 
             % set default properties of mesh zones
             for mzName = obj.m.getMeshZoneNames
@@ -100,36 +107,16 @@ classdef emdlab_solvers_ts3d_tn < handle
         end
 
         %% Design Properties
-%         function setDepth(obj, value)
-%             obj.depth = value;
-%         end
-
+        function setInitialTemperatureOfAllMeshZones(obj, value)
+            obj.initialTemperature = value;
+        end
 
         %% solver properties for mesh zones
 
         function setdp(obj, mzName)
             % set default properties of a mesh zone
 
-            obj.m.mzs.(mzName).props.isExcited = false;
-            obj.m.mzs.(mzName).props.isCoilArm = false;
-            obj.m.mzs.(mzName).props.isCoilMember = false;
-            obj.m.mzs.(mzName).props.isMagnetized = false;
-            %             obj.makeFalse_isElementDataAssigned;
-
-        end
-
-        function addmz(obj, mzName, mzValue)
-
-            obj.m.addmz(mzName, mzValue);
-            obj.setdp(mzName);
-            %             obj.makeFalse_isElementDataAssigned;
-
-        end
-
-        function removemz(obj, mzName)
-
-            obj.m.removemz(mzName);
-            %             obj.makeFalse_isElementDataAssigned;
+            obj.m.mzs.(mzName).props.initialTemperature = 25;
 
         end
 
@@ -146,6 +133,7 @@ classdef emdlab_solvers_ts3d_tn < handle
 
         %% Solver Functions
         function setSolverIndex(obj, value)
+            % solver index used for parallel computing
             obj.solverIndex = value;
         end
 
@@ -172,7 +160,7 @@ classdef emdlab_solvers_ts3d_tn < handle
                 mzptr = obj.m.mzs.(mzNames{i});
 
                 % assigning thermal conductivities
-                if obj.m.mts.(mzptr.material).ThermalConductivity.isTemperatureDependent 
+                if obj.m.mts.(mzptr.material).ThermalConductivity.isTemperatureDependent
                     if obj.m.mts.(mzptr.material).ThermalConductivity.isIsotropic
                         obj.edata.ThermalConductivity(:,obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ThermalConductivity.value;
                     else
@@ -202,7 +190,6 @@ classdef emdlab_solvers_ts3d_tn < handle
             obj.assignElementData;
 
             % calculate resistances
-            obj.NR = max(obj.m.elements(:,end));
             resistances = zeros(obj.m.Ne,obj.NR);
 
             % loop over mesh zones
@@ -239,11 +226,10 @@ classdef emdlab_solvers_ts3d_tn < handle
                     else
                         uij = obj.m.facetCenter(abs(obj.m.elements(i,j)),:) - obj.m.elementCenter(i,:);
                         die = norm(uij);
-                    end                    
+                    end
                     uij = uij / norm(uij);
 
                     kij = kx*(ux(i,:)*uij').^2 + ky*(uy(i,:)*uij').^2 + kz*(uz(i,:)*uij').^2;
-%                     obj.kxySV(i,j) = (kx-ky) * (ux(i,1:2) * uij') * (uy(i,1:2) * uij');
 
                     elm(i,j) = abs(uij * obj.m.facetNormal(abs(obj.m.elements(i,j)),:)');
 
@@ -286,68 +272,219 @@ classdef emdlab_solvers_ts3d_tn < handle
             % construct global matrices and solve
             G_maxtrix = sparse(indexI, indexJ, value);
             obj.results.T = G_maxtrix\sourceVector;
-%             obj.evalTSmooth;
-%             sourceVectorU = sourceVector;
+            obj.evalTn;
 
-%             if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
-% 
-%                 releativeError = 1e-3;
-%                 maxIteration = 50;
-%                 iter = 0;
-%                 err = inf;
-%                 
-%                 % iterative loop for solver
-%                 while iter<maxIteration && err>releativeError
-% 
-%                     % handle anisotropy
-%                     if ~obj.edata.areAllIsotropic
-%                         for i = 1:obj.m.Ne
-%                             T1 = obj.results.Tsmooth(obj.m.cl(i,1));
-%                             T2 = obj.results.Tsmooth(obj.m.cl(i,2));
-%                             T3 = obj.results.Tsmooth(obj.m.cl(i,3));
-%                             T4 = obj.results.Tsmooth(obj.m.cl(i,4));
-%                             sourceVectorU(i) = sourceVector(i) + obj.kxySV(i)*z*  ...
-%                                 (-(T2-T1)+(T3-T2)-(T4-T3)+(T1-T4));
-%                         end
-%                     end
-% 
-%                     Told = obj.results.T;
-%                     % solver iteration
-%                     obj.results.T = G_maxtrix\sourceVectorU;
-%                     obj.evalTSmooth;
-% 
-%                     iter = iter + 1;
-%                     err = norm(obj.results.T-Told,2)/norm(obj.results.T,2);
-% 
-%                 end
-% 
-%             end
+            obj.solverHistory.relativeError = [];
+
+            %             if ~obj.edata.areAllTemperatureIndependent || ~obj.edata.areAllIsotropic || ~obj.edata.areAllHomogeneous
+            %
+            %                 releativeError = 1e-3;
+            %                 maxIteration = 200;
+            %                 iter = 0;
+            %                 err = inf;
+            %
+            %                 % iterative loop for solver
+            %                 while iter<maxIteration && err>releativeError
+            %
+            %                     sourceVectorU = sourceVector;
+            %
+            %                     % handle anisotropy
+            %                     if ~obj.edata.areAllIsotropic
+            %                         for i = 1:obj.m.Ne
+            %                             Tij = obj.results.Tn(obj.m.cl(i,[1:obj.NR,1]));
+            %                             for j = 1:obj.NR
+            %                                 if ~obj.m.bedges(abs(obj.m.elements(i,j)))
+            %                                     sourceVectorU(i) = sourceVectorU(i) + z * ...
+            %                                         obj.kxySV(i,j) * (Tij(j) - Tij(j+1)) * elm(i,j);
+            %                                 end
+            %                             end
+            %                         end
+            %                     end
+            %
+            %                     Told = obj.results.T;
+            %
+            %                     % solver iteration
+            %                     obj.results.T = G_maxtrix\sourceVectorU;
+            %                     obj.evalTn;
+            %
+            %                     iter = iter + 1;
+            %                     err = norm(obj.results.T-Told,2)/norm(obj.results.T,2);
+            %                     obj.solverHistory.relativeError(end+1) = err;
+            %
+            %                     fprintf('Iteration #%03d, Relative Error = %.2e\n', iter, err);
+            %
+            %                 end
+            %
+            %             end
+
+            % calculate cross heat at facets
+            Nfn_ = obj.Nfn;
+            Nfacets = size(obj.m.facets,1);
+            obj.results.qf = zeros(Nfacets,1);
+            %             for k = 1:Nfacets
+            %                 if ~obj.m.bfacets(k)
+            %                     % index of left element
+            %                     i = obj.m.facets(k,Nfn_+3);
+            %                     % index of right element
+            %                     j = obj.m.facets(k,Nfn_+5);
+            %                     % net heat passing k-th internal edge
+            %                     obj.results.qf(k) = (obj.results.T(j) - obj.results.T(i)) * G_maxtrix(i,j);
+            %                 end
+            %             end
+
+            emdlab_mex_solvers_ts3d_calcqfif(obj.m.facets, obj.m.bfacets, obj.results.T, G_maxtrix, obj.results.qf, Nfn_);
+
+            for k = 1:numel(exNames)
+
+                exptr = obj.excitations.(exNames(k));
+                switch exptr.type
+
+                    case 'fixed-temperature'
+                        if isa(exptr.value, 'function_handle')
+                            Tb = exptr.value(obj.m.facetCenter(exptr.idx,1),obj.m.facetCenter(exptr.idx,2),obj.m.facetCenter(exptr.idx,3));
+                        else
+                            Tb = exptr.value*ones(length(exptr.idx),1);
+                        end
+
+                        emdlab_mex_solvers_ts3d_calcqfft(resistances, obj.m.facets, exptr.idx, obj.results.T, Tb, obj.results.qf, Nfn_);
+
+                        %                         j = 0;
+                        %                         for i = exptr.idx(:)'
+                        %                             j = j+1;
+                        %
+                        %                             if obj.m.facets(i,Nfn_+2)
+                        %                                 obj.results.qf(i) = (Tb(j) - obj.results.T(obj.m.facets(i,Nfn_+5))) / ...
+                        %                                     resistances(obj.m.facets(i,Nfn_+5), obj.m.facets(i,Nfn_+6));
+                        %                             else
+                        %                                 obj.results.qf(i) = (obj.results.T(obj.m.facets(i,Nfn_+3)) - Tb(j)) / ...
+                        %                                     resistances(obj.m.facets(i,Nfn_+3), obj.m.facets(i,Nfn_+4));
+                        %                             end
+                        %                         end
+
+                    case 'convection'
+                        if isa(exptr.hValue, 'function_handle')
+                            hValue = exptr.hValue(edgeCenter(exptr.idx,1),edgeCenter(exptr.idx,2));
+                        else
+                            hValue = exptr.hValue*ones(length(exptr.idx),1);
+                        end
+
+                        j = 0;
+                        for i = exptr.idx(:)'
+                            j = j+1;
+
+                            if obj.m.facets(i,Nfn_+2)
+                                obj.results.qf(i) = (exptr.Tinf - obj.results.T(obj.m.facets(i,Nfn_+5))) / ...
+                                    (resistances(obj.m.facets(i,Nfn_+5), obj.m.facets(i,Nfn_+6)) + 1/(hValue(j)*obj.m.facetArea(i)*obj.units.k_length^2));
+                            else
+                                obj.results.qf(i) = (obj.results.T(obj.m.facets(i,Nfn_+3)) - exptr.Tinf) / ...
+                                    (resistances(obj.m.facets(i,Nfn_+3), obj.m.facets(i,Nfn_+4)) + 1/(hValue(j)*obj.m.facetArea(i)*obj.units.k_length^2));
+                            end
+                        end
+
+                    case 'radiation'
+                        [value, sourceVector] = applyConvectionBC(obj, exptr.idx, value, sourceVector, resistances, exptr.Tinf, exptr.hValue);
+
+                    case 'heat-flux'
+                        if isa(exptr.value, 'function_handle')
+                            qb = exptr.value(obj.m.facetCenter(exptr.idx,1),obj.m.facetCenter(exptr.idx,2),obj.m.facetCenter(exptr.idx,3));
+                        else
+                            qb = exptr.value*ones(length(exptr.idx),1);
+                        end
+
+                        emdlab_mex_solvers_ts3d_calcqfhf(obj.m.facets, exptr.idx, qb, obj.results.qf, obj.m.facetArea, Nfn_, obj.units.k_length^2);
+
+                        %                         j = 0;
+                        %                         for i = exptr.idx(:)'
+                        %                             j = j+1;
+                        %
+                        %                             if obj.m.facets(i,Nfn_+2)
+                        %                                 obj.results.qf(i) = qb(j)*obj.m.facetArea(i)*obj.units.k_length^2;
+                        %                             else
+                        %                                 obj.results.qf(i) = -qb(j)*obj.m.facetArea(i)*obj.units.k_length^2;
+                        %                             end
+                        %                         end
+
+                end
+
+            end
+
+            obj.evalTSmooth;
+        end
+
+        function y = calculateNetHeatCrossingBoundaryFacets(obj, idx)
+            y = 0;
+            Nfn_ = obj.Nfn;
+            for i = idx(:)'
+                if obj.m.facets(i,Nfn_+2)
+                    y = y + obj.results.qf(i);
+                else
+                    y = y - obj.results.qf(i);
+                end
+            end
+        end
+
+        function evalTn(obj)
+            obj.results.Tn = emdlab_mex_solvers_ts3d_evalTn(obj.results.T, obj.m.elementCenter, obj.m.nodes, obj.m.cl);
+        end
+
+        function evalTn_mfile(obj)
+
+            obj.results.Tn = zeros(obj.m.Nn,1);
+            ec = obj.m.elementCenter;
+            denum = zeros(obj.m.Nn,1);
+
+            % loop over elements
+            for i = 1:obj.m.Ne
+                for j = 1:obj.m.cl(i,end)
+                    pIndex = obj.m.cl(i,j);
+                    di = norm(ec(i,:) - obj.m.nodes(pIndex,:));
+                    obj.results.Tn(pIndex) = obj.results.Tn(pIndex) + obj.results.T(i)/di;
+                    denum(pIndex) = denum(pIndex) + 1/di;
+                end
+            end
+
+            obj.results.Tn = obj.results.Tn ./ denum;
+
+            %             % apply excitation conditions
+            %             exNames = obj.getExcitationNames;
+            %             for i = 1:numel(exNames)
+            %                 exptr = obj.excitations.(exNames(i));
+            %                 if strcmpi(exptr.type,'fixed-temperature')
+            %                     for j = reshape(exptr.idx, 1, [])
+            %                         if isa(exptr.value, 'function_handle')
+            %                             pts = obj.m.nodes(obj.m.edges(j,1:2),:);
+            %                             obj.results.Tn(obj.m.edges(j,1)) = exptr.value(pts(1,1),pts(1,2));
+            %                             obj.results.Tn(obj.m.edges(j,2)) = exptr.value(pts(2,1),pts(2,2));
+            %                         else
+            %                             obj.results.Tn(obj.m.edges(j,1:2)) = exptr.value;
+            %                         end
+            %                     end
+            %                 end
+            %             end
 
         end
 
         function evalTSmooth(obj)
 
-            gea_tmp = repmat(obj.m.gea,4,1);
-            index = obj.m.cl';
-            obj.results.Tsmooth = full(diag(sparse(index, index, repmat(obj.results.T',4,1) .* gea_tmp)) ./ ...
-            diag(sparse(index, index, gea_tmp)));
-            
+            obj.results.Tsmooth = obj.results.Tn;
+
             % apply excitation conditions
             exNames = obj.getExcitationNames;
             for i = 1:numel(exNames)
                 exptr = obj.excitations.(exNames(i));
                 if strcmpi(exptr.type,'fixed-temperature')
-                    for j = reshape(exptr.idx, 1, [])
+                    for j = exptr.idx(:)'
                         if isa(exptr.value, 'function_handle')
-                            pts = obj.m.nodes(obj.m.edges(j,1:2),:);
-                            obj.results.Tsmooth(obj.m.edges(j,1)) = exptr.value(pts(1,1),pts(1,2));
-                            obj.results.Tsmooth(obj.m.edges(j,2)) = exptr.value(pts(2,1),pts(2,2));
+                            pts = obj.m.nodes(obj.m.facets(j,1:obj.m.facets(j,end)),:);
+                            for k = 1:obj.m.facets(j,end)
+                                obj.results.Tsmooth(obj.m.facets(j,k)) = exptr.value(pts(k,1),pts(k,2),pts(k,3));
+                            end
                         else
-                            obj.results.Tsmooth(obj.m.edges(j,1:2)) = exptr.value;
+                            obj.results.Tsmooth(obj.m.facets(j,1:obj.m.facets(j,end))) = exptr.value;
                         end
-                    end                     
+                    end
                 end
-            end            
+            end
 
         end
 
@@ -396,7 +533,7 @@ classdef emdlab_solvers_ts3d_tn < handle
             mzName = obj.m.checkMeshZoneExistence(mzName);
             obj.excitations.(exName).type = 'internal-heat-source';
             obj.excitations.(exName).mzName = mzName;
-            
+
 
             z = obj.getDepth;
             um = obj.units.k_length;
@@ -448,12 +585,12 @@ classdef emdlab_solvers_ts3d_tn < handle
             switch obj.meshType
                 case 'thm'
                     idx = obj.m.facets(obj.m.bfacets,6) + obj.m.facets(obj.m.bfacets,8);
-            patch('faces', obj.m.facets(obj.m.bfacets,1:3), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(idx), ...
-                'FaceColor','flat', 'edgecolor', 'w');
+                    patch('faces', obj.m.facets(obj.m.bfacets,1:3), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(idx), ...
+                        'FaceColor','flat', 'edgecolor', 'w');
                 case 'hhm'
-            idx = obj.m.facets(obj.m.bfacets,7) + obj.m.facets(obj.m.bfacets,9);
-            patch('faces', obj.m.facets(obj.m.bfacets,1:4), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(idx), ...
-                'FaceColor','flat', 'edgecolor', 'w');
+                    idx = obj.m.facets(obj.m.bfacets,7) + obj.m.facets(obj.m.bfacets,9);
+                    patch('faces', obj.m.facets(obj.m.bfacets,1:4), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(idx), ...
+                        'FaceColor','flat', 'edgecolor', 'w');
             end
 
             colormap(jet(N));
@@ -461,19 +598,19 @@ classdef emdlab_solvers_ts3d_tn < handle
             cb.FontName = 'Verdana';
             cb.FontSize = 12;
             cb.Label.String = 'Average Temperature [C]';
-            climits = clim; 
+            climits = clim;
             cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
             cb.Ticks(1) = cb.Ticks(1) + 0.01;
             cb.Position = [0.8,0.3,0.05,0.4];
 
-%             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
-%             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
-%                 'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+            %             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
+            %             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
+            %                 'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
 
-%             zoom on;
-%             axis(ax, 'off');
-%             axis(ax, 'equal');
-%             set(ax, 'clipping', 'off');
+            %             zoom on;
+            %             axis(ax, 'off');
+            %             axis(ax, 'equal');
+            %             set(ax, 'clipping', 'off');
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
@@ -484,29 +621,82 @@ classdef emdlab_solvers_ts3d_tn < handle
 
         function varargout = plotTemperature(obj, N, varargin)
 
-            [f,ax] = emdlab_flib_fax(varargin{:});
+            [f,ax] = emdlab_r3d_geometry(1,0);
             if nargin<2, N=10; end
-            obj.evalTSmooth;
 
-            patch('faces', obj.m.cl, 'Vertices', obj.m.nodes, 'FaceVertexCData', obj.results.Tsmooth, ...
-                'FaceColor','interp', 'edgecolor', 'none');
+            switch obj.meshType
+                case 'thm'
+
+                    patch('faces', obj.m.facets(obj.m.bfacets,1:3), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tsmooth, ...
+                        'FaceColor','interp', 'edgecolor', 'w');
+                case {'pm','hhm'}
+                    tmp = obj.m.facets(obj.m.bfacets,1:4);
+                    tmp(tmp ==0 ) = nan;
+                    patch('faces', tmp, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tsmooth, ...
+                        'FaceColor','interp', 'edgecolor', 'w');
+            end
+
             colormap(jet(N));
             cb = colorbar;
             cb.FontName = 'Verdana';
             cb.FontSize = 12;
-            cb.Label.String = 'Temperature [C]';
-            climits = clim; 
+            cb.Label.String = 'Average Temperature [C]';
+            climits = clim;
             cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
             cb.Ticks(1) = cb.Ticks(1) + 0.01;
+            cb.Position = [0.8,0.3,0.05,0.4];
 
-            index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
-            patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+            %             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
+            %             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
+            %                 'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
 
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
+            %             zoom on;
+            %             axis(ax, 'off');
+            %             axis(ax, 'equal');
+            %             set(ax, 'clipping', 'off');
+
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function varargout = plotTemperatureTn(obj, N, varargin)
+
+            [f,ax] = emdlab_r3d_geometry(1,0);
+            if nargin<2, N=10; end
+
+            switch obj.meshType
+                case 'thm'
+
+                    patch('faces', obj.m.facets(obj.m.bfacets,1:3), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tn, ...
+                        'FaceColor','interp', 'edgecolor', 'w');
+                case {'pm','hhm'}
+                    tmp = obj.m.facets(obj.m.bfacets,1:4);
+                    tmp(tmp ==0 ) = nan;
+                    patch('faces', tmp, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tn, ...
+                        'FaceColor','interp', 'edgecolor', 'w');
+            end
+
+            colormap(jet(N));
+            cb = colorbar;
+            cb.FontName = 'Verdana';
+            cb.FontSize = 12;
+            cb.Label.String = 'Average Temperature [C]';
+            climits = clim;
+            cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
+            cb.Ticks(1) = cb.Ticks(1) + 0.01;
+            cb.Position = [0.8,0.3,0.05,0.4];
+
+            %             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
+            %             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
+            %                 'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
+
+            %             zoom on;
+            %             axis(ax, 'off');
+            %             axis(ax, 'equal');
+            %             set(ax, 'clipping', 'off');
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
@@ -517,6 +707,14 @@ classdef emdlab_solvers_ts3d_tn < handle
 
         function y = getAverageTemperature(obj)
             y = obj.m.gev * obj.results.T / sum(obj.m.gev);
+        end
+
+        function y = getMinimumTemperature(obj)
+            y = min([obj.results.T; obj.results.Tn; obj.results.Tsmooth]);
+        end
+
+        function y = getMaximumTemperature(obj)
+            y = max([obj.results.T; obj.results.Tn; obj.results.Tsmooth]);
         end
 
     end
@@ -592,7 +790,7 @@ classdef emdlab_solvers_ts3d_tn < handle
                         Rp(j) = inf;
                         indexJ(i,j+1) = i;
                     end
-                    
+
                 end
 
                 indexJ(i,1) = i;
@@ -608,7 +806,7 @@ classdef emdlab_solvers_ts3d_tn < handle
             idx = idx(:)';
             Nidx = length(idx);
 
-            % calculate temperature value at facet centers -> tvfc            
+            % calculate temperature value at facet centers -> tvfc
             if isa(TValue,'function_handle')
                 tvfc = zeros(1,Nidx);
                 for i = 1:Nidx
@@ -641,7 +839,7 @@ classdef emdlab_solvers_ts3d_tn < handle
                     end
 
                     % hexahedral mesh
-                case 'hhm'
+                case {'pm', 'hhm'}
 
                     for i = 1:Nidx
                         if obj.m.facets(idx(i),7)
@@ -713,7 +911,7 @@ classdef emdlab_solvers_ts3d_tn < handle
             idx = idx(:)';
             Nidx = length(idx);
 
-            % calculate heat flux at facet centers -> hffc            
+            % calculate heat flux at facet centers -> hffc
             if isa(HFValue,'function_handle')
                 hffc = zeros(1,Nidx);
                 for i = 1:Nidx
@@ -746,7 +944,7 @@ classdef emdlab_solvers_ts3d_tn < handle
                     end
 
                     % hexahedral mesh
-                case 'hhm'
+                case {'pm','hhm'}
 
                     for i = 1:Nidx
 
@@ -768,7 +966,7 @@ classdef emdlab_solvers_ts3d_tn < handle
                     error('Mesh type is not supported.');
             end
 
-            
+
 
         end
 

@@ -1,7 +1,7 @@
 %{
 Solving 3D heat diffusion equation in box with
 input heat-flux at left face and zero temperature for 
-the rest -> using tetrahedral mesh
+the rest -> using hexahedron mesh
 Tavg = 3.43612
 %}
 
@@ -19,15 +19,15 @@ meshSize = 0.05; % maximum mesh size
 
 % define geometry
 g = emdlab_g2d_db;
-g.addFace('z1', g.addRectangleLoop(0,0,W,H));
+g.addRectangleLoop(0,0,W,H);
 
-% construct triangular mesh
-g.setMeshMaxLength(meshSize);
-tm = g.generateMesh('mg0');
+% construct quadrilateral mesh
+qm = emdlab_m2d_qmdb();
+qm.addMeshZone('z1', g.getQMeshByEdges(1,2,3,4,ceil(W/meshSize),ceil(H/meshSize)));
 
 % extrude quadrilateral mesh to generate hexahedron mesh
-m = emdlab_m3d_thmdb;
-m.addMeshZone('z1', tm.mzs.z1.getExtrude(linspace(0,1,ceil(1/meshSize))));
+m = emdlab_m3d_hhmdb;
+m.addMeshZone('z1', qm.mzs.z1.getExtrude(linspace(0,1,ceil(1/meshSize))));
 
 % add & set materials
 m.addMaterial('copper', emdlab_mlib_copper);
@@ -47,7 +47,11 @@ s.addFixedTemperatureBC('rest', rest_idx, 0);
 
 % solve & plot results
 s.solve
-s.plotAverageTemperature;
-fprintf('Tmin = %.4f\n', min(s.results.T));
-fprintf('Tmax = %.4f\n', max(s.results.T));
+s.plotTemperature;
+fprintf('Tmin = %.4f\n', s.getMinimumTemperature);
+fprintf('Tmax = %.4f\n', s.getMaximumTemperature);
 fprintf('Tavg = %.4f\n', s.getAverageTemperature);
+fprintf('Qin = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(left_idx));
+fprintf('Qout = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(rest_idx));
+right_idx = m.getFacetIndicesOnPlane([1,0,0],[1,0,0]);
+fprintf('Qright_face = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(right_idx));

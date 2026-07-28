@@ -9,6 +9,7 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             if nargin < 2, error('Not enough input arguments.'); end
             if nargin > 2, error('Too many input arguments.'); end
+
             obj.nodes = nodes;
             obj.cl = cl;
             obj.setData;
@@ -57,9 +58,10 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         function setData(obj)
 
+            % check if data is already set
             if obj.isDataSet, return; end
 
-            % Hex faces
+            % hexahedral facets
             f1 = obj.cl(:, [1,2,3,4]);
             f2 = obj.cl(:, [5,8,7,6]);
             f3 = obj.cl(:, [1,5,6,2]);
@@ -67,57 +69,36 @@ classdef emdlab_m3d_hhmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             f5 = obj.cl(:, [3,7,8,4]);
             f6 = obj.cl(:, [4,8,5,1]);
 
-            % Stack all faces
-            allFaces = [f1; f2; f3; f4; f5; f6];
+            % stack all faces
+            allFacets = [f1; f2; f3; f4; f5; f6];
+            emdlab_mex_m3d_makeFacetsCanonical(allFacets);
 
-            [~,idx] = min(allFaces,[],2);
-            for i = 1:length(idx)
-                allFaces(i,:) = circshift(allFaces(i,:), 1-idx(i));
-            end
-
-            % Canonical form for uniqueness
-            [sortedFaces,s] = sort(allFaces, 2);
-
-            % facet path
-            s = s(:,2) < s(:,3);
+            % canonical form for uniqueness
+            sortedFacets = allFacets;
+            s = false(size(allFacets,1),1);
+            idx = allFacets(:,2) > allFacets(:,4);
+            sortedFacets(idx,2) = allFacets(idx,4);
+            sortedFacets(idx,4) = allFacets(idx,2);
+            s(idx) = true;
 
             % unification of facets
-            [~, ia, ic] = unique(sortedFaces, 'rows');
-            obj.facets = allFaces(ia,:);
+            [obj.facets, ~, ic] = unique(sortedFacets, 'rows');
 
-            % getting number of elements
-            ne = obj.Ne;
-
-            % Face index per element
-            obj.elements = [
-                ic(1:ne), ...
-                ic(ne+1:2*ne), ...
-                ic(2*ne+1:3*ne), ...
-                ic(3*ne+1:4*ne), ...
-                ic(4*ne+1:5*ne), ...
-                ic(5*ne+1:6*ne)
-                ];
-
-            % specefying boundary facets
-            obj.bfacets = sparse(obj.elements,ones(6*ne,1),ones(6*ne,1));
-            obj.bfacets = full(obj.bfacets == 1);
-
+            % use negative sign for reverse facets
             ic(s) = -ic(s);
 
-            % Face index per element
-            obj.elements = [
-                ic(1:ne), ...
-                ic(ne+1:2*ne), ...
-                ic(2*ne+1:3*ne), ...
-                ic(3*ne+1:4*ne), ...
-                ic(4*ne+1:5*ne), ...
-                ic(5*ne+1:6*ne)
-                ];
+            % face index per element
+            obj.elements = reshape(ic, obj.Ne, 6);
+
+            % find boundary facets
+            idx = emdlab_mex_findSignedPairs(obj.elements, size(obj.facets,1));
+            obj.bfacets = idx ~= 3;
 
             % evaluation of area of each elements
             obj.evalVolumeOfElements;
             obj.evalVolume;
 
+            % update data set flag
             obj.isDataSet = true;
             
         end

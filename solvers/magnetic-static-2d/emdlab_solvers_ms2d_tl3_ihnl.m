@@ -78,7 +78,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
 
             % preparing mesh data
             obj.m.evalKeMeFe_TL3;
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % assigning material and force data to each triangle
 
@@ -174,7 +174,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
 
             end
 
-            disp('Initialization of material and force data compeleted.'); toc;
+            obj.dispMessage('Initialization of material and force data compeleted.', timeHolder);
 
             % change states
             obj.isElementDataAssigned = true;
@@ -191,7 +191,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             obj.bcs.updateAll;
 
             % Construction of [K] and [F]
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % Assembeling [F]
             % assembling the total load vector
@@ -204,8 +204,8 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             Iindex = obj.m.cl(:, Iindex)';
             Jindex = obj.m.cl(:, Jindex)';
             K = sparse(Iindex, Jindex, obj.edata.MagneticReluctivity .* obj.m.mtcs.Ke);
-            disp('Construction of [K] and [F] compeleted.'); toc;
-            tic, disp('-------------------------------------------------------');
+            obj.dispMessage('Construction of [K] and [F] compeleted.', timeHolder);
+            timeHolder = obj.dispLine;
 
             % imposing boundary conditions on [K] and [F]
             % dbcs
@@ -232,10 +232,10 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
                     [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, obj.m.Nn);
             end
 
-            disp('All boundary condition are imposed.'); toc;
+            obj.dispMessage('All boundary condition are imposed.', timeHolder);
 
             % solving [K][U] = [F]
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % solving equation KU = F
             if ~any(F)
@@ -245,7 +245,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
 
             obj.results.A = full(K \ F);
             obj.evalBe;
-            disp('Initial geuss calculation completed.'); toc;
+            obj.dispMessage('Initial geuss calculation completed.', timeHolder);
 
             if obj.edata.areAllLinear
                 obj.evalHe;
@@ -259,7 +259,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             end
 
             % loop for nonlinear solver
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % initials values
             RelEResidual = inf;
@@ -304,7 +304,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             alphaNR = 0.7;
 
             % loop for non-linearity
-            fprintf('Iter|Error   |Residual|time\n');
+            obj.fprintf('Iter|Error   |Residual|time\n');
             while ((RelError > obj.solverSettings.relativeError) || (RelEResidual>obj.solverSettings.relativeEnergyResidual)) && (Iterations < obj.solverSettings.maxIteration)
 
                 % starting loop time
@@ -385,7 +385,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
                 obj.solverHistory.relativeError(end + 1) = RelError;
 
                 % printing Residual and RelError
-                fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
+                obj.fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
 
                 % go to next iteration
                 Iterations = Iterations + 1;
@@ -406,7 +406,7 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             end
 
             obj.solverHistory.iterations = Iterations;
-            disp(['Number of total iterations = ', num2str(Iterations - 1)]); toc;
+            obj.dispMessage(['Number of total iterations = ', num2str(Iterations - 1)], timeHolder);
 
             % update magnetic flux density
             obj.evalBe;

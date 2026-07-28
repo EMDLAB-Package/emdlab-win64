@@ -61,26 +61,26 @@ m.copyMirrorMeshZone('magnetRear','magnetFront',[1,0]);
 m.copyMirrorMeshZone('rapRear','rapFront',[1,0]);
 
 % generate full mesh
-m.aux_cmyjcshj('rotorRear',gv_p,gv_taup,0)
-m.aux_cmyjcshj('rapRear',gv_p,gv_taup,0)
-m.aux_cmyjcsh('magnetRear',gv_p,gv_taup,0)
-m.aux_cmyjcshj('rotorFront',gv_p,gv_taup,0)
-m.aux_cmyjcshj('rapFront',gv_p,gv_taup,0)
-m.aux_cmyjcsh('magnetFront',gv_p,gv_taup,0)
+m.aux_cmyjcshj('rotorRear',gv_p,gv_taup,0);
+m.aux_cmyjcshj('rapRear',gv_p,gv_taup,0);
+m.aux_cmyjcsh('magnetRear',gv_p,gv_taup,0);
+m.aux_cmyjcshj('rotorFront',gv_p,gv_taup,0);
+m.aux_cmyjcshj('rapFront',gv_p,gv_taup,0);
+m.aux_cmyjcsh('magnetFront',gv_p,gv_taup,0);
 
 m.copyMirrorMeshZone('s2','s1',[1,0]);
 m.joinMeshZones('stator','s1','s2');
-m.aux_cmyjcshj('stator',gv_Ns,gv_taus,0)
+m.aux_cmyjcshj('stator',gv_Ns,gv_taus,0);
 m.copyMirrorMeshZone('sc2','sc1',[1,0]);
 m.joinMeshZones('sca','sc1','sc2');
-m.aux_cmycsh('sca',gv_Ns,gv_taus,0)
+m.aux_cmycsh('sca',gv_Ns,gv_taus,0);
 m.copyMirrorMeshZone('sap2','sap1',[1,0]);
 m.joinMeshZones('sap','sap1','sap2');
 m.aux_cmyjcshj('sap',gv_Ns,gv_taus,0);
 
 % add airgap mesh
-m.aux_addLineAirGap('ag1',0,gv_dss/2+gv_gap/2,1,0,gv_gap,2)
-m.aux_addLineAirGap('ag2',0,-gv_dss/2-gv_gap/2,1,0,gv_gap,2)
+m.aux_addLineAirGap('ag1',0,gv_dss/2+gv_gap/2,1,0,gv_gap,2);
+m.aux_addLineAirGap('ag2',0,-gv_dss/2-gv_gap/2,1,0,gv_gap,2);
 
 % getting an instance of solver object
 s = emdlab_solvers_ms2d_tl3_ihnl(m);
