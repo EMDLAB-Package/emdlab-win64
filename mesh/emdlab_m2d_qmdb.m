@@ -546,53 +546,39 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         %% Topological Functions
         function setData(obj)
 
+            % getting the number of elements
+            ne = obj.Ne;
+
             % quadrilateral edges
             e1 = obj.cl(:,[1,2]);
             e2 = obj.cl(:,[2,3]);
             e3 = obj.cl(:,[3,4]);
             e4 = obj.cl(:,[4,1]);
 
-            % sorting for lower index
-            [e1,s1] = sort(e1,2);
-            [e2,s2] = sort(e2,2);
-            [e3,s3] = sort(e3,2);
-            [e4,s4] = sort(e4,2);
+            % stack all edges
+            allEdges = [e1; e2; e3; e4];
+            sortedEdgets = allEdges;
+            s = false(size(sortedEdgets,1),1);
+            idx = allEdges(:,2) > allEdges(:,1);
+            sortedEdgets(idx,2) = allEdges(idx,1);
+            sortedEdgets(idx,1) = allEdges(idx,2);
+            s(idx) = true;
 
-            % specefying changed edge index
-            s1 = s1(:, 1) == 2;
-            s2 = s2(:, 1) == 2;
-            s3 = s3(:, 1) == 2;
-            s4 = s4(:, 1) == 2;
+             % unification of edges
+            [obj.edges, ~, ic] = unique(sortedEdgets,'rows');
 
-            % unification of edges
-            [obj.edges, ~, ic] = unique([e1; e2; e3; e4], 'rows');
+            % use negative sign for reverse edges
+            ic(s) = -ic(s);
 
-            % getting number of elements
-            ne = obj.Ne;
+            % edge index per element
+            obj.elements(:,1:4) = reshape(ic, ne, 4);
 
-            % getting index of edge corresponding to each elements
-            e1 = ic(1:ne);
-            e2 = ic(1 + ne:2 * ne);
-            e3 = ic(1 + 2 * ne:3 * ne);
-            e4 = ic(1 + 3 * ne:4 * ne);
+            % element properties
+            obj.elementCenter = (obj.nodes(obj.cl(:,1),:) + obj.nodes(obj.cl(:,2),:) + ...
+                obj.nodes(obj.cl(:,3),:) + obj.nodes(obj.cl(:,4),:))/4;
 
-            % specefying boundary edges
-            obj.bedges = sparse([e1, e2, e3, e4], ones(4 * ne, 1), ones(4 * ne, 1));
-            obj.bedges = full(obj.bedges == 1);
-
-            % specefying trace direction
-            e1(s1) = -e1(s1);
-            e2(s2) = -e2(s2);
-            e3(s3) = -e3(s3);
-            e4(s4) = -e4(s4);
-
-            % element matrix
-            obj.elements(:, 1:4) = [e1, e2, e3, e4];
-
-            % initialize nbs matrix
-            obj.nbs = zeros(obj.Ne,4);
-
-            % edge length
+            % edge properties
+            obj.edgeCenter = (obj.nodes(obj.edges(:,1),:) + obj.nodes(obj.edges(:,2),:))/2;
             obj.edgeLength = sqrt(sum((obj.nodes(obj.edges(:,1),:) - obj.nodes(obj.edges(:,2),:)).^2, 2));
             obj.el = obj.edgeLength(abs(obj.elements(:,1:4)));
 
@@ -601,9 +587,14 @@ classdef emdlab_m2d_qmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.uEdges = obj.uEdges ./ vecnorm(obj.uEdges, 2, 2);
             obj.nEdges = [obj.uEdges(:,2), -obj.uEdges(:,1)];
 
-            % edge element
-            obj.edges = [obj.edges, zeros(size(obj.edges,1), 6)];
+            % edge element relationships             
+            obj.nbs = zeros(obj.Ne,4); % initialize nbs matrix
+            obj.edges = [obj.edges, zeros(size(obj.edges, 1), 6)];
             emdlab_m2d_qmdbc_evalee(obj.edges, obj.elements, obj.nbs);
+
+            % find boundary edges
+            obj.bedges = bitor(obj.edges(:,3) == 0, obj.edges(:,4) == 0);
+            obj.edgeNamedSelections.('none') = find(obj.bedges);
 
         end
 
