@@ -8,20 +8,27 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
         % mesh nodes: [x,y]
         nodes (:,2) double;
 
-        % mesh connectivity list
+        % mesh connectivity list: [n1, n2, n3, ..., Nnodes]
         cl (:,:) double;
 
-        % mesh elements: [edge1, edge2, edge3, zone index] -> triangular mesh
-        % mesh elements: [edge1, edge2, edge3, edge4, zone index] -> quadrilateral mesh
+        % mesh elements: [edge1, edge2, edge3, ..., zoneIndex, Nedges]
         elements (:,:) double;
 
-        % unique edges (:,8): [node1, node2, zi1, zi2, ]
-        edges
+        % unique edges
+        % [n1, n2, zi1, zi2, ei1, eep1, ei2, eep2, Nnodes]
+        % zi -> zone index
+        % ei -> element index
+        % eep -> element edge position
+        edges (:,:) double;
 
         % list of boundary edges
-        bedges
+        bedges (:,1) logical;
 
-        % edge length
+        % element properties
+        elementCenter (:,2) double;
+
+        % edge properties
+        edgeCenter (:,2) double;
         edgeLength (:,1) double;
         el (:,:) double;
         uEdges (:,2) double;
@@ -29,6 +36,12 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
 
         % neighborhood elements
         nbs (:,:) double;
+
+        % ij & ie properties
+        uij_x (:,:) double;
+        uij_y (:,:) double;
+        dij (:,1) double;
+        die (:,1) double;
 
         % jacobian inverse transpose
         JIT (:,:) double;

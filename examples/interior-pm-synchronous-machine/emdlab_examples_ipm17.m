@@ -40,7 +40,7 @@ emdlab_g2d_lib_tc3(g, gv_ISD, gv_OSD, gv_Ns, gv_wst, gv_dss, gv_bs0, gv_hs0, gv_
 emdlab_g2d_lib_rm_ipm17(g,gv_Dsh,gv_ISD-2*gv_gap,gv_p,gv_dm1,gv_dm2,gv_alpha_v,gv_gv,gv_wtrib,gv_wrrib,gv_d0,gv_d1,3,7,'rotor','magnet','rap')
 
 % setting the wireframe mesh by mesh size function
-f_mesh = @(r) interp1([gv_Dsh/2,gv_ISD/2,gv_OSD/2], [2,gv_gap/2,3], r, 'linear','extrap');
+f_mesh = @(r) interp1([gv_Dsh/2,gv_ISD/2,gv_OSD/2], [5,gv_gap,5], r, 'linear','extrap');
 g.setMeshLengthByRadialFunction(f_mesh);
 
 % mesh generation

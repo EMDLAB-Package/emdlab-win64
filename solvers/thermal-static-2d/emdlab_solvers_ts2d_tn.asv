@@ -221,66 +221,44 @@ classdef emdlab_solvers_ts2d_tn < handle
                 kx = obj.edata.ThermalConductivity(1,i);
                 ky = obj.edata.ThermalConductivity(2,i);
 
-                for j = 1:obj.NR
-
+%                 for j = 1:obj.NR
+% 
 %                     % direction vector from cell center i to cell center j
 %                     if obj.m.nbs(i,j)
 %                         uij = elementCenter(obj.m.nbs(i,j), :) - elementCenter(i,:);
-%                         uij = uij / norm(uij);
-%                         die = edgeCenter(abs(obj.m.elements(i,j)),:) - elementCenter(i,:);
-%                         die = abs(die * obj.m.nEdges(abs(obj.m.elements(i,j)),:)');
+%                         die = 0.5 * norm(uij);
 %                     else
 %                         uij = edgeCenter(abs(obj.m.elements(i,j)),:) - elementCenter(i,:);
-%                         uij = uij / norm(uij);
-%                         die = edgeCenter(abs(obj.m.elements(i,j)),:) - elementCenter(i,:);
-%                         die = abs(die * obj.m.nEdges(abs(obj.m.elements(i,j)),:)');
-%                     end   
+%                         die = norm(uij);
+%                     end                    
+%                     uij = uij / norm(uij);
+% 
+%                     kij = kx * (ux(i,1:2) * uij').^2 + ky * (uy(i,1:2) * uij').^2;
+%                     obj.kxySV(i,j) = (kx-ky) * (ux(i,1:2) * uij') * (uy(i,1:2) * uij');
+% 
+%                     elm(i,j) = abs(uij * obj.m.nEdges(abs(obj.m.elements(i,j)),:)');
+% 
+%                     % calculation of conductances
+%                     resistances(i,j) = die/(kij*z*obj.m.el(i,j) * elm(i,j));
+% 
+%                 end
 
-edge = abs(obj.m.elements(i,j));
+for j = 1:obj.NR
 
-if obj.m.nbs(i,j)
+    % direction vector from cell center i to cell center j
+    uie = edgeCenter(abs(obj.m.elements(i,j)),:) - elementCenter(i,:);
+        die = norm(uie);
+    uie = uie / norm(uie);
 
-    nb = obj.m.nbs(i,j);
+    kij = kx * (ux(i,1:2) * uie').^2 + ky * (uy(i,1:2) * uie').^2;
+    obj.kxySV(i,j) = (kx-ky) * (ux(i,1:2) * uie') * (uy(i,1:2) * uie');
 
-    Ci = elementCenter(i,:);
-    Cj = elementCenter(nb,:);
-    F  = edgeCenter(edge,:);
-    n  = obj.m.nEdges(edge,:);
+    elm(i,j) = abs(uie * obj.m.nEdges(abs(obj.m.elements(i,j)),:)');
 
-    % direction from cell i to cell j
-    d = Cj - Ci;
-    uij = d / norm(d);
-
-    % intersection of center-center line with face
-    t = dot(F - Ci, n) / dot(d, n);
-    P = Ci + t * d;
-
-    % distance from cell center i to intersection point
-    die = norm(P - Ci);
-
-else
-
-    Ci = elementCenter(i,:);
-    F  = edgeCenter(edge,:);
-
-    d = F - Ci;
-    die = norm(d);
-    uij = d / die;
+    % calculation of conductances
+    resistances(i,j) = die/(kij*z*obj.m.el(i,j) * elm(i,j));
 
 end
-                    
-
-                    kij = kx * (ux(i,1:2) * uij').^2 + ky * (uy(i,1:2) * uij').^2;
-                    obj.kxySV(i,j) = (kx-ky) * (ux(i,1:2) * uij') * (uy(i,1:2) * uij');
-
-                    elm(i,j) = abs(uij * obj.m.nEdges(abs(obj.m.elements(i,j)),:)');
-
-                    % calculation of conductances
-                    resistances(i,j) = die/(kij*z*obj.m.el(i,j) * elm(i,j));
-
-                end
-
-
             end
 
             % initialize conductance matrix and source vector
@@ -469,10 +447,6 @@ end
         end
 
         function evalTn(obj)
-            obj.results.Tn = emdlab_mex_solvers_ts2d_evalTn(obj.results.T, obj.m.getCenterOfElements, obj.m.nodes, [obj.m.cl,size(obj.m.cl,2)*ones(obj.m.Ne,1)]);
-        end
-
-        function evalTn_mfile(obj)
 
             obj.results.Tn = zeros(obj.m.Nn,1);
             ec = obj.m.getCenterOfElements;
@@ -675,35 +649,6 @@ end
 
         end
 
-        function varargout = plotMeshZoneAverageTemperature(obj, mzName, N, varargin)
-
-            [f,ax] = obj.m.showwf;
-            if nargin<3, N=10; end
-
-            tmp = obj.m.cl(obj.m.ezi(:,obj.m.mzs.(mzName).zi),:);
-            patch('faces', tmp, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(obj.m.ezi(:,obj.m.mzs.(mzName).zi)), ...
-                'FaceColor','flat', 'edgecolor', 'none');
-            colormap(jet(N));
-            cb = colorbar;
-            cb.FontName = 'Verdana';
-            cb.FontSize = 12;
-            cb.Label.String = 'Average Temperature [C]';
-            climits = clim; 
-            cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
-            cb.Ticks(1) = cb.Ticks(1) + 0.01;
-
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
-
-            if nargout == 1, varargout{1} = f;
-            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
-            elseif nargout > 1, error('Too many output argument.');
-            end
-
-        end
-
         function varargout = plotTemperature(obj, N, varargin)
 
             [f,ax] = emdlab_flib_fax(varargin{:});
@@ -724,36 +669,6 @@ end
             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
                 'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
-
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
-
-            if nargout == 1, varargout{1} = f;
-            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
-            elseif nargout > 1, error('Too many output argument.');
-            end
-
-        end
-
-        function varargout = plotMeshZoneTemperature(obj, mzName, N, varargin)
-
-            [f,ax] = obj.m.showwf;
-            if nargin<3, N=10; end
-
-            tmp = obj.m.cl(obj.m.ezi(:,obj.m.mzs.(mzName).zi),:);
-            patch('faces', tmp, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tn, ...
-                'FaceColor','interp', 'edgecolor', 'none');
-            colormap(jet(N));
-            cb = colorbar;
-            cb.FontName = 'Verdana';
-            cb.FontSize = 12;
-            cb.Label.String = 'Temperature [C]';
-            clim([min(obj.results.Tn(obj.m.mzs.(mzName).l2g)), max(obj.results.Tn(obj.m.mzs.(mzName).l2g))]);
-            climits = clim; 
-            cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
-            cb.Ticks(1) = cb.Ticks(1) + 0.01;
 
             zoom on;
             axis(ax, 'off');
@@ -802,11 +717,6 @@ end
 
         function y = getAverageTemperature(obj)
             y = obj.m.gea * obj.results.T / sum(obj.m.gea);
-        end
-
-        function y = getMeshZoneTemperature(obj, mzName)
-            idx = obj.m.ezi(:,obj.m.mzs.(mzName).zi);
-            y = [min(obj.results.T(idx)), max(obj.results.T(idx)), obj.m.gea(idx)*obj.results.T(idx)/sum(obj.m.gea(idx))];
         end
 
         function showContact(obj, varargin)

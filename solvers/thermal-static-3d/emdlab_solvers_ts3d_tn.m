@@ -191,6 +191,7 @@ classdef emdlab_solvers_ts3d_tn < handle
 
             % calculate resistances
             resistances = zeros(obj.m.Ne,obj.NR);
+            um = obj.units.k_length;
 
             % loop over mesh zones
             mzNames = obj.m.getMeshZoneNames;
@@ -234,7 +235,7 @@ classdef emdlab_solvers_ts3d_tn < handle
                     elm(i,j) = abs(uij * obj.m.facetNormal(abs(obj.m.elements(i,j)),:)');
 
                     % calculation of conductances
-                    resistances(i,j) = die/(kij * elm(i,j) * obj.m.fa(i,j));
+                    resistances(i,j) = die/(kij * elm(i,j) * obj.m.fa(i,j) * um);
 
                 end
 
@@ -535,9 +536,9 @@ classdef emdlab_solvers_ts3d_tn < handle
             obj.excitations.(exName).mzName = mzName;
 
 
-            z = obj.getDepth;
+%             z = obj.getDepth;
             um = obj.units.k_length;
-            Area = sum(obj.m.gea(obj.m.ezi(:,obj.m.mzs.(mzName).zi))) * um^2;
+%             Area = sum(obj.m.gea(obj.m.ezi(:,obj.m.mzs.(mzName).zi))) * um^2;
 
             % set default unit
             if nargin < 5, unit = 'W'; end
@@ -546,7 +547,7 @@ classdef emdlab_solvers_ts3d_tn < handle
             switch unit
 
                 case 'w'
-                    value = value/(z*Area);
+                    value = value/(obj.m.mzs.(mzName).volume * um^3);
 
                 case {'w/m^3', 'w/m3', 'w/(m^3)'}
                 otherwise
@@ -640,7 +641,7 @@ classdef emdlab_solvers_ts3d_tn < handle
             cb = colorbar;
             cb.FontName = 'Verdana';
             cb.FontSize = 12;
-            cb.Label.String = 'Average Temperature [C]';
+            cb.Label.String = 'Temperature [C]';
             climits = clim;
             cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
             cb.Ticks(1) = cb.Ticks(1) + 0.01;
@@ -703,6 +704,11 @@ classdef emdlab_solvers_ts3d_tn < handle
             elseif nargout > 1, error('Too many output argument.');
             end
 
+        end
+
+        function y = getMeshZoneTemperature(obj, mzName)
+            idx = obj.m.ezi(:,obj.m.mzs.(mzName).zi);
+            y = [min(obj.results.T(idx)), max(obj.results.T(idx)), obj.m.gev(idx)*obj.results.T(idx)/sum(obj.m.gev(idx))];
         end
 
         function y = getAverageTemperature(obj)
@@ -805,6 +811,7 @@ classdef emdlab_solvers_ts3d_tn < handle
             % make idx as a row vector
             idx = idx(:)';
             Nidx = length(idx);
+            NFN = obj.m.NFN;
 
             % calculate temperature value at facet centers -> tvfc
             if isa(TValue,'function_handle')
@@ -816,85 +823,55 @@ classdef emdlab_solvers_ts3d_tn < handle
                 tvfc = TValue * ones(1,Nidx);
             end
 
-            % check mesh type to find proper indices
-            switch obj.meshType
+            % loop over facets
+            for i = 1:Nidx
+                if obj.m.facets(idx(i),NFN+3)
 
-                % tetrahedral mesh
-                case 'thm'
+                    eIndex = obj.m.facets(idx(i),NFN+3);
+                    value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),NFN+4));
+                    sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),NFN+4));
 
-                    for i = 1:Nidx
-                        if obj.m.facets(idx(i),6)
+                else
 
-                            eIndex = obj.m.facets(idx(i),6);
-                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),7));
-                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),7));
+                    eIndex = obj.m.facets(idx(i),NFN+5);
+                    value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),NFN+6));
+                    sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),NFN+6));
 
-                        else
-
-                            eIndex = obj.m.facets(idx(i),8);
-                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),9));
-                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),9));
-
-                        end
-                    end
-
-                    % hexahedral mesh
-                case {'pm', 'hhm'}
-
-                    for i = 1:Nidx
-                        if obj.m.facets(idx(i),7)
-
-                            eIndex = obj.m.facets(idx(i),7);
-                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),8));
-                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),8));
-
-                        else
-
-                            eIndex = obj.m.facets(idx(i),9);
-                            value(eIndex,1) = value(eIndex,1) + 1/resistances(eIndex,obj.m.facets(idx(i),10));
-                            sourceVector(eIndex) = sourceVector(eIndex) + tvfc(i)/resistances(eIndex,obj.m.facets(idx(i),10));
-
-                        end
-                    end
-
-                otherwise
-                    error('Mesh type is not supported.');
+                end
             end
 
         end
 
         function [value, sourceVector] = applyConvectionBC(obj, idx, value, sourceVector, resistances, Tinf, HValue)
 
-            if iscolumn(idx), idx = idx'; end
-            edgeCenters = obj.m.getCenterOfEdges;
-            z = obj.getDepth;
+            % make idx as a row vector
+            idx = idx(:)';
+            Nidx = length(idx);
             um = obj.units.k_length;
+            NFN = obj.m.NFN;
 
-            for index = idx
-
-                if isa(HValue,'function_handle')
-                    hvbc = HValue(edgeCenters(index,1),edgeCenters(index,2));
-                else
-                    hvbc = HValue;
+            % calculate h-coefficient value at facet centers -> hvfc
+            if isa(HValue,'function_handle')
+                hvfc = zeros(1,Nidx);
+                for i = 1:Nidx
+                    hvfc(i) = HValue(obj.m.facetCenter(idx(i),1),obj.m.facetCenter(idx(i),2),obj.m.facetCenter(idx(i),3));
                 end
+            else
+                hvfc = HValue * ones(1,Nidx);
+            end
 
-                if obj.m.edges(index,5)
+            % loop over facets
+            for i = 1:Nidx
 
-                    eIndex = obj.m.edges(index,5);
-                    if ismember(obj.m.edges(index,6),[1,3])
-                        Gconv = 1/(resistances(eIndex,1)/2 + 1/(hvbc*z*um*obj.m.el(eIndex,obj.m.edges(index,6))));
-                    else
-                        Gconv = 1/(resistances(eIndex,2)/2 + 1/(hvbc*z*um*obj.m.el(eIndex,obj.m.edges(index,6))));
-                    end
+                if obj.m.facets(idx(i),NFN+3)
+
+                    eIndex = obj.m.facets(idx(i),NFN+3);
+                    Gconv = 1/(resistances(eIndex,obj.m.facets(idx(i),NFN+4)) + 1/(hvfc(i) * obj.m.facetArea(idx(i)) * um^2));
 
                 else
 
-                    eIndex = obj.m.edges(index,7);
-                    if ismember(obj.m.edges(index,8),[1,3])
-                        Gconv = 1/(resistances(eIndex,1)/2 + 1/(hvbc*z*um*obj.m.el(eIndex,obj.m.edges(index,8))));
-                    else
-                        Gconv = 1/(resistances(eIndex,2)/2 + 1/(hvbc*z*um*obj.m.el(eIndex,obj.m.edges(index,8))));
-                    end
+                    eIndex = obj.m.facets(idx(i),NFN+5);
+                    Gconv = 1/(resistances(eIndex,obj.m.facets(idx(i),NFN+6)) + 1/(hvfc(i) * obj.m.facetArea(idx(i)) * um^2));
 
                 end
 
@@ -966,26 +943,27 @@ classdef emdlab_solvers_ts3d_tn < handle
                     error('Mesh type is not supported.');
             end
 
-
-
         end
 
         function sourceVector = applyIHG(obj, mzName, sourceVector, IHGValue)
 
-            idx = 1:obj.m.Ne;
-            idx = idx(obj.m.ezi(:,obj.m.mzs.(mzName).zi));
-            z = obj.getDepth;
+            idx = find(obj.m.ezi(:,obj.m.mzs.(mzName).zi));
+            Nidx = length(idx);
             um = obj.units.k_length;
 
-            for index = idx
-
-                if isa(IHGValue,'function_handle')
-                    ihgbc = IHGValue(edgeCenters(index,1),edgeCenters(index,2));
-                else
-                    ihgbc = IHGValue;
+            % calculate internl heat generation at elment centers -> ihgec
+            if isa(IHGValue,'function_handle')
+                ihgec = zeros(1,Nidx);
+                for i = 1:Nidx
+                    ihgec(i) = IHGValue(obj.m.elementCenter(idx(i),1),obj.m.elementCenter(idx(i),2),obj.m.elementCenter(idx(i),3));
                 end
+            else
+                ihgec = IHGValue * ones(1,Nidx);
+            end
 
-                sourceVector(index) = sourceVector(index) + ihgbc * obj.m.gea(index) * z * um^2;
+            for i = 1:Nidx
+
+                sourceVector(idx(i)) = sourceVector(idx(i)) + ihgec(i) * obj.m.gev(idx(i)) * um^3;
 
             end
 

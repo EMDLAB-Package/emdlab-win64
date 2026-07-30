@@ -64,7 +64,7 @@ g.addFace('hz1', g.addLoop(3,16,-6,-14));
 g.addFace('hz2', g.addLoop(6,17,-9,-15));
 
 g.setMeshMaxLength(meshSize);
-m = g.generateMesh('gmsh');
+m = g.generateMesh('mg0');
 m.joinMeshZones('stator', 'sz1', 'sz2',' sz3');
 m.aux_cmxjcrj('stator',1)
 m.joinMeshZones('housing', 'hz1', 'hz2');

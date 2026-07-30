@@ -48,45 +48,35 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             % check if already data is set
             if obj.isDataSet, return; end
 
-            % first edge of each triangle
-            e1 = obj.cl(:, [1, 2]);
-            % second edge of each triangle
-            e2 = obj.cl(:, [2, 3]);
-            % third edge of each triangle
-            e3 = obj.cl(:, [3, 1]);
-
-            % sorting for lower index
-            [e1, s1] = sort(e1, 2);
-            [e2, s2] = sort(e2, 2);
-            [e3, s3] = sort(e3, 2);
-
-            % specefying changed edge index
-            s1 = s1(:, 1) == 2;
-            s2 = s2(:, 1) == 2;
-            s3 = s3(:, 1) == 2;
-
-            % unification of edges
-            [obj.edges, ~, ic] = unique([e1; e2; e3], 'rows');
-
-            % getting number of elements
+            % getting the number of elements
             ne = obj.Ne;
 
-            % getting index of edge corresponding to each elements
-            e1 = ic(1:ne);
-            e2 = ic(1 + ne:2 * ne);
-            e3 = ic(1 + 2 * ne:3 * ne);
+            % triangle edges
+            e1 = obj.cl(:,[1,2]);
+            e2 = obj.cl(:,[2,3]);
+            e3 = obj.cl(:,[3,1]);
 
-            % specefying boundary edges
-            obj.bedges = sparse([e1, e2, e3], ones(3 * ne, 1), ones(3 * ne, 1));
-            obj.bedges = full(obj.bedges == 1);
+            % stack all edges
+            allEdges = [e1; e2; e3];
+            sortedEdgets = allEdges;
+            s = false(size(sortedEdgets,1),1);
+            idx = allEdges(:,2) > allEdges(:,1);
+            sortedEdgets(idx,1) = allEdges(idx,2);
+            sortedEdgets(idx,2) = allEdges(idx,1);
+            s(idx) = true;
 
-            % specefying trace direction
-            e1(s1) = -e1(s1);
-            e2(s2) = -e2(s2);
-            e3(s3) = -e3(s3);
+            % unification of edges
+            [obj.edges, ~, ic] = unique(sortedEdgets,'rows');
 
-            % element matrix
-            obj.elements = [e1, e2, e3];
+            % use negative sign for reverse edges
+            ic(s) = -ic(s);
+
+            % edge index per element
+            obj.elements = reshape(ic, ne, 3);
+
+            % find boundary edges
+            idx = emdlab_mex_findSignedPairs(obj.elements, size(obj.edges,1));
+            obj.bedges = idx ~= 3;
 
             % change states
             obj.isDataSet = true;
@@ -118,12 +108,11 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
         end
 
         %% Tools Functions
-        function moveNodes(obj, MovTol)
+        function moveNodes(obj, iterMax, movTol)
             obj.setdata;
 
-            if nargin < 2
-                MovTol = 1e-3;
-            end
+            if nargin < 2, iterMax = 100; end
+            if nargin < 3, movTol = 1e-3; end
 
             % connectivity matrix for nodes
             Con = sparse(double(obj.edges(:, 1)), double(obj.edges(:, 2)), 1, obj.Nn, obj.Nn);
@@ -133,7 +122,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             % weight matrix
             weight = diag(1 ./ sum(Con(inodes, :), 2));
 
-            for iter = 1:100
+            for iter = 1:iterMax
                 % getting position of new nodes
                 pnew = Con(inodes, :) * obj.nodes;
                 pnew = weight * pnew;
@@ -141,7 +130,47 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
                 Mov = sqrt(sum((obj.nodes(inodes, :) - pnew).^2, 2));
                 obj.nodes(inodes, :) = pnew;
                 % check for movment tolerance
-                if Mov < MovTol
+                if Mov < movTol
+                    fprintf("Mesh smoothing #%d\n", iter);
+                    break;
+                end
+
+            end
+
+            % change states
+            obj.isAreaOfElementsEvaluated = false;
+            obj.isMeshZoneAreaEvaluated = false;
+            obj.is_Q_Evaluated = false;
+        end
+
+        function moveNodes1(obj, iterMax, movTol)
+
+            obj.setdata;
+            if nargin < 2, iterMax = 100; end
+            if nargin < 3, movTol = 1e-3; end
+
+            % index of inner nodes
+            idx = obj.getinodes;
+
+            for iter = 1:iterMax
+
+                % eij vectors
+                eij = obj.nodes(obg.edges(:,2),:) - obj.nodes(obg.edges(:,1),:);
+
+                % edge length
+                el = vecnorm(eij,2,2);
+
+                for i = idx
+                end
+
+                % getting position of new nodes
+                pnew = Con(inodes, :) * obj.nodes;
+                pnew = weight * pnew;
+                % evaluation of movments
+                Mov = sqrt(sum((obj.nodes(inodes, :) - pnew).^2, 2));
+                obj.nodes(inodes, :) = pnew;
+                % check for movment tolerance
+                if Mov < movTol
                     fprintf("Mesh smoothing #%d\n", iter);
                     break;
                 end

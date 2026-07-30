@@ -439,35 +439,33 @@ classdef emdlab_m3d_pmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
         end
 
-        function idx = getFacetIndicesOnCylinder(obj, p0, nv, r)
+        function idx = getFacetIndicesOnCylinder(obj, p0, p1, R, tol)
+            %GETFACETINDICESONCYLINDER Returns indices of facets lying entirely on a cylinder's lateral surface.
+            % A facet is on the cylinder if all of its nodes are on the cylinder.
+            %
+            % p0  - Point defining the start of the cylinder axis (1x3)
+            % p1  - Point defining the end of the cylinder axis (1x3)
+            % R   - Cylinder radius
+            % tol - Tolerance (defaults to obj.gleps)
 
-            if ~obj.isdata
-                obj.setData();
+            % Handle default tolerance
+            if nargin < 5 || isempty(tol)
+                tol = obj.gleps;
             end
 
-            nv = nv(:) / norm(nv);
-            idx = [];
+            % 1. Get indices of all nodes on the cylinder lateral surface
+            node_idx = obj.getNodeIndicesOnCylinder(p0, p1, R, tol);
 
-            for i = 1:size(obj.facets, 1)
-                f = obj.facets(i, :);
-                f = f(f > 0);
-                xyz = obj.nodes(f, :);
+            % 2. Find facets whose all 4 nodes are in node_idx (using your ismember approach)
+            mask = ismember(obj.facets(:, 1), node_idx) & ...
+                ismember(obj.facets(:, 2), node_idx) & ...
+                ismember(obj.facets(:, 3), node_idx) & ...
+                ismember(obj.facets(:, 4), node_idx);
 
-                ok = true;
-                for k = 1:size(xyz, 1)
-                    v = xyz(k, :) - p0;
-                    vp = v - dot(v, nv.') * nv.';
-                    if abs(norm(vp) - r) > obj.MINTOL
-                        ok = false;
-                        break;
-                    end
-                end
-
-                if ok
-                    idx(end + 1, 1) = i; %#ok<AGROW>
-                end
-            end
+            % 3. Return facet indices
+            idx = find(mask);
         end
+
 
         function varargout = showfb(obj)
 
@@ -488,47 +486,7 @@ classdef emdlab_m3d_pmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             end
 
         end
-
-
-
-        function showmz(obj, idx)
-
-            if idx < 1 || idx > numel(obj.mzs)
-                error('Mesh zone index is out of range.');
-            end
-
-            obj.mzs(idx).showm();
-        end
-
-        function showg(obj)
-
-            if ~obj.ismesh
-                obj.ggmesh();
-            end
-
-            [f, ax] = emdlab_r3d_geometry();
-            f.Name = '[Prism Mesh Database][Global Mesh]';
-            hold(ax, 'on');
-
-            if isempty(obj.facets)
-                obj.setData();
-            end
-
-            F = double(obj.facets(obj.bfacets, :));
-            F(F == 0) = NaN;
-
-            patch('Faces', F, ...
-                'Vertices', obj.nodes, ...
-                'FaceColor', 'none', ...
-                'EdgeColor', 'k', ...
-                'Parent', ax);
-
-            axis(ax, 'equal');
-            axis(ax, 'off');
-            set(ax, 'clipping', 'off');
-            set(f, 'Visible', 'on');
-        end
-
+        
          %% Index Finding Functions
         function y = getfbf(obj)
             obj.ggmesh;

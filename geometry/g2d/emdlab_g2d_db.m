@@ -738,30 +738,7 @@ classdef emdlab_g2d_db < handle
             end
 
         end
-
-        function [newEdgeIndex, newPointIndex] = splitSegment(obj, eIndex)
-
-            edgeHandle = obj.edges(eIndex).ptr;
-            tmp = edgeHandle.getCenter;
-            newPointIndex = obj.addPoint(tmp(1),tmp(2));
-            p2 = edgeHandle.p1;
-            edgeHandle.p1 = obj.points(newPointIndex);
-            newEdgeIndex = obj.addSegment(newPointIndex,obj.addPoint(p2));
-
-        end
-
-        function [newEdgeIndex, newPointIndex] = splitArc(obj, eIndex)
-
-            edgeHandle = obj.edges(eIndex).ptr;
-            tmp = edgeHandle.p0.getVector;
-            tmp = emdlab_g2d_rotatePoints(edgeHandle.p1.getVector,edgeHandle.getSignedAngle/2, tmp(1),tmp(2));
-            newPointIndex = obj.addPoint(tmp(1),tmp(2));
-            p2 = edgeHandle.p2;
-            edgeHandle.p2 = obj.points(newPointIndex);
-            newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),newPointIndex,obj.addPoint(p2),edgeHandle.direction);
-
-        end
-
+        
         % edge extensions to draw complex geometries
         function varargout = extendSegmentBySegmentUpToPoint(obj, eIndex, x, y, seIndex)
 
@@ -1059,6 +1036,26 @@ classdef emdlab_g2d_db < handle
             y = obj.edges(eIndex).ptr.getLength;
         end
 
+        function varargout = addRectangle(obj, x0, y0, w, h)
+
+            p1Index = obj.addPoint(x0,y0);
+            p2Index = obj.addPoint(x0+w,y0);
+            p3Index = obj.addPoint(x0+w,y0+h);
+            p4Index = obj.addPoint(x0,y0+h);
+
+            e1Index = obj.addSegment(p1Index, p2Index);
+            e2Index = obj.addSegment(p2Index, p3Index);
+            e3Index = obj.addSegment(p3Index, p4Index);
+            e4Index = obj.addSegment(p4Index, p1Index);
+
+            if nargout == 1
+                varargout{1} = [e1Index, e2Index, e3Index, e4Index];
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
         function varargout = addCenterRectangle(obj, x0, y0, w, h)
 
             p1Index = obj.addPoint(x0-w/2,y0-h/2);
@@ -1128,6 +1125,34 @@ classdef emdlab_g2d_db < handle
 
             end
 
+        end
+
+        function [newEdgeIndex, newPointIndex] = splitSegment(obj, eIndex)
+
+            edgeHandle = obj.edges(eIndex).ptr;
+            tmp = edgeHandle.getCenter;
+            newPointIndex = obj.addPoint(tmp(1),tmp(2));
+            p2 = edgeHandle.p1;
+            edgeHandle.p1 = obj.points(newPointIndex);
+            newEdgeIndex = obj.addSegment(newPointIndex,obj.addPoint(p2));
+
+        end
+
+        function [newEdgeIndex, newPointIndex] = splitArc(obj, eIndex)
+
+            edgeHandle = obj.edges(eIndex).ptr;
+            tmp = edgeHandle.p0.getVector;
+            tmp = emdlab_g2d_rotatePoints(edgeHandle.p1.getVector,edgeHandle.getSignedAngle/2, tmp(1),tmp(2));
+            newPointIndex = obj.addPoint(tmp(1),tmp(2));
+            p2 = edgeHandle.p2;
+            edgeHandle.p2 = obj.points(newPointIndex);
+            newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),newPointIndex,obj.addPoint(p2),edgeHandle.direction);
+
+        end
+
+        function addRectangularFinOnArc(obj, eIndex, wf, hf, t)
+
+            
         end
 
         function removeEdge(obj, eIndex)

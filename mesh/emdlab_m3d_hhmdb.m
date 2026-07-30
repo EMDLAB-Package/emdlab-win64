@@ -617,10 +617,6 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
             allFacets = [f1; f2; f3; f4; f5; f6];
 
             % set all facets in canonical form
-            %             [~,idx] = min(allFacets,[],2);
-            %             for i = 1:6*ne
-            %                 allFacets(i,:) = circshift(allFacets(i,:), 1-idx(i));
-            %             end
             emdlab_mex_m3d_makeFacetsCanonical(allFacets);
 
             % canonical form for uniqueness
@@ -881,31 +877,6 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
                 mzptr.color, 'EdgeColor', [0.1, 0.1, 0.1], ...
                 'Parent', a, 'FaceAlpha', 1);
             set(gcf, 'HandleVisibility', 'off', 'Visible', 'on');
-        end
-
-        function showg(obj)
-            mzNames = fieldnames(obj.mzs);
-            f = GraphicWindow();
-            f.Name = ['[Number of Mesh Zones: ', num2str(numel(mzNames)), ']'];
-            h = guihandles(f);
-
-            for i = 1:numel(mzNames)
-                mzptr = obj.mzs.(mzNames{i});
-                mzptr.setdata;
-
-                if isequal(mzptr.color, 'none')
-                    edgeColor = 'none';
-                else
-                    edgeColor = [0.1, 0.1, 0.1];
-                end
-
-                patch(h.va, 'Faces', mzptr.facets(mzptr.bfacets, :), ...
-                    'Vertices', mzptr.nodes, 'FaceColor', ...
-                    mzptr.color, 'EdgeColor', mzptr.color, ...
-                    'FaceAlpha', mzptr.transparency, 'tag', mzNames{i});
-            end
-
-            set(f, 'Visible', 'on');
         end
 
         function showmzss(obj)

@@ -8,19 +8,23 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
         % mesh nodes: [x,y]
         nodes (:,3) double;
 
-        % mesh connectivity list: [n1, n2, n3, ...]
+        % mesh connectivity list: [n1, n2, n3, ..., Nnodes]
         cl (:,:) double;
 
-        % mesh elements: [facet1, facet2, facet3, ...]
+        % mesh elements: [facet1, facet2, facet3, ..., zoneIndex, Nfacets]
         elements (:,:) double;
 
-        % Unique Mesh Facets
+        % unique mesh facets
+        % [n1, n2, n3, ..., zi1, zi2, ei1, efp1, ei2, efp2, Nnodes]
+        % zi -> zone index
+        % ei -> element index
+        % efp -> element face position
         facets (:,:) double;
 
-        % Boundary Facets
+        % boundary facets
         bfacets (:,1) logical;
 
-        % edge length
+        % facet properties
         facetArea (:,1) double;
         fa (:,:) double;
         xfc (:,1) double;
@@ -37,9 +41,10 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
         % neighborhood elements
         nbs (:,:) double;
 
-        % 
+        % ij & if properties
         uij (:,:) double;
         dij (:,:) double;
+        dif (:,:) double;
 
         % jacobian inverse transpose
         JIT (:,:) double;
@@ -478,16 +483,20 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
             [f,ax] = emdlab_r3d_geometry(0,0);
             obj.ggmesh;
 
-            idx = ((obj.facets(:, 4) == zi1) & (obj.facets(:, 5) == zi2)) | ...
-                ((obj.facets(:, 4) == zi2) & (obj.facets(:, 5) == zi1));
+            idx = ((obj.facets(:, 5) == zi1) & (obj.facets(:, 6) == zi2)) | ...
+                ((obj.facets(:, 5) == zi2) & (obj.facets(:, 6) == zi1));
 
-            index = obj.facets(:, 4) ~= obj.facets(:, 5);
-            patch('Faces', obj.facets(index, 1:3), 'Vertices', ...
+            index = obj.facets(:, 5) ~= obj.facets(:, 6);
+            tmp = obj.facets(index, 1:4);
+            tmp(tmp==0) = nan;
+            patch('Faces', tmp, 'Vertices', ...
                 obj.nodes, 'FaceColor', ...
                 'c', 'EdgeColor', 'none', ...
                 'FaceAlpha', 0.2, 'parent', ax);
 
-            patch('Faces', obj.facets(idx, 1:3), 'Vertices', ...
+            tmp = obj.facets(idx, 1:4);
+            tmp(tmp==0) = nan;
+            patch('Faces', tmp, 'Vertices', ...
                 obj.nodes, 'FaceColor', ...
                 'y', 'EdgeColor', 'none', ...
                 'FaceAlpha', 1, 'parent', ax);

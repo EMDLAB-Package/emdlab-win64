@@ -23,51 +23,36 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
             % check if already data is set
             if obj.isDataSet, return; end
 
-            % first edge of each quadrilateral
-            e1 = obj.cl(:,[1,2]);
-            % second edge of each quadrilateral
-            e2 = obj.cl(:,[2,3]);
-            % third edge of each quadrilateral
-            e3 = obj.cl(:,[3,4]);
-            % forth edge of each quadrilateral
-            e4 = obj.cl(:,[4,1]);
-
-            % sorting for lower index
-            [e1,s1] = sort(e1, 2);
-            [e2,s2] = sort(e2, 2);
-            [e3,s3] = sort(e3, 2);
-            [e4,s4] = sort(e4, 2);
-
-            % specefying changed edge index
-            s1 = s1(:,1) == 2;
-            s2 = s2(:,1) == 2;
-            s3 = s3(:,1) == 2;
-            s4 = s4(:,1) == 2;
-
-            % unification of edges
-            [obj.edges, ~, ic] = unique([e1; e2; e3; e4],'rows');
-
-            % getting number of elements
+            % getting the number of elements
             ne = obj.Ne;
 
-            % getting index of edge corresponding to each elements
-            e1 = ic(1:ne);
-            e2 = ic(1+ne:2*ne);
-            e3 = ic(1+2*ne:3*ne);
-            e4 = ic(1+3*ne:4*ne);
+            % quadrilateral edges
+            e1 = obj.cl(:,[1,2]);
+            e2 = obj.cl(:,[2,3]);
+            e3 = obj.cl(:,[3,4]);
+            e4 = obj.cl(:,[4,1]);
 
-            % specefying boundary edges
-            obj.bedges = sparse([e1,e2,e3,e4],ones(4*ne,1),ones(4*ne,1));
-            obj.bedges = full(obj.bedges==1);
+            % stack all edges
+            allEdges = [e1; e2; e3; e4];
+            sortedEdgets = allEdges;
+            s = false(size(sortedEdgets,1),1);
+            idx = allEdges(:,2) > allEdges(:,1);
+            sortedEdgets(idx,1) = allEdges(idx,2);
+            sortedEdgets(idx,2) = allEdges(idx,1);
+            s(idx) = true;
 
-            % specefying trace direction
-            e1(s1) = -e1(s1);
-            e2(s2) = -e2(s2);
-            e3(s3) = -e3(s3);
-            e4(s4) = -e4(s4);
+            % unification of edges
+            [obj.edges, ~, ic] = unique(sortedEdgets,'rows');
 
-            % element matrix
-            obj.elements = [e1,e2,e3,e4];
+            % use negative sign for reverse edges
+            ic(s) = -ic(s);
+
+            % edge index per element
+            obj.elements = reshape(ic, ne, 4);
+
+            % find boundary edges
+            idx = emdlab_mex_findSignedPairs(obj.elements, size(obj.edges,1));
+            obj.bedges = idx ~= 3;
 
             % change states
             obj.isDataSet = true;

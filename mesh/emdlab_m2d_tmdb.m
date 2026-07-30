@@ -183,6 +183,32 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.emi = false(obj.Nmts, obj.Ne);
             obj.ezi = false(obj.Ne, obj.Nmzs);
 
+            tmp1 = 1:obj.Nmzs;
+            tmp1 = repmat(tmp1,obj.Ne,1);
+
+            tmp2 = obj.elements(:,4);
+            tmp2 = repmat(tmp2,1,obj.Nmzs);
+
+            obj.ezi = tmp1 == tmp2;
+
+            for i = 1:obj.Nmzs
+                for j = 1:obj.Nmts
+                    if obj.mzs.(meshZoneNames(i)).material == obj.materialNames(j)
+                        obj.emi(j,obj.ezi(:,i)) = true;
+                    end
+                end
+            end
+
+        end
+
+        function evalezi_old(obj)
+
+            % construct emi & ezi
+            meshZoneNames = obj.getMeshZoneNames;
+            obj.materialNames = string(fieldnames(obj.mts)');
+            obj.emi = false(obj.Nmts, obj.Ne);
+            obj.ezi = false(obj.Ne, obj.Nmzs);
+
             for i = 1:obj.Nmzs
                 obj.ezi(:,i) = obj.elements(:,4) == i;
                 for j = 1:obj.Nmts
@@ -867,48 +893,37 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         % setting needed data
         function setdata(obj)
 
-            % triangle edges
-            e1 = obj.cl(:, [1, 2]);
-            e2 = obj.cl(:, [2, 3]);
-            e3 = obj.cl(:, [3, 1]);
-
-            % sorting for lower index
-            [e1, s1] = sort(e1, 2);
-            [e2, s2] = sort(e2, 2);
-            [e3, s3] = sort(e3, 2);
-
-            % specefying changed edge index
-            s1 = s1(:, 1) == 2;
-            s2 = s2(:, 1) == 2;
-            s3 = s3(:, 1) == 2;
-
-            % unification of edges
-            [obj.edges, ~, ic] = unique([e1; e2; e3], 'rows');
-            
-            % getting number of elements
+            % getting the number of elements
             ne = obj.Ne;
 
-            % getting index of edge corresponding to each elements
-            e1 = ic(1:ne);
-            e2 = ic(1 + ne:2 * ne);
-            e3 = ic(1 + 2 * ne:3 * ne);
+            % triangle edges
+            e1 = obj.cl(:,[1,2]);
+            e2 = obj.cl(:,[2,3]);
+            e3 = obj.cl(:,[3,1]);
 
-            % specefying boundary edges
-            obj.bedges = sparse([e1, e2, e3], ones(3 * ne, 1), ones(3 * ne, 1));
-            obj.bedges = full(obj.bedges == 1);
+            % stack all edges
+            allEdges = [e1; e2; e3];
+            sortedEdgets = allEdges;
+            s = false(size(sortedEdgets,1),1);
+            idx = allEdges(:,2) > allEdges(:,1);
+            sortedEdgets(idx,1) = allEdges(idx,2);
+            sortedEdgets(idx,2) = allEdges(idx,1);
+            s(idx) = true;
 
-            % specefying trace direction
-            e1(s1) = -e1(s1);
-            e2(s2) = -e2(s2);
-            e3(s3) = -e3(s3);
+            % unification of edges
+            [obj.edges, ~, ic] = unique(sortedEdgets,'rows');
 
-            % element matrix
-            obj.elements(:, 1:3) = [e1, e2, e3];
+            % use negative sign for reverse edges
+            ic(s) = -ic(s);
 
-            % initialize nbs matrix
-            obj.nbs = zeros(obj.Ne,3);
+            % edge index per element
+            obj.elements(:,1:3) = reshape(ic, ne, 3);
 
-            % edge length
+            % element properties
+            obj.elementCenter = (obj.nodes(obj.cl(:,1),:) + obj.nodes(obj.cl(:,2),:) + obj.nodes(obj.cl(:,3),:))/3;
+
+            % edge properties
+            obj.edgeCenter = (obj.nodes(obj.edges(:,1),:) + obj.nodes(obj.edges(:,2),:))/2;
             obj.edgeLength = sqrt(sum((obj.nodes(obj.edges(:,1),:) - obj.nodes(obj.edges(:,2),:)).^2, 2));
             obj.el = obj.edgeLength(abs(obj.elements(:,1:3)));
 
@@ -917,9 +932,16 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.uEdges = obj.uEdges ./ vecnorm(obj.uEdges, 2, 2);
             obj.nEdges = [obj.uEdges(:,2), -obj.uEdges(:,1)];
 
-            % edge element
+            % edge element relationships             
+            obj.nbs = zeros(obj.Ne,3); % initialize nbs matrix
             obj.edges = [obj.edges, zeros(size(obj.edges, 1), 6)];
             emdlab_m2d_tmdbc_evalee(obj.edges, obj.elements, obj.nbs);
+
+            % calculate ij * ie properties
+%             obj.uij_x = 
+
+            % find boundary edges
+            obj.bedges = bitor(obj.edges(:,3) == 0, obj.edges(:,4) == 0);
             obj.edgeNamedSelections.('none') = find(obj.bedges);
 
         end
