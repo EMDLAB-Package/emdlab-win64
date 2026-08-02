@@ -7,7 +7,6 @@ end
 % angles
 a = atan_02pi([points(:, 1) - center(1), points(:, 2) - center(2)]);
 
-
 [~, index] = sort(a);
 points = points(index,:);
 

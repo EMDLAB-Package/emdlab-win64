@@ -106,21 +106,21 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
                 mzptr = obj.mzs.(mzName);
                 switch class(mzptr)
                     case 'emdlab_m3d_thmz'
-                        cl_facets = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3);
+                        fcl = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3);
                     case 'emdlab_m3d_hhmz'
-                        cl_facets = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:4);
+                        fcl = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:4);
                     case 'emdlab_m3d_pmz'
-                        cl_facets = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:4);
-                        cl_facets(cl_facets==0) = nan;
+                        fcl = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:4);
+                        fcl(fcl==0) = nan;
                 end
                 if mzColorFlag
-                    plt = patch(ax,'Faces', cl_facets, ...
+                    plt = patch(ax,'Faces', fcl, ...
                         'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
                         obj.mzs.(mzName).color, 'EdgeColor', [0.2,0.2,0.2], ...
                         'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
                     plt.UserData.c = obj.mzs.(mzName).color;
                 else
-                    plt = patch(ax,'Faces', cl_facets, ...
+                    plt = patch(ax,'Faces', fcl, ...
                         'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
                         'c', 'EdgeColor', [0.2,0.2,0.2], ...
                         'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
@@ -172,20 +172,25 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
 
         function varargout = showg(obj, varargin)
 
-            [f,ax] = emdlab_r3d_geometryNEW(1,0);
+            [f,ax] = emdlab_r3d_geometryNEW1(1,1);
             obj.ggmesh;
             mzNames = string(fieldnames(obj.mzs)');
 
             for mzName = mzNames
                 mzptr = obj.mzs.(mzName);
                 if isa(mzptr, 'emdlab_m3d_thmz')
-                    plt = patch(ax,'Faces', obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3), ...
+                    tmp = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:3);
+                else
+                    tmp = obj.mzs.(mzName).facets(obj.mzs.(mzName).bfacets,1:4);
+                    tmp(tmp==0) = nan;
+                end
+                plt = patch(ax,'Faces', tmp, ...
                         'Vertices', obj.mzs.(mzName).nodes, 'FaceColor', ...
                         obj.mzs.(mzName).color, 'EdgeColor', 'none', ...
                         'FaceAlpha', 1, 'HitTest','on','PickableParts','visible');
-                end
                 plt.UserData.Tag = mzName;
                 plt.UserData.c = obj.mzs.(mzName).color;
+                plt.UserData.ec = 'none';
             end
 
             if nargout == 1, varargout{1} = f;
@@ -216,17 +221,14 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
         function varargout = showwf(obj, varargin)
             % show wire frame mesh
 
-            [f,ax] = emdlab_flib_fax(varargin{:});
+            [f,ax] = emdlab_r3d_geometryNEW1(1,0);
             obj.ggmesh;
 
-            index = obj.edges(:, 3) ~= obj.edges(:, 4);
-            patch('Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
-
-            zoom on;
-            axis(ax, 'off');
-            axis(ax, 'equal');
-            set(ax, 'clipping', 'off');
+            idx = obj.facets(:, obj.NFN+1) ~= obj.facets(:, obj.NFN+2);
+            fcl = obj.facets(idx, 1:obj.NFN);
+            fcl(fcl == 0) = nan;
+            patch('Faces', fcl, 'Vertices', obj.nodes, 'facealpha', 0.5, ...
+                'FaceColor', 'c', 'EdgeColor', 'none', 'LineWidth', 1.2, 'parent', ax);
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
@@ -234,8 +236,6 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
             end
 
         end
-
-        
 
         function varargout = showmd(obj, varargin)
             % show mesh degree
@@ -856,15 +856,15 @@ classdef emdlab_m3d_xmdb < handle & emdlab_mdb_cp
             idx = find(mask);
         end
 
-        function idx = getEdgeIndicesOnContact(obj, mz1Name, mz2Name)
+        function idx = getFacetIndicesOnContact(obj, mz1Name, mz2Name)
 
             mz1Name = obj.checkMeshZoneExistence(mz1Name);
             mz2Name = obj.checkMeshZoneExistence(mz2Name);
 
-            mask = (ismember(obj.edges(:, 3), obj.mzs.(mz1Name).zi) & ...
-                ismember(obj.edges(:, 4), obj.mzs.(mz2Name).zi)) | ...
-                (ismember(obj.edges(:, 3), obj.mzs.(mz2Name).zi) & ...
-                ismember(obj.edges(:, 4), obj.mzs.(mz1Name).zi));
+            mask = (ismember(obj.facets(:, obj.NFN+1), obj.mzs.(mz1Name).zi) & ...
+                ismember(obj.facets(:, obj.NFN+2), obj.mzs.(mz2Name).zi)) | ...
+                (ismember(obj.facets(:, obj.NFN+1), obj.mzs.(mz2Name).zi) & ...
+                ismember(obj.facets(:, obj.NFN+2), obj.mzs.(mz1Name).zi));
 
             idx = find(mask);
 

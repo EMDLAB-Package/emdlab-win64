@@ -262,10 +262,11 @@ classdef emdlab_m3d_pmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
             % calculate facet areas
             % initialize matrices
-            obj.facetNormal = zeros(5*ne,3);
-            obj.facetArea = zeros(5*ne,1);
+            nf = size(obj.facets,1);
+            obj.facetNormal = zeros(nf,3);
+            obj.facetArea = zeros(nf,1);
             obj.fa = zeros(ne,5);
-            obj.facetCenter = zeros(5*ne,3);
+            obj.facetCenter = zeros(nf,3);
 
             % triangular facets
             idx = obj.facets(:,end) == 0;
@@ -633,34 +634,66 @@ classdef emdlab_m3d_pmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.isdata = false;
         end
 
-        function joinMeshZones(obj, idxs, name)
+        function joinMeshZones(obj, newMeshZoneName, varargin)
 
-            if nargin < 3
-                name = "joined_mz";
+            % get mesh zone names string list
+            mzNames = emdlab_flib_varargin2StringList(varargin{:});
+            Nmzs = numel(mzNames);
+
+            if Nmzs < 1
+                error('You have to specify one mesh zone at least.');
             end
 
-            idxs = idxs(:).';
-            if isempty(idxs)
-                return;
+            % find total number of mesh zones need to be joined
+            for i = 1:Nmzs
+                mzNames(i) = obj.checkMeshZoneExistence(mzNames(i));
             end
 
-            nodes = [];
-            elements = [];
-            offset = 0;
+            % store number of nodes and mesh zones of each element
+            Nn_tmp = zeros(1, Nmzs);
+            Ne_tmp = zeros(1, Nmzs);
 
-            for i = idxs
-                mz = obj.mzs(i);
-                nodes = [nodes; mz.nodes]; %#ok<AGROW>
-                elements = [elements; mz.elements + offset]; %#ok<AGROW>
-                offset = offset + mz.Nn;
+            for i = 1:Nmzs
+                Nn_tmp(i) = obj.mzs.(mzNames(i)).Nn;
+                Ne_tmp(i) = obj.mzs.(mzNames(i)).Ne;
             end
 
-            mznew = emdlab_m3d_pmz(nodes, elements);
-            mznew.name = char(name);
+            n_nmz = zeros(sum(Nn_tmp), 3);
+            e_nmz = zeros(sum(Ne_tmp), 6);
+            n_tmp = 0;
+            e_tmp = 0;
 
-            obj.addMeshZone(mznew, name);
+            for i = 1:Nmzs
+                n_nmz(1 + n_tmp:n_tmp + Nn_tmp(i), :) = obj.mzs.(mzNames(i)).nodes;
+                e_nmz(1 + e_tmp:e_tmp + Ne_tmp(i), :) = obj.mzs.(mzNames(i)).cl(:,1:6) + n_tmp;
+                n_tmp = n_tmp + Nn_tmp(i);
+                e_tmp = e_tmp + Ne_tmp(i);
+            end
+
+            % jointing mzs
+            [n_nmz, ~, ic] = uniquetol(n_nmz, obj.gleps, 'ByRows', true);
+            e_nmz = ic(e_nmz);
+
+            % get material and color of first mesh zone
+            material = obj.mzs.(mzNames(1)).material;
+            color = obj.mzs.(mzNames(1)).color;
+            transparency = obj.mzs.(mzNames(1)).transparency;
+
+            % removing old mesh zones
+            for i = 1:Nmzs
+                obj.mzs = rmfield(obj.mzs, mzNames(i));
+            end
+
+            % check non existance of new mesh zone name
+            newMeshZoneName = obj.checkMeshZoneNonExistence(newMeshZoneName);
+
+            % adding new mz
+            obj.mzs.(newMeshZoneName) = emdlab_m3d_pmz(e_nmz, n_nmz);
+            obj.mzs.(newMeshZoneName).material = material;
+            obj.mzs.(newMeshZoneName).color = color;
+            obj.mzs.(newMeshZoneName).transparency = transparency;
+
         end
-    
 
     end
 

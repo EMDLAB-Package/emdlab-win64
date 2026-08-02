@@ -1,10 +1,10 @@
-function [f,va] = emdlab_r3d_geometryNEW(bgFlag, hflag)
+
+function [f,va] = emdlab_r3d_geometryNEW1(bgFlag, hflag)
 
 if nargin == 0
     bgFlag = 1;
 end
-
-if nargin>2
+if nargin < 2
     hflag = 1;
 end
 
@@ -19,7 +19,7 @@ f = figure( ...
     'Renderer', 'opengl', ...
     'Units', 'pixels', ...
     'ToolBar','none', ...
-    'DockControls','off',...
+    'DockControls','off', ...
     'MenuBar','none');
 
 movegui(f, 'center');
@@ -47,11 +47,13 @@ va.Toolbar.Visible = 'off';
 camzoom(va,0.7);
 axis(va,'off','vis3d');
 
-% --- LIGHTING INITIALIZATION ---
-% Add a headlight source to 'va' and configure smooth shading calculations
-lh = camlight(va, 'headlight'); 
-lighting(va, 'gouraud'); 
-% -------------------------------
+% --- BRIGHT DYNAMIC LIGHTING ---
+lighting(va,'gouraud');
+material(va,'default');
+
+va.UserData.lightRig = createDynamicInfiniteLights(va);
+updateDynamicInfiniteLights(va);
+% --------------------------------
 
 %% ================= BACKGROUND ======================================
 bg = [];
@@ -64,11 +66,11 @@ if bgFlag
         'Clipping', 'off', ...
         'HitTest', 'off', ...
         'PickableParts', 'none');
+
     bg.Toolbar.Visible = 'off';
 
     uistack(bg,'bottom');
     setBackground(bg);
-    %     drawBackgroundLabel(bg, 'emdlab_win64');
 end
 
 %% ================= SMALL COORDINATE AXIS ===========================
@@ -79,9 +81,11 @@ ca = axes(f, ...
     'NextPlot','add');
 
 ca.Toolbar.Visible = 'off';
+
 if ~verLessThan('matlab','9.5')
     ca.Toolbar = [];
 end
+
 ca.Interactions = [];
 ca.PickableParts = 'none';
 
@@ -93,7 +97,12 @@ drawAxisArrow(ca, [0 0 1], [0 0.6 0], 'Z');
 
 patch(ca, ...
     'Faces', [1 2; 3 4; 5 6], ...
-    'Vertices', [-1 0 0; 1 0 0; 0 -1 0; 0 1 0; 0 0 -1; 0 0 1], ...
+    'Vertices', [-1 0 0; ...
+                  1 0 0; ...
+                  0 -1 0; ...
+                  0 1 0; ...
+                  0 0 -1; ...
+                  0 0 1], ...
     'EdgeColor','none');
 
 ca.HandleVisibility = 'off';
@@ -104,8 +113,6 @@ else
     f.UserData.txt = '';
 end
 
-% Save the light handle 'lh' into va's UserData so it is accessible inside callbacks
-va.UserData.lh = lh;
 va.UserData.camMovH = [0,0,0];
 va.UserData.camPosH = [0,0,0];
 va.UserData.rFlag = true;
@@ -121,24 +128,31 @@ f.SizeChangedFcn        = @fResizeFcn;
 guidata(f, guihandles(f));
 f.Visible = 'on';
 
-%% ================= CALLBACK FUNCTIONS ===============================
+%% ================= CALLBACK FUNCTIONS ==============================
 
     function fButtonDownFcn(~,~)
+
         ud = f.UserData;
+
         ud.isMouseDown = true;
         ud.cp = f.CurrentPoint;
         ud.cp0 = ud.cp;
-        ud.isMouseLeft = strcmpi(f.SelectionType,'normal');
+
+        ud.isMouseLeft  = strcmpi(f.SelectionType,'normal');
         ud.isMouseRight = strcmpi(f.SelectionType,'alt');
+
         ud.isDragging = false;
+
         f.UserData = ud;
     end
 
     function fButtonMotionFcn(src,~)
+
         ud = f.UserData;
 
-        % ---------- DRAG MODE: rotate only ----------
+        % ---------- DRAG MODE ----------
         if ud.isMouseDown && (ud.isMouseLeft || ud.isMouseRight)
+
             cpNew = f.CurrentPoint;
             dxy = cpNew - ud.cp;
 
@@ -149,61 +163,85 @@ f.Visible = 'on';
             ud.cp = cpNew;
 
             if ud.isDragging
+
                 dx = dxy(1);
                 dy = dxy(2);
 
                 if ud.isMouseLeft
+
                     rotScale = 0.35;
-                    camorbit(va, -rotScale*dx, -rotScale*dy, 'camera');
-                    camorbit(ca, -rotScale*dx, -rotScale*dy, 'camera');
+
+                    camorbit(va, ...
+                        -rotScale*dx, ...
+                        -rotScale*dy, ...
+                        'camera');
+
+                    camorbit(ca, ...
+                        -rotScale*dx, ...
+                        -rotScale*dy, ...
+                        'camera');
+
                 else
+
                     mousePanVa(dx,dy);
+
                 end
-                
-                % Update headlight to move with the camera view during drag rotation
-                if isgraphics(va.UserData.lh)
-                    camlight(va.UserData.lh, 'headlight');
-                end
+
+                % Update lighting according to the new camera
+                % orientation.
+                updateDynamicInfiniteLights(va);
+
             end
 
             f.UserData = ud;
+
             drawnow limitrate;
+
             return
         end
 
-        % ---------- HOVER MODE: highlight only ----------
+        % ---------- HOVER MODE ----------
         hoverHighlight(src);
+
     end
 
-    function fButtonUpFcn(src,~)
+    function fButtonUpFcn(~,~)
+
         ud = f.UserData;
-        ud.isMouseDown = false;
-        ud.isMouseLeft = false;
+
+        ud.isMouseDown  = false;
+        ud.isMouseLeft  = false;
         ud.isMouseRight = false;
-        ud.isDragging = false;
+        ud.isDragging   = false;
+
         f.UserData = ud;
+
     end
 
     function fScrollFcn(~,eventData)
+
         ud = f.UserData;
 
         if eventData.VerticalScrollCount < 0
+
             camzoom(va,0.9);
             ud.zf = ud.zf * 0.9;
+
         else
+
             camzoom(va,1.1);
             ud.zf = ud.zf * 1.1;
+
         end
 
-        % Update headlight position post-zoom
-        if isgraphics(va.UserData.lh)
-            camlight(va.UserData.lh, 'headlight');
-        end
+        updateDynamicInfiniteLights(va);
 
         f.UserData = ud;
+
     end
 
     function fKeyFcn(~,eventData)
+
         key = lower(eventData.Key);
         mods = lower(string(eventData.Modifier));
 
@@ -212,115 +250,185 @@ f.Visible = 'on';
         hasCtrl  = numel(mods)==1 && mods=="control";
 
         switch key
-            %% ---------- ORBIT (no modifier) ----------
+
             case 'rightarrow'
+
                 if hasNoMod
+
                     camorbit(ca,-10,0,'camera');
                     camorbit(va,-10,0,'camera');
+
                 elseif hasShift
+
                     camroll(va,-5);
                     camroll(ca,-5);
+
                 elseif hasCtrl
+
                     keyboardPanVa(+10,0);
+
                 end
 
             case 'leftarrow'
+
                 if hasNoMod
+
                     camorbit(ca,10,0,'camera');
                     camorbit(va,10,0,'camera');
+
                 elseif hasShift
+
                     camroll(va,5);
                     camroll(ca,5);
+
                 elseif hasCtrl
+
                     keyboardPanVa(-10,0);
+
                 end
 
             case 'uparrow'
+
                 if hasNoMod
+
                     camorbit(ca,0,-10,'camera');
                     camorbit(va,0,-10,'camera');
+
                 elseif hasShift
+
                     ud = f.UserData;
+
                     camzoom(va,1.1);
+
                     ud.zf = ud.zf*1.1;
+
                     f.UserData = ud;
+
                 elseif hasCtrl
+
                     keyboardPanVa(0,+10);
+
                 end
 
             case 'downarrow'
+
                 if hasNoMod
+
                     camorbit(ca,0,10,'camera');
                     camorbit(va,0,10,'camera');
+
                 elseif hasShift
+
                     ud = f.UserData;
+
                     camzoom(va,0.9);
+
                     ud.zf = ud.zf*0.9;
+
                     f.UserData = ud;
+
                 elseif hasCtrl
+
                     keyboardPanVa(0,-10);
+
                 end
 
-                %% ---------- PRESET VIEWS ----------
             case 'z'
+
                 if hasNoMod
+
                     view(va,[0 0 1]);
                     view(ca,[0 0 1]);
+
                 end
+
             case 'x'
+
                 if hasNoMod
+
                     view(va,[1 0 0]);
                     view(ca,[1 0 0]);
+
                 end
+
             case 'y'
+
                 if hasNoMod
+
                     view(va,[0 1 0]);
                     view(ca,[0 1 0]);
+
                 end
+
             case 'i'
+
                 if hasNoMod
+
                     camorbit(ca,30,20,'camera');
                     camorbit(va,30,20,'camera');
+
                 end
 
-                %% ---------- ROLL ----------
             case 'space'
+
                 if hasNoMod
+
                     camroll(va,90);
                     camroll(ca,90);
+
                 end
 
-                %% ---------- SAVE EPS ----------
             case 's'
+
                 if hasCtrl
-                    if ~isempty(bg), bg.Visible='off'; end
-                    f.Renderer='painters';
+
+                    if ~isempty(bg)
+                        bg.Visible = 'off';
+                    end
+
+                    f.Renderer = 'painters';
+
                     saveas(f,'view.eps');
-                    if ~isempty(bg), bg.Visible='on'; end
+
+                    if ~isempty(bg)
+                        bg.Visible = 'on';
+                    end
+
                 end
 
-                %% ---------- ZOOM FIT ----------
             case 'f'
+
                 if hasNoMod
+
                     ud = f.UserData;
+
                     camzoom(va,1/ud.zf);
+
                     ud.zf = 1;
+
                     f.UserData = ud;
+
                 end
+
             case 'r'
-                va.CameraPosition = va.UserData.camMovH;
-                va.CameraTarget   =  va.UserData.camPosH;
-                va.UserData.rFlag = true;
+
+                if hasNoMod
+
+                    va.CameraPosition = va.UserData.camMovH;
+                    va.CameraTarget   = va.UserData.camPosH;
+
+                    va.UserData.rFlag = true;
+
+                end
 
         end
 
-        % Update headlight positions after any keyboard camera updates
-        if isgraphics(va.UserData.lh)
-            camlight(va.UserData.lh, 'headlight');
-        end
+        updateDynamicInfiniteLights(va);
+
     end
 
     function keyboardPanVa(dx,dy)
+
         campos_ = va.CameraPosition;
         camtar_ = va.CameraTarget;
         camup_  = va.CameraUpVector;
@@ -334,120 +442,200 @@ f.Visible = 'on';
         up = camup_ ./ norm(camup_);
 
         panSpeed = 0.4;
+
         move = (dx * right + dy * up) * panSpeed;
 
         va.CameraPosition = campos_ - move;
         va.CameraTarget   = camtar_ - move;
 
-        % ca intentionally NOT panned
     end
 
-
     function mousePanVa(dx,dy)
+
         campos_ = va.CameraPosition;
         camtar_ = va.CameraTarget;
         camup_  = va.CameraUpVector;
 
-        % Camera basis vectors
         forward = camtar_ - campos_;
+
         dist = norm(forward);
-        forward = forward/dist;
+
+        forward = forward / dist;
 
         right = cross(forward,camup_);
-        right = right/norm(right);
+        right = right / norm(right);
 
         up = cross(right,forward);
-        up = up/norm(up);
+        up = up / norm(up);
 
-        % Translation proportional to camera distance
-        s = dist/9800;
+        s = dist / 9800;
 
-        move = (-dx*right - dy*up)*s;
+        move = (-dx*right - dy*up) * s;
 
         if va.UserData.rFlag
+
             va.UserData.camMovH = campos_;
             va.UserData.camPosH = camtar_;
+
             va.UserData.rFlag = false;
+
         end
 
         va.CameraPosition = campos_ + move;
         va.CameraTarget   = camtar_ + move;
+
     end
 
     function fResizeFcn(~,~)
+
         handles = guihandles(f);
+
         if isfield(handles,'cba')
+
             handles.cba.Units='normalized';
+
             handles.cba.Position(2)=0.2;
             handles.cba.Position(4)=0.7;
+
             handles.cba.Units='pixels';
+
             handles.cba.Position(1)=30;
             handles.cba.Position(3)=20;
+
         end
+
     end
 
 %% ================= HELPERS =========================================
 
     function hoverHighlight(src)
-        if ~hflag; return; end
+
+        if ~hflag
+            return;
+        end
+
         ud = f.UserData;
+
         h = hittest(src);
 
-        % Restore previously hovered patch
         if ~isempty(ud.hoverPatch) && isgraphics(ud.hoverPatch)
-            if isa(ud.hoverPatch,'matlab.graphics.primitive.Patch')
+
+            if isa(ud.hoverPatch, ...
+                    'matlab.graphics.primitive.Patch')
+
                 restorePatchAppearance(ud.hoverPatch);
+
             end
+
         end
 
         ud.hoverPatch = gobjects(0);
 
-        % Default title when not hovering a patch
-        f.UserData.txt.String = '';
+        if isstruct(f.UserData) && ...
+                isfield(f.UserData,'txt') && ...
+                ~isempty(f.UserData.txt) && ...
+                isgraphics(f.UserData.txt)
 
-        % Highlight current hovered patch only if it belongs to va
-        if isa(h,'matlab.graphics.primitive.Patch') && ancestor(h,'axes') == va
-            set(h, 'FaceColor', 'y', 'FaceAlpha', 1, 'edgecolor', [0.2,0.2,0.2]);
+            f.UserData.txt.String = '';
+
+        end
+
+        if isa(h,'matlab.graphics.primitive.Patch') && ...
+                ancestor(h,'axes') == va
+
+            set(h, ...
+                'FaceColor', 'y', ...
+                'FaceAlpha', 1, ...
+                'EdgeColor', [0 0 0]);
+
             ud.hoverPatch = h;
 
-            f.UserData.txt.String = h.UserData.Tag;
+            if isstruct(f.UserData) && ...
+                    isfield(f.UserData,'txt') && ...
+                    ~isempty(f.UserData.txt) && ...
+                    isgraphics(f.UserData.txt)
+
+                if isstruct(h.UserData) && ...
+                        isfield(h.UserData,'Tag')
+
+                    f.UserData.txt.String = h.UserData.Tag;
+
+                else
+
+                    f.UserData.txt.String = '';
+
+                end
+
+            end
+
         end
 
         f.UserData = ud;
+
         drawnow limitrate;
+
     end
 
-
     function restorePatchAppearance(hp)
+
         if ~isgraphics(hp)
-            return
+            return;
         end
 
-        % default restore state
-        set(hp, 'FaceColor', hp.UserData.c, 'FaceAlpha', 1, 'edgecolor', hp.UserData.ec);
+        if isstruct(hp.UserData) && ...
+                isfield(hp.UserData,'c')
+
+            faceColor = hp.UserData.c;
+
+        else
+
+            faceColor = [0.8 0.8 0.8];
+
+        end
+
+        set(hp, ...
+            'FaceColor', faceColor, ...
+            'FaceAlpha', 1, ...
+            'EdgeColor', hp.UserData.ec);
+
     end
 
     function setBackground(ax)
+
         n = 250;
         d = n/3;
 
-        c1 = [1 1 1; d^2 d 1; n^2 n 1]\[1;0.80;1];
-        c2 = [1 1 1; d^2 d 1; n^2 n 1]\[1;0.81;1];
-        c3 = [1 1 1; d^2 d 1; n^2 n 1]\[1;0.82;1];
+        c1 = [1 1 1; d^2 d 1; n^2 n 1]\ ...
+             [1;0.80;1];
+
+        c2 = [1 1 1; d^2 d 1; n^2 n 1]\ ...
+             [1;0.81;1];
+
+        c3 = [1 1 1; d^2 d 1; n^2 n 1]\ ...
+             [1;0.82;1];
 
         r = (1:n)';
+
         m = zeros(n,n,3);
 
-        m(:,:,1) = repmat(c1(1)*r.^2 + c1(2)*r + c1(3),1,n);
-        m(:,:,2) = repmat(c2(1)*r.^2 + c2(2)*r + c2(3),1,n);
-        m(:,:,3) = repmat(c3(1)*r.^2 + c3(2)*r + c3(3),1,n);
+        m(:,:,1) = repmat( ...
+            c1(1)*r.^2 + c1(2)*r + c1(3),1,n);
+
+        m(:,:,2) = repmat( ...
+            c2(1)*r.^2 + c2(2)*r + c2(3),1,n);
+
+        m(:,:,3) = repmat( ...
+            c3(1)*r.^2 + c3(2)*r + c3(3),1,n);
 
         imagesc(ax,m);
+
         axis(ax,'off');
+
     end
 
     function txt = drawBackgroundLabel(ax,str)
-        txt=text(ax,0.5,0.95,str, ...
+
+        txt = text(ax,0.5,0.95,str, ...
             'Units','normalized', ...
             'HorizontalAlignment','center', ...
             'VerticalAlignment','middle', ...
@@ -457,13 +645,166 @@ f.Visible = 'on';
             'Color',[1 1 1]*0.2, ...
             'Interpreter','none', ...
             'HitTest','off');
+
     end
 
     function drawAxisArrow(ax,dir,color,labelText)
-        emdlab_flib_arrow3d([0 dir(1)], [0 dir(2)], [0 dir(3)], ...
+
+        emdlab_flib_arrow3d( ...
+            [0 dir(1)], ...
+            [0 dir(2)], ...
+            [0 dir(3)], ...
             0.85,0.045,0.1,color,ax);
-        text(ax,1.1*dir(1),1.1*dir(2),1.1*dir(3), ...
-            labelText,'Color',color,'FontSize',10);
+
+        text(ax, ...
+            1.1*dir(1), ...
+            1.1*dir(2), ...
+            1.1*dir(3), ...
+            labelText, ...
+            'Color',color, ...
+            'FontSize',10);
+
+    end
+
+%% ============ TRUE DYNAMIC LIGHTING ================================
+
+    function rig = createDynamicInfiniteLights(ax)
+
+        % ---------------------------------------------------------
+        % Three-point dynamic lighting
+        %
+        % Infinite lights are used so only their direction changes
+        % when the camera moves.
+        %
+        % The fill and rim lights have been increased compared with
+        % the original version to avoid dark surfaces.
+        % ---------------------------------------------------------
+
+        % Strong white key light
+        rig.key = light(ax, ...
+            'Style','infinite', ...
+            'Color',[1.00 1.00 1.00]);
+
+        % Stronger fill light
+        rig.fill = light(ax, ...
+            'Style','infinite', ...
+            'Color',[0.80 0.80 0.80]);
+
+        % Brighter rim/back light
+        rig.rim = light(ax, ...
+            'Style','infinite', ...
+            'Color',[0.50 0.50 0.50]);
+
+    end
+
+    function updateDynamicInfiniteLights(ax)
+
+        if ~isgraphics(ax)
+            return;
+        end
+
+        if ~isfield(ax.UserData,'lightRig')
+            return;
+        end
+
+        rig = ax.UserData.lightRig;
+
+        if ~isstruct(rig)
+            return;
+        end
+
+        % ---------------------------------------------------------
+        % Camera basis
+        % ---------------------------------------------------------
+        cp = ax.CameraPosition;
+        ct = ax.CameraTarget;
+        up = ax.CameraUpVector;
+
+        fwd = ct - cp;
+
+        nf = norm(fwd);
+
+        if nf < eps
+            return;
+        end
+
+        fwd = fwd / nf;
+
+        upn = up / max(norm(up),eps);
+
+        right = cross(fwd,upn);
+
+        nr = norm(right);
+
+        if nr < eps
+
+            upn = [0 0 1];
+
+            right = cross(fwd,upn);
+
+            nr = max(norm(right),eps);
+
+        end
+
+        right = right / nr;
+
+        upn = cross(right,fwd);
+
+        upn = upn / max(norm(upn),eps);
+
+        % ---------------------------------------------------------
+        % Camera-relative light directions
+        %
+        % Strong front key
+        % Strong front-left fill
+        % Moderate back rim
+        % ---------------------------------------------------------
+        keyDir = ...
+            1.00*fwd + ...
+            0.55*right + ...
+            0.45*upn;
+
+        fillDir = ...
+            1.00*fwd - ...
+            0.45*right + ...
+            0.30*upn;
+
+        rimDir = ...
+            -0.50*fwd + ...
+            0.20*right + ...
+            0.30*upn;
+
+        % ---------------------------------------------------------
+        % Normalize directions
+        % ---------------------------------------------------------
+        keyDir = keyDir / max(norm(keyDir),eps);
+
+        fillDir = fillDir / max(norm(fillDir),eps);
+
+        rimDir = rimDir / max(norm(rimDir),eps);
+
+        % ---------------------------------------------------------
+        % Update infinite-light directions
+        % ---------------------------------------------------------
+        if isfield(rig,'key') && isgraphics(rig.key)
+
+            rig.key.Position = keyDir;
+
+        end
+
+        if isfield(rig,'fill') && isgraphics(rig.fill)
+
+            rig.fill.Position = fillDir;
+
+        end
+
+        if isfield(rig,'rim') && isgraphics(rig.rim)
+
+            rig.rim.Position = rimDir;
+
+        end
+
     end
 
 end
+

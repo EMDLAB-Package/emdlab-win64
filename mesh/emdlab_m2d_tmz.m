@@ -497,7 +497,7 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
         end
 
 
-        function mzptr = buildPrismMeshByExtrusion(obj, z, skewAngle)
+        function mzptr = buildPrismMeshByExtrusion1(obj, z, skewAngle)
 
             if iscolumn(z)
                 z = z';
@@ -547,6 +547,457 @@ classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable 
             mzptr.material = obj.material;
 
         end
+
+ 
+function mzptr = buildPrismMeshByExtrusion(obj, z, skewAngle, draftAngle)
+% buildPrismMeshByExtrusion
+%
+% Extrudes a 2D triangular mesh in the z-direction and optionally applies
+% skew and draft during extrusion.
+%
+% Inputs:
+%   z          : z-levels of the extrusion
+%   skewAngle  : total skew angle in degrees
+%                Positive value rotates the upper cross-section
+%                counter-clockwise relative to the bottom one.
+%
+%   draftAngle : draft angle in degrees
+%                Positive value expands the cross-section during extrusion.
+%                Negative value contracts the cross-section.
+%
+% Output:
+%   mzptr      : 3D prism mesh object
+%
+% Notes:
+%   The draft is applied with respect to the centroid of the original
+%   2D mesh. The radial displacement corresponding to the draft is
+%
+%       dr = dz * tan(draftAngle)
+%
+%   where dz is the distance from the bottom extrusion plane.
+%
+%   The skew and draft are applied simultaneously at every z-level.
+
+    % -------------------------------------------------------------
+    % Check and format z
+    % -------------------------------------------------------------
+    if iscolumn(z)
+        z = z';
+    end
+
+    Nz = length(z);
+
+    if Nz < 2
+        error('At least two z-levels are required to extrude.');
+    end
+
+    % -------------------------------------------------------------
+    % Default parameters
+    % -------------------------------------------------------------
+    if nargin < 3 || isempty(skewAngle)
+        skewAngle = 0;
+    end
+
+    if nargin < 4 || isempty(draftAngle)
+        draftAngle = 0;
+    end
+
+    % -------------------------------------------------------------
+    % Basic mesh information
+    % -------------------------------------------------------------
+    Ne2d = size(obj.cl, 1);
+    Nlayers = Nz - 1;
+
+    % -------------------------------------------------------------
+    % Build prism connectivity
+    %
+    % Each triangular element in the 2D mesh becomes a triangular
+    % prism with 6 nodes:
+    %
+    %   bottom: 1 2 3
+    %   top:    4 5 6
+    % -------------------------------------------------------------
+    cl3d = zeros(Ne2d * Nlayers, 6);
+
+    for k = 0:Nlayers-1
+
+        idx = k * Ne2d + (1:Ne2d);
+        shift = k * obj.Nn;
+
+        cl3d(idx,1:3) = obj.cl + shift;
+        cl3d(idx,4:6) = obj.cl + shift + obj.Nn;
+
+    end
+
+    % -------------------------------------------------------------
+    % 2D mesh centroid
+    %
+    % Draft is applied relative to this point.
+    % -------------------------------------------------------------
+    center = mean(obj.nodes, 1);
+
+    % -------------------------------------------------------------
+    % Convert angles to radians
+    % -------------------------------------------------------------
+    skewTotal = skewAngle * pi / 180;
+    draftRad  = draftAngle * pi / 180;
+
+    % -------------------------------------------------------------
+    % Create 3D nodes
+    % -------------------------------------------------------------
+    nodes3d = zeros(obj.Nn * Nz, 3);
+
+    % Total extrusion height
+    H = z(end) - z(1);
+
+    if H == 0
+        error('The z-levels must span a non-zero extrusion height.');
+    end
+
+    for i = 1:Nz
+
+        % Current z coordinate
+        zi = z(i);
+
+        % Distance from bottom plane
+        dz = zi - z(1);
+
+        % Normalized extrusion position
+        t = dz / H;
+
+        % ---------------------------------------------------------
+        % Draft
+        %
+        % Radial displacement produced by the draft angle:
+        %
+        %     dr = dz * tan(draftAngle)
+        %
+        % To avoid a singularity at the centroid, the displacement
+        % is applied by scaling the complete cross-section.
+        %
+        % The characteristic radius is taken as the maximum
+        % distance of the original nodes from the centroid.
+        % ---------------------------------------------------------
+        if draftAngle == 0
+
+            draftScale = 1;
+
+        else
+
+            r = sqrt( ...
+                (obj.nodes(:,1) - center(1)).^2 + ...
+                (obj.nodes(:,2) - center(2)).^2);
+
+            R = max(r);
+
+            if R == 0
+                error('Cannot apply draft to a mesh with zero size.');
+            end
+
+            dr = dz * tan(draftRad);
+
+            draftScale = 1 + dr / R;
+
+            % Prevent inversion of the cross-section
+            if draftScale <= 0
+                error(['Draft angle is too large for the specified ', ...
+                       'extrusion height. The cross-section would invert.']);
+            end
+
+        end
+
+        % ---------------------------------------------------------
+        % Apply draft
+        % ---------------------------------------------------------
+        x = center(1) + ...
+            draftScale * (obj.nodes(:,1) - center(1));
+
+        y = center(2) + ...
+            draftScale * (obj.nodes(:,2) - center(2));
+
+        % ---------------------------------------------------------
+        % Apply skew
+        %
+        % The total skew angle is reached at the final z-level.
+        % ---------------------------------------------------------
+        ang = t * skewTotal;
+
+        c = cos(ang);
+        s = sin(ang);
+
+        % Rotate around the mesh centroid rather than the global
+        % origin. This is generally more appropriate for extrusion.
+        xRel = x - center(1);
+        yRel = y - center(2);
+
+        xRot = center(1) + xRel * c - yRel * s;
+        yRot = center(2) + xRel * s + yRel * c;
+
+        % ---------------------------------------------------------
+        % Store nodes
+        % ---------------------------------------------------------
+        idxNodes = (i-1)*obj.Nn + (1:obj.Nn);
+
+        nodes3d(idxNodes,:) = [ ...
+            xRot, ...
+            yRot, ...
+            repmat(zi, obj.Nn, 1)];
+
+    end
+
+    % -------------------------------------------------------------
+    % Create prism mesh
+    % -------------------------------------------------------------
+    mzptr = emdlab_m3d_pmz(cl3d, nodes3d);
+
+    % Copy properties
+    mzptr.color = obj.color;
+    mzptr.material = obj.material;
+
+end
+
+
+
+function [mzptr, lastLayerNodes] = buildPrismMeshByExtrusionZAxisDraft(obj, z, skewAngle, draftAngle)
+% buildPrismMeshByExtrusionZAxisDraft
+%
+% Extrudes a 2D triangular mesh in the z-direction and optionally applies
+% skew and radial draft with respect to the GLOBAL z-axis.
+%
+% Inputs:
+%   z          : z-levels of the extrusion
+%
+%   skewAngle  : total skew angle in degrees
+%                Positive value rotates the upper cross-section
+%                counter-clockwise around the global z-axis.
+%
+%   draftAngle : draft angle in degrees
+%
+%                Positive value:
+%                    cross-section SHRINKS toward the z-axis.
+%
+%                Negative value:
+%                    cross-section EXPANDS away from the z-axis.
+%
+% Output:
+%   mzptr          : 3D prism mesh object
+%
+%   lastLayerNodes : coordinates of the nodes at the final z-level
+%                    after applying draft and skew.
+%                    Size = [obj.Nn x 3]
+%
+% Description:
+%
+%   The draft is applied relative to the global z-axis:
+%
+%       x' = scale * x
+%       y' = scale * y
+%
+%   The final radial displacement is defined by:
+%
+%       dr = H * tan(draftAngle)
+%
+%   where H is the total extrusion height.
+%
+%   Positive draftAngle shrinks the cross-section toward the z-axis.
+%   Negative draftAngle expands the cross-section away from the z-axis.
+%
+%   Skew is applied as a rotation around the global z-axis.
+%
+%   Nodes located directly on the z-axis are handled naturally:
+%
+%       x = y = 0  -->  x' = y' = 0
+
+    % -------------------------------------------------------------
+    % Check and format z
+    % -------------------------------------------------------------
+    if iscolumn(z)
+        z = z';
+    end
+
+    Nz = length(z);
+
+    if Nz < 2
+        error('At least two z-levels are required to extrude.');
+    end
+
+    % -------------------------------------------------------------
+    % Default parameters
+    % -------------------------------------------------------------
+    if nargin < 3 || isempty(skewAngle)
+        skewAngle = 0;
+    end
+
+    if nargin < 4 || isempty(draftAngle)
+        draftAngle = 0;
+    end
+
+    % -------------------------------------------------------------
+    % Basic mesh information
+    % -------------------------------------------------------------
+    Ne2d    = size(obj.cl, 1);
+    Nlayers = Nz - 1;
+
+    % -------------------------------------------------------------
+    % Build prism connectivity
+    %
+    % Each triangular element becomes a 6-node prism:
+    %
+    %       bottom: 1 2 3
+    %       top:    4 5 6
+    % -------------------------------------------------------------
+    cl3d = zeros(Ne2d * Nlayers, 6);
+
+    for k = 0:Nlayers-1
+
+        idx   = k * Ne2d + (1:Ne2d);
+        shift = k * obj.Nn;
+
+        cl3d(idx,1:3) = obj.cl + shift;
+        cl3d(idx,4:6) = obj.cl + shift + obj.Nn;
+
+    end
+
+    % -------------------------------------------------------------
+    % Convert angles to radians
+    % -------------------------------------------------------------
+    skewTotal = skewAngle * pi / 180;
+    draftRad  = draftAngle * pi / 180;
+
+    % -------------------------------------------------------------
+    % Total extrusion height
+    % -------------------------------------------------------------
+    H = z(end) - z(1);
+
+    if H == 0
+        error('The z-levels must span a non-zero extrusion height.');
+    end
+
+    % -------------------------------------------------------------
+    % Create 3D nodes
+    % -------------------------------------------------------------
+    nodes3d = zeros(obj.Nn * Nz, 3);
+
+    % -------------------------------------------------------------
+    % Calculate final radial scale
+    %
+    % R is the maximum radial distance from the global z-axis.
+    % -------------------------------------------------------------
+    if draftAngle ~= 0
+
+        R = max(sqrt( ...
+            obj.nodes(:,1).^2 + ...
+            obj.nodes(:,2).^2));
+
+        if R == 0
+            error('The 2D mesh has zero radial size.');
+        end
+
+        % Radial displacement at the top layer
+        dr = H * tan(draftRad);
+
+        % New maximum radius
+        Rnew = R - dr;
+
+        % Prevent collapse or inversion
+        if Rnew <= 0
+            error(['Draft angle is too large for the specified ', ...
+                   'extrusion height. The cross-section would ', ...
+                   'collapse or invert.']);
+        end
+
+        % Scale at final layer
+        scaleFinal = Rnew / R;
+
+    else
+
+        scaleFinal = 1;
+
+    end
+
+    % -------------------------------------------------------------
+    % Generate each z-layer
+    % -------------------------------------------------------------
+    for i = 1:Nz
+
+        % Current z-coordinate
+        zi = z(i);
+
+        % Distance from bottom plane
+        dz = zi - z(1);
+
+        % Normalized extrusion position
+        t = dz / H;
+
+        % ---------------------------------------------------------
+        % Draft
+        %
+        % Linear interpolation from:
+        %
+        %       scale = 1
+        %
+        % at the bottom to:
+        %
+        %       scale = scaleFinal
+        %
+        % at the top.
+        % ---------------------------------------------------------
+        draftScale = 1 + t * (scaleFinal - 1);
+
+        % ---------------------------------------------------------
+        % Apply radial draft relative to global z-axis
+        % ---------------------------------------------------------
+        x = draftScale * obj.nodes(:,1);
+        y = draftScale * obj.nodes(:,2);
+
+        % ---------------------------------------------------------
+        % Apply skew
+        %
+        % Total skewAngle is reached at the final layer.
+        % ---------------------------------------------------------
+        ang = t * skewTotal;
+
+        c = cos(ang);
+        s = sin(ang);
+
+        xRot = c*x - s*y;
+        yRot = s*x + c*y;
+
+        % ---------------------------------------------------------
+        % Store nodes
+        % ---------------------------------------------------------
+        idxNodes = (i-1)*obj.Nn + (1:obj.Nn);
+
+        nodes3d(idxNodes,:) = [ ...
+            xRot, ...
+            yRot, ...
+            repmat(zi, obj.Nn, 1)];
+
+    end
+
+    % -------------------------------------------------------------
+    % Extract nodes of the LAST layer
+    % -------------------------------------------------------------
+    lastLayerNodes = nodes3d( ...
+        (Nz-1)*obj.Nn + (1:obj.Nn), :);
+
+    % -------------------------------------------------------------
+    % Create prism mesh
+    % -------------------------------------------------------------
+    mzptr = emdlab_m3d_pmz(cl3d, nodes3d);
+
+    % -------------------------------------------------------------
+    % Copy properties
+    % -------------------------------------------------------------
+    mzptr.color    = obj.color;
+    mzptr.material = obj.material;
+
+end
+
+
+
+
+
 
         function ttmz = getRotateZ(obj, Angle, Nlayer)
             Angle = Angle * pi / 180;

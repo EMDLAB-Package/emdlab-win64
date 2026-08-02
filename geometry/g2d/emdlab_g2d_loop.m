@@ -23,6 +23,13 @@ classdef emdlab_g2d_loop < handle
 
     end
 
+    properties (Dependent = true)
+
+        % number of edges
+        Nedges (1,1) double;
+
+    end
+
     methods
 
         % constructor
@@ -36,6 +43,10 @@ classdef emdlab_g2d_loop < handle
             obj.directions(end+1) = direction;
             obj.edgesIndexList(end+1) = edgeIndex;
 
+        end
+
+        function y = get.Nedges(obj)
+            y = numel(obj.edges);
         end
 
         % clear all existing edges

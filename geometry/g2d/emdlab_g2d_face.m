@@ -21,15 +21,24 @@ classdef emdlab_g2d_face < handle
 
     end
 
+    properties (Dependent = true)
+
+        % number of loops
+        Nloops (1,1) double;
+
+    end
+
     methods
 
         function obj = emdlab_g2d_face()
         end
 
         function addLoop(obj, newLoop)
-
             obj.loops(end+1) = newLoop;
+        end
 
+        function y = get.Nloops(obj)
+            y = numel(obj.loops);
         end
 
         function [f, v] = getFacesVertices(obj)

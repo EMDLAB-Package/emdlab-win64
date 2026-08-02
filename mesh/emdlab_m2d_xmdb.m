@@ -1179,6 +1179,11 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
             idx = find(mask);
         end
 
+        function pts = getNodesOnCircle(obj, varargin)
+            idx = obj.getNodeIndicesOnCircle(varargin{:});
+            pts = obj.nodes(idx,:);
+        end
+
         function idx = getEdgeIndicesInCircle(obj, x0, y0, r, tol)
             % getEdgeIndicesInCircle
             % Returns indices of edges that lie entirely inside (or on)

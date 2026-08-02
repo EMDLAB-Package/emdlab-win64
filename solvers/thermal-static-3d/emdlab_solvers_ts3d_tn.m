@@ -559,13 +559,140 @@ classdef emdlab_solvers_ts3d_tn < handle
 
         end
 
+        function modifyFixedTemperatureBC(obj, exName, varargin)
+        % 1. Verify that the boundary condition actually exists first
+        if ~isfield(obj.excitations, exName)
+            error('EMDLAB:ThermalSolver:ExcitationNotFound', ...
+                'Excitation "%s" does not exist. Use addFixedTemperatureBC first.', exName);
+        end
+        
+        % 2. Ensure we are modifying a fixed-temperature BC
+        if ~strcmp(obj.excitations.(exName).type, 'fixed-temperature')
+            error('EMDLAB:ThermalSolver:InvalidType', ...
+                'Excitation "%s" is not a fixed-temperature boundary condition.', exName);
+        end
+
+        % 3. Parse optional inputs to allow updating either 'value', 'idx', or both
+        p = inputParser;
+        p.addParameter('value', [], @isnumeric);
+        p.addParameter('idx', [], @isnumeric);
+        p.parse(varargin{:});
+        
+        % Update only the parameters that were provided
+        if ~isempty(p.Results.value)
+            obj.excitations.(exName).value = p.Results.value;
+        end
+        if ~isempty(p.Results.idx)
+            obj.excitations.(exName).idx = p.Results.idx;
+        end
+        end
+
+        function modifyRadiationBC(obj, exName, varargin)
+        % 1. Verify that the boundary condition actually exists first
+        if ~isfield(obj.excitations, exName)
+            error('EMDLAB:ThermalSolver:ExcitationNotFound', ...
+                'Excitation "%s" does not exist. Use addRadiationBC first.', exName);
+        end
+        
+        % 2. Ensure we are modifying a radiation BC
+        if ~strcmp(obj.excitations.(exName).type, 'radiation')
+            error('EMDLAB:ThermalSolver:InvalidType', ...
+                'Excitation "%s" is not a radiation boundary condition.', exName);
+        end
+
+        % 3. Parse optional inputs to allow updating eValue, Tsurr, idx, or combinations of them
+        p = inputParser;
+        p.addParameter('eValue', [], @isnumeric);
+        p.addParameter('Tsurr', [], @isnumeric);
+        p.addParameter('idx', [], @isnumeric);
+        p.parse(varargin{:});
+        
+        % Update only the parameters that were provided
+        if ~isempty(p.Results.eValue)
+            obj.excitations.(exName).eValue = p.Results.eValue;
+        end
+        if ~isempty(p.Results.Tsurr)
+            obj.excitations.(exName).Tsurr = p.Results.Tsurr;
+        end
+        if ~isempty(p.Results.idx)
+            obj.excitations.(exName).idx = p.Results.idx;
+        end
+        end
+
+        function modifyConvectionBC(obj, exName, hValue, Tinf)
+        % 1. Verify that the boundary condition actually exists first
+        if ~isfield(obj.excitations, exName)
+            error('EMDLAB:ThermalSolver:ExcitationNotFound', ...
+                'Excitation "%s" does not exist. Use addConvectionBC first.', exName);
+        end
+        
+
+        obj.excitations.(exName).hValue =hValue;
+
+            obj.excitations.(exName).Tinf = Tinf;
+        end
+
+        function modifyHeatFluxBC(obj, exName, varargin)
+        % 1. Verify that the boundary condition actually exists first
+        if ~isfield(obj.excitations, exName)
+            error('EMDLAB:ThermalSolver:ExcitationNotFound', ...
+                'Excitation "%s" does not exist. Use addHeatFluxBC first.', exName);
+        end
+        
+        % 2. Ensure we are modifying a heat-flux BC
+        if ~strcmp(obj.excitations.(exName).type, 'heat-flux')
+            error('EMDLAB:ThermalSolver:InvalidType', ...
+                'Excitation "%s" is not a heat-flux boundary condition.', exName);
+        end
+
+        % 3. Parse optional inputs to allow updating value, idx, or both
+        p = inputParser;
+        p.addParameter('value', [], @isnumeric);
+        p.addParameter('idx', [], @isnumeric);
+        p.parse(varargin{:});
+        
+        % Update only the parameters that were provided
+        if ~isempty(p.Results.value)
+            obj.excitations.(exName).value = p.Results.value;
+        end
+        if ~isempty(p.Results.idx)
+            obj.excitations.(exName).idx = p.Results.idx;
+        end
+    end
+
+    function modifyInternalHeatSource(obj, exName, value)
+        
+        mzName = obj.excitations.(exName).mzName;
+
+        um = obj.units.k_length;
+%             Area = sum(obj.m.gea(obj.m.ezi(:,obj.m.mzs.(mzName).zi))) * um^2;
+
+            % set default unit
+            if nargin < 4, unit = 'W'; end
+
+            unit = lower(erase(unit, ' '));
+            switch unit
+
+                case 'w'
+                    value = value/(obj.m.mzs.(mzName).volume * um^3);
+
+                case {'w/m^3', 'w/m3', 'w/(m^3)'}
+                otherwise
+                    error('Unsupported unit type.');
+
+            end
+
+            obj.excitations.(exName).value = value;
+
+    end
+
         %% Contacts
         function addContact(obj, cName, mz1Name, mz2Name, hValue)
 
             cName = obj.checkContactNonExistence(cName);
             mz1Name = obj.m.checkMeshZoneExistence(mz1Name);
             mz2Name = obj.m.checkMeshZoneExistence(mz2Name);
-            obj.contacts.(cName).idx = obj.m.getEdgeIndicesOnContact(mz1Name,mz2Name);
+            obj.contacts.(cName).idx = obj.m.getFacetIndicesOnContact(mz1Name,mz2Name);
             obj.contacts.(cName).mz1Name = mz1Name;
             obj.contacts.(cName).mz2Name = mz2Name;
             obj.contacts.(cName).hValue = hValue;
@@ -573,7 +700,7 @@ classdef emdlab_solvers_ts3d_tn < handle
         end
 
         function area = getContactArea(obj, mz1Name, mz2Name)
-            idx = obj.m.getEdgeIndicesOnContact(mz1Name,mz2Name);
+            idx = obj.m.getFacetIndicesOnContact(mz1Name, mz2Name);
             area = obj.getDepth * sum(obj.m.edgeLength(idx)) * obj.units.k_length;
         end
 
@@ -620,48 +747,133 @@ classdef emdlab_solvers_ts3d_tn < handle
 
         end
 
-        function varargout = plotTemperature(obj, N, varargin)
+        function varargout = plotHeatFlux(obj, N, varargin)
 
             [f,ax] = emdlab_r3d_geometry(1,0);
             if nargin<2, N=10; end
 
+            clr = abs(obj.results.qf./obj.m.facetArea)*(1/obj.units.k_length^2);
+
             switch obj.meshType
                 case 'thm'
-
-                    patch('faces', obj.m.facets(obj.m.bfacets,1:3), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tsmooth, ...
-                        'FaceColor','interp', 'edgecolor', 'w');
+                    idx = obj.m.facets(obj.m.bfacets,6) + obj.m.facets(obj.m.bfacets,8);
+                    patch('faces', obj.m.facets(obj.m.bfacets,1:3), 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.T(idx), ...
+                        'FaceColor','flat', 'edgecolor', 'w');
                 case {'pm','hhm'}
-                    tmp = obj.m.facets(obj.m.bfacets,1:4);
-                    tmp(tmp ==0 ) = nan;
-                    patch('faces', tmp, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tsmooth, ...
-                        'FaceColor','interp', 'edgecolor', 'w');
+                    idx = (obj.results.qf ~= 0) & obj.m.bfacets;
+                    tmp = obj.m.facets(idx,1:4);
+                    tmp(tmp == 0) = nan;
+                    patch('faces', tmp, 'Vertices', obj.m.nodes, 'FaceVertexCData',clr(idx), ...
+                        'FaceColor','flat', 'edgecolor', 'w');
             end
 
             colormap(jet(N));
             cb = colorbar;
             cb.FontName = 'Verdana';
             cb.FontSize = 12;
-            cb.Label.String = 'Temperature [C]';
+            cb.Label.String = 'Heat Flux [W/m^2]';
             climits = clim;
-            cb.Ticks = fix(linspace(climits(1), climits(2), 10)*100)/100;
-            cb.Ticks(1) = cb.Ticks(1) + 0.01;
-            cb.Position = [0.8,0.3,0.05,0.4];
-
-            %             index = obj.m.edges(:, 3) ~= obj.m.edges(:, 4);
-            %             patch('Faces', obj.m.edges(index, [1, 2]), 'Vertices', obj.m.nodes, ...
-            %                 'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1.2, 'parent', ax);
-
-            %             zoom on;
-            %             axis(ax, 'off');
-            %             axis(ax, 'equal');
-            %             set(ax, 'clipping', 'off');
-
+            cb.Ticks = linspace(climits(1), climits(2), 10)*100/100;
+            ticks = cb.Ticks;
+            cb.TickLabels = compose('%0.2e',ticks);
+            cb.Position = [0.75,0.3,0.05,0.4];
+            
+            % set outputs
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
             elseif nargout > 1, error('Too many output argument.');
             end
 
         end
+
+        function varargout = plotTemperature(obj, N, varargin)
+
+            % set default number of contours
+            if nargin < 2, N=10; end
+
+            % get figure & axis
+            [f,ax] = emdlab_r3d_geometryNEW(0,0);
+            
+            % index of boundary facets for mesh zone
+            idx = ((obj.m.facets(:,obj.m.NFN+1) == 0) & (obj.m.facets(:,obj.m.NFN+2) ~= 0)) | ...
+                ((obj.m.facets(:,obj.m.NFN+1) ~= 0) & (obj.m.facets(:,obj.m.NFN+2) == 0));
+
+            % facet connectivity list
+            fcl = obj.m.facets(idx,1:obj.m.NFN);
+            fcl(fcl == 0) = nan;
+
+            % plot mesh zone temperature
+            patch('faces', fcl, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tsmooth, ...
+                        'FaceColor','interp', 'edgecolor', 'none');
+
+            % set color bar
+            colormap(jet(N));
+            cb = colorbar;
+            cb.FontName = 'Verdana';
+            cb.FontSize = 12;
+            cb.Label.String = 'Temperature [C]';
+            climits = clim;
+            cb.Ticks = linspace(climits(1), climits(2), 10)*100/100;
+            ticks = cb.Ticks;
+            cb.TickLabels = compose('%0.2e',ticks);
+            cb.Position = [0.75,0.3,0.05,0.4];
+
+            % set outputs
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
+        function varargout = plotMeshZoneTemperature(obj, mzName, N)
+
+            % set default number of contours
+            if nargin < 3, N=10; end
+
+            % check mesh zone name
+            mzName = obj.m.checkMeshZoneExistence(mzName);
+            zi = obj.m.mzs.(mzName).zi; % zone index
+
+            % get figure & axis
+            [f,ax] = emdlab_r3d_geometryNEW(0,0);
+            
+            % index of boundary facets for mesh zone
+            idx = ((obj.m.facets(:,obj.m.NFN+1) == zi) & (obj.m.facets(:,obj.m.NFN+2) ~= zi)) | ...
+                ((obj.m.facets(:,obj.m.NFN+1) ~= zi) & (obj.m.facets(:,obj.m.NFN+2) == zi));
+
+            % facet connectivity list
+            fcl = obj.m.facets(idx,1:obj.m.NFN);
+            fcl(fcl == 0) = nan;
+
+            % plot mesh zone temperature
+            patch('faces', fcl, 'Vertices', obj.m.nodes, 'FaceVertexCData',obj.results.Tsmooth, ...
+                        'FaceColor','interp', 'edgecolor', 'none');
+
+            % Temperature of mesh zone nodes -> this is used to set color bar
+            Tmz = obj.results.Tsmooth(obj.m.mzs.(mzName).l2g);
+
+            % set color bar
+            colormap(jet(N));
+            cb = colorbar;
+            cb.FontName = 'Verdana';
+            cb.FontSize = 12;
+            cb.Label.String = 'Temperature [C]';
+            clim([min(Tmz), max(Tmz)]);
+            climits = clim;
+            cb.Ticks = linspace(climits(1), climits(2), 10)*100/100;
+            ticks = cb.Ticks;
+            cb.TickLabels = compose('%0.2e',ticks);
+            cb.Position = [0.75,0.3,0.05,0.4];
+
+            % set outputs
+            if nargout == 1, varargout{1} = f;
+            elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
+            elseif nargout > 1, error('Too many output argument.');
+            end
+
+        end
+
 
         function varargout = plotTemperatureTn(obj, N, varargin)
 
@@ -971,38 +1183,33 @@ classdef emdlab_solvers_ts3d_tn < handle
 
         function gMatrix = applyContact(obj, idx, gMatrix, hValue)
 
-            if iscolumn(idx), idx = idx'; end
-            edgeCenters = obj.m.getCenterOfEdges;
-            z = obj.getDepth;
+            idx = idx(:)';
             um = obj.units.k_length;
 
             for index = idx
 
                 % index of left element
-                i = obj.m.edges(index,5);
+                i = obj.m.facets(index,obj.m.NFN+3);
 
                 % index of right element
-                j = obj.m.edges(index,7);
+                j = obj.m.facets(index,obj.m.NFN+5);
 
                 % length of contact edge
-                el = obj.m.el(i,obj.m.edges(index,6));
-
-                % area of contact edge
-                A = el*z*um;
+                A = obj.m.facetArea(index) * um^2;
 
                 if isa(hValue,'function_handle')
-                    h = hValue(edgeCenters(index,1),edgeCenters(index,2));
+                    h = hValue(obj.m.facetCenter(index,1),obj.m.facetCenter(index,2),obj.m.facetCenter(index,3));
                 else
                     h = hValue;
                 end
 
                 Rc = 1/(h*A);
-                Rij_old = -1/gMatrix(i,obj.m.edges(index,6) + 1);
+                Rij_old = -1/gMatrix(i,obj.m.facets(index,obj.m.NFN+4) + 1);
                 Rij_new = Rij_old + Rc;
                 gMatrix(i,1) = gMatrix(i,1) - 1/Rij_old + 1/Rij_new;
                 gMatrix(j,1) = gMatrix(j,1) - 1/Rij_old + 1/Rij_new;
-                gMatrix(i,obj.m.edges(index,6) + 1) = -1/Rij_new;
-                gMatrix(j,obj.m.edges(index,8) + 1) = -1/Rij_new;
+                gMatrix(i,obj.m.facets(index,obj.m.NFN+4) + 1) = -1/Rij_new;
+                gMatrix(j,obj.m.facets(index,obj.m.NFN+6) + 1) = -1/Rij_new;
 
             end
 

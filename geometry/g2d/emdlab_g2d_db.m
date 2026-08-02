@@ -110,9 +110,11 @@ classdef emdlab_g2d_db < handle
 
             % remove connected edges to this point firt
             for i = 1:numel(pIndex.tags)
+                obj.removeEdge(pIndex.tags(i));
             end
             obj.points(pIndex) = [];
-        end
+        
+        end      
 
         function pointHandle = getPointHandleByTag(obj, pTag)
 
@@ -1150,9 +1152,36 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function addRectangularFinOnArc(obj, eIndex, wf, hf, t)
+        function e = addRectangularFinOnArc(obj, eIndex, wf, hf, t)
 
-            
+            aptr = obj.edges(eIndex).ptr;
+            [na1Index, p1Index] = obj.splitArc(eIndex);
+
+            u = obj.points(p1Index).getUnitVector;
+
+            [na2Index, p2Index] = obj.splitArc(na1Index);
+
+            r = aptr.getRadius;
+            c = aptr.p0.getVector;
+
+            gamma = 2*asin(wf*0.5/r);
+
+            [x,y] = emdlab_g2d_rotatePointsXY(obj.points(p1Index).x,obj.points(p1Index).y,-gamma/2);
+            obj.setPointCoordinates(p1Index, x, y);
+
+            [x,y] = emdlab_g2d_rotatePointsXY(obj.points(p1Index).x,obj.points(p1Index).y,gamma);
+            obj.setPointCoordinates(p2Index, x, y);
+
+            p3Index = obj.addPoint(obj.points(p1Index).getVector + hf*u);
+            p4Index = obj.addPoint(obj.points(p2Index).getVector + hf*u);
+
+            s1 = obj.addSegment(p1Index, p3Index);
+            s2 = obj.addSegment(p3Index, p4Index);
+            s3 = obj.addSegment(p4Index, p2Index);
+
+            e = [eIndex, na1Index, na2Index, s1, s2, s3];
+
+
         end
 
         function removeEdge(obj, eIndex)
@@ -1237,6 +1266,21 @@ classdef emdlab_g2d_db < handle
 
         end
 
+        function removeLoopRecursive(obj, loopIndex)
+
+            if ischar(loopIndex)
+                loopIndex = obj.getLoopIndexByTag(loopIndex);
+            end
+
+            % first remove all connected faces to this loop
+            for faceTag = obj.loops(loopIndex).tags
+                obj.removeFace(faceTag);
+            end
+
+            obj.loops(loopIndex) = [];
+
+        end
+
         function loopIndex = getLoopIndexByTag(obj, lTag)
 
             % check for existance of already defined loop in data base
@@ -1287,6 +1331,18 @@ classdef emdlab_g2d_db < handle
 
             if ischar(faceIndex)
                 faceIndex = obj.getFaceIndexByTag(faceIndex);
+            end
+            obj.faces(faceIndex) = [];
+
+        end
+
+        function removeFaceRecursive(obj, faceIndex)
+
+            if ischar(faceIndex)
+                faceIndex = obj.getFaceIndexByTag(faceIndex);
+            end
+            for i = 1:obj.faces(faceIndex).Nloops
+                obj.removeLoop(obj.faces(faceIndex).loops(i).tag);
             end
             obj.faces(faceIndex) = [];
 
