@@ -89,10 +89,10 @@ m.setMeshZoneColor(['magnet',num2str(i)],255,70,70);
 end
 
 % apply boundary conditions
-k1 = m.getfbniol_p0x([0,-gv_g/2-gv_dm-gv_dry]);
-k2 = m.getfbniol_p0x([0,gv_g/2+gv_dss+gv_dsy]);
+k1 = m.getNodeIndicesOnLineP0U(0, -gv_g/2-gv_dm-gv_dry, 1, 0);
+k2 = m.getNodeIndicesOnLineP0U(0, gv_g/2+gv_dss+gv_dsy, 1, 0);
 s.setAzBC([k1;k2],0);
-[km,ks] = m.splitShift(setdiff(m.getfbn,[k1;k2]), [gv_L,0]);
+[km,ks] = m.splitPeriodicNodesByShift(setdiff(m.getfbn,[k1;k2]), gv_L, 0);
 s.setEvenPeriodicBC(km,ks);
 
 % run solver

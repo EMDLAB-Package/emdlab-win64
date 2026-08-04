@@ -3,164 +3,80 @@
 
 classdef emdlab_m2d_qtmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmz
 
-    properties (SetAccess = private)
-
-        % mesh nodes
-        nodes (:,2) double;
-
-        % quadrilateral mesh connectivity list
-        qcl (:,4) double;
-
-        % triangular mesh connectivity list
-        tcl (:,3) double;
-
-        % quadrilateral mesh elements
-        qelements (:,4) double;
-
-        % triangular mesh elements
-        telements (:,3) double;
-
-        % unique edges
-        edges (:,2) double;
-
-        % list of boundary edges
-        bedges (:,1) double;
-
-    end
-
-    properties
-
-        % zone index
-        zi (1,1) double;
-
-        % local to global node index
-        l2g (:,1) double;
-
-        % material of zone
-        material char = 'air';
-
-        % surface color transparency
-        transparency (1,1) double = 1;
-
-        % mesh zone color
-        color = 'c';
-
-        % mesh zone properties: differs in differents solvers
-        props (1,1) struct;
-
-        % flags
-        isMoving = false;
-
-        orientation = 'global';
-
-    end
-
-    properties (Access = private)
-
-        % a vector containing area of elements
-        ea (:,1) double;
-
-        % mesh zone area
-        area (1,1) double;
-
-        % states
-        isDataSet (1,1) logical = false;
-        isAreaOfElementsEvaluated (1,1) logical = false;
-        isMeshZoneAreaEvaluated (1,1) logical = false;
-
-    end
-
-    properties (Dependent = true)
-
-        % number of mesh zone nodes
-        Nn (1,1) double;
-
-        % number of quadrilateral elements
-        Nq (1,1) double;
-
-        % number of triangular elements
-        Nt (1,1) double;
-
-    end
-
     methods
         %% Constructor and Destructor
-        function obj = emdlab_m2d_qtmz(qcl, tcl, nodes)
+        function obj = emdlab_m2d_qtmz(varargin)
 
-            if nargin < 3, error('Not enough input arguments.'); end
-            if nargin > 3, error('Too many input arguments.'); end
+            switch nargin
+                case 2
+                    obj.cl = varargin{1};
+                    obj.nodes = varargin{2};
 
-            obj.nodes = nodes;
-            obj.qcl = qcl;
-            obj.tcl = tcl;
+                case 3
+                    obj.cl = [varargin{1}; varargin{2}, zeros(size(varargin{2},1),1)];
+                    obj.nodes = varargin{3};
+
+                otherwise
+                    error('Wrong number of input arguments.');
+            end
+
             obj = obj.setData;
 
         end
 
-        function y = get.Nn(obj)
-            y = size(obj.nodes, 1);
-        end
-
-        function y = get.Nq(obj)
-            y = size(obj.qcl, 1);
-        end
-
-        function y = get.Nt(obj)
-            y = size(obj.tcl, 1);
-        end
-
         %% Topological Functions
-        % setting needed data
         function obj = setData(obj)
 
             % check if already data is set
             if obj.isDataSet, return; end
 
-            % first edge of each quadrilateral
-            e1 = obj.qcl(:,[1,2]);
-            % second edge of each quadrilateral
-            e2 = obj.qcl(:,[2,3]);
-            % third edge of each quadrilateral
-            e3 = obj.qcl(:,[3,4]);
-            % forth edge of each quadrilateral
-            e4 = obj.qcl(:,[4,1]);
+            % getting the number of elements
+            ne = obj.Ne;
 
-            % sorting for lower index
-            [e1,s1] = sort(e1, 2);
-            [e2,s2] = sort(e2, 2);
-            [e3,s3] = sort(e3, 2);
-            [e4,s4] = sort(e4, 2);
+            % sort rows base on last column to distinquish
+            % between quadrilateral and triangles
+            obj.cl = sortrows(obj.cl,4);
 
-            % specefying changed edge index
-            s1 = s1(:,1) == 2;
-            s2 = s2(:,1) == 2;
-            s3 = s3(:,1) == 2;
-            s4 = s4(:,1) == 2;
+            % number of triangles in mesh zone
+            nt = sum(obj.cl(:,4) == 0);
+
+            % number of quadrilaterals in mesh zone
+            nq = ne - nt;
+
+            % indices referring to triangles and quadrilaterals
+            idx_t = 1:nt;
+            idx_q = (nt+1):ne;
+
+            % all edges
+            e1t = obj.cl(idx_t,[1,2]);
+            e2t = obj.cl(idx_t,[2,3]);
+            e3t = obj.cl(idx_t,[3,1]);
+            e1q = obj.cl(idx_q,[1,2]);
+            e2q = obj.cl(idx_q,[2,3]);
+            e3q = obj.cl(idx_q,[3,4]);
+            e4q = obj.cl(idx_q,[4,1]);
+
+            % stack all edges
+            allEdges = [e1t; e2t; e3t; e1q; e2q; e3q; e4q];
+            sortedEdgets = allEdges;
+            s = false(size(sortedEdgets,1),1);
+            idx = allEdges(:,2) > allEdges(:,1);
+            sortedEdgets(idx,1) = allEdges(idx,2);
+            sortedEdgets(idx,2) = allEdges(idx,1);
+            s(idx) = true;
 
             % unification of edges
-            [obj.edges, ~, ic] = unique([e1; e2; e3; e4],'rows');
+            [obj.edges, ~, ic] = unique(sortedEdgets,'rows');
 
-            % getting number of elements
-            ne = obj.Nq;
+            % use negative sign for reverse edges
+            ic(s) = -ic(s);
 
-            % getting index of edge corresponding to each elements
-            e1 = ic(1:ne);
-            e2 = ic(1+ne:2*ne);
-            e3 = ic(1+2*ne:3*ne);
-            e4 = ic(1+3*ne:4*ne);
+            % edge index per element
+            obj.elements = [reshape(ic(1:3*nt), nt, 3), zeros(nt,1); reshape(ic(3*nt+1:end), nq, 4)];
 
-            % specefying boundary edges
-            obj.bedges = sparse([e1,e2,e3,e4],ones(4*ne,1),ones(4*ne,1));
-            obj.bedges = full(obj.bedges==1);
-
-            % specefying trace direction
-            e1(s1) = -e1(s1);
-            e2(s2) = -e2(s2);
-            e3(s3) = -e3(s3);
-            e4(s4) = -e4(s4);
-
-            % element matrix
-            obj.qelements = [e1,e2,e3,e4];
+            % find boundary edges
+            idx = emdlab_mex_findSignedPairs(obj.elements, size(obj.edges,1));
+            obj.bedges = idx ~= 3;
 
             % change states
             obj.isDataSet = true;
@@ -172,12 +88,11 @@ classdef emdlab_m2d_qtmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
             f = emdlab_r2d_mesh();
             ax = axes(f);
-            f.Name = "Nn = " + string(obj.Nn) + ", Nq = " + string(obj.Nq) + ", Nt = " + string(obj.Nt);
 
-            patch('Faces',obj.qcl,'Vertices',obj.nodes,'FaceColor',...
-                obj.color,'EdgeColor','k','parent',ax);
+            fcl = obj.cl(:,1:4);
+            fcl(fcl == 0) = nan;
 
-            patch('Faces',obj.tcl,'Vertices',obj.nodes,'FaceColor',...
+            patch('Faces',fcl,'Vertices',obj.nodes,'FaceColor',...
                 obj.color,'EdgeColor','k','parent',ax);
 
             zoom on;
@@ -372,18 +287,6 @@ classdef emdlab_m2d_qtmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyabl
 
             mzptr = emdlab_m3d_hhmz(hhcl, p3);
             mzptr.color = obj.color;
-
-        end
-
-    end
-
-    methods (Access = private)
-
-        function clearSetDataFlag(obj)
-
-            obj.isDataSet = false;
-            obj.isAreaOfElementsEvaluated = false;
-            obj.isMeshZoneAreaEvaluated = false;
 
         end
 

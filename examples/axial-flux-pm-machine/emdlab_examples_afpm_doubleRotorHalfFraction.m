@@ -92,6 +92,6 @@ s.setOddPeriodicBC(km,ks);
 % run solver
 s.solve;
 s.plotBmagF(8, 'stator', 'rotorFront');
-cb = findall(gcf,'Type','ColorBar');
+cb = findall(gcf, 'Type', 'ColorBar');
 cb.Location = 'southoutside';
 zoom(1.5);

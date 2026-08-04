@@ -16,8 +16,7 @@ classdef emdlab_m2d_qmz <  handle & emdlab_g2d_constants & matlab.mixin.Copyable
 
         end
 
-        %% Topological Functions
-        % setting needed data
+        %% Topological Functions        
         function obj = setData(obj)
 
             % check if already data is set

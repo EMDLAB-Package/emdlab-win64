@@ -923,6 +923,14 @@ classdef emdlab_solvers_ts3d_tn < handle
             y = [min(obj.results.T(idx)), max(obj.results.T(idx)), obj.m.gev(idx)*obj.results.T(idx)/sum(obj.m.gev(idx))];
         end
 
+%         function plotHeatFluxVectors(obj)
+%             [f,ax] = obj.m.showwf;
+%             q = -obj.results.qf .* obj.m.facetNormal;
+%             quiver3(obj.m.facetCenter(:,1),obj.m.facetCenter(:,2),obj.m.facetCenter(:,3), ...
+%                 q(:,1), q(:,2), q(:,3), 5, 'Parent', ax);
+%             axis off equal
+%         end
+
         function y = getAverageTemperature(obj)
             y = obj.m.gev * obj.results.T / sum(obj.m.gev);
         end

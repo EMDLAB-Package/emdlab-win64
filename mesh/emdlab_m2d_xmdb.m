@@ -100,11 +100,11 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
         function varargout = showm(obj, varargin)
             % show global mesh
 
-            [f,ax] = emdlab_flib_fax(varargin{:}); 
+            [f,ax] = emdlab_flib_fax(varargin{:});
             if isa(f,'matlab.ui.Figure')
                 f.MenuBar = "none";
             end
-            
+
             obj.ggmesh;
             mzNames = string(fieldnames(obj.mzs)');
 
@@ -176,22 +176,22 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
         function varargout = showgg(obj, varargin)
             % show global geometry
 
-            [f,ax] = emdlab_flib_fax(varargin{:}); 
+            [f,ax] = emdlab_flib_fax(varargin{:});
             if isa(f,'matlab.ui.Figure')
                 f.MenuBar = "none";
             end
-            
+
             obj.ggmesh;
             mzNames = string(fieldnames(obj.mzs)');
 
             for mzName = mzNames
                 mzptr = obj.mzs.(mzName);
                 if isa(mzptr, 'emdlab_m2d_tmz') || isa(mzptr, 'emdlab_m2d_qmz')
-                plt = patch(ax,'Faces', mzptr.cl, ...
-                    'Vertices', mzptr.nodes, 'FaceColor', ...
-                    'c', 'EdgeColor', 'none', ...
-                    'FaceAlpha', 0.5, ...
-                    'HitTest','on','PickableParts','visible');
+                    plt = patch(ax,'Faces', mzptr.cl, ...
+                        'Vertices', mzptr.nodes, 'FaceColor', ...
+                        'c', 'EdgeColor', 'none', ...
+                        'FaceAlpha', 0.5, ...
+                        'HitTest','on','PickableParts','visible');
                 end
                 plt.UserData = mzName;
             end
@@ -284,9 +284,9 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
             for i = 1:numel(mzNames)
                 mzptr = obj.mzs.(mzNames{i});
                 if isa(mzptr, 'emdlab_m2d_tmz') || isa(mzptr, 'emdlab_m2d_qmz')
-                plt = patch('Faces', mzptr.cl, 'Vertices', mzptr.nodes, 'FaceColor', ...
-                    mzptr.color, 'EdgeColor', 'none', ...
-                    'FaceAlpha', 1, 'Parent', ax);
+                    plt = patch('Faces', mzptr.cl, 'Vertices', mzptr.nodes, 'FaceColor', ...
+                        mzptr.color, 'EdgeColor', 'none', ...
+                        'FaceAlpha', 1, 'Parent', ax);
                 end
                 plt.UserData.color = mzptr.color;
             end
@@ -327,7 +327,7 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
             end
 
         end
-        
+
         function varargout = showwf(obj, varargin)
             % show wire frame mesh
 
@@ -377,8 +377,8 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
             elseif nargout > 1, error('Too many output argument.');
             end
 
-        end     
-        
+        end
+
         function varargout = showmd(obj, varargin)
             % show mesh degree
 
@@ -439,7 +439,7 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
             if isnumeric(varargin{1})
                 sIndex = 1;
             else
-                sIndex = 2; 
+                sIndex = 2;
             end
             color = 'r';
             for i = sIndex:numel(varargin)
@@ -1253,6 +1253,361 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
                 ismember(obj.edges(:, 4), obj.mzs.(mz1Name).zi));
 
             idx = find(mask);
+
+        end
+
+        function [km, ks] = splitPeriodicNodesByShift(obj, k, dx, dy, tol)
+            %SPLITPERIODICNODESBYSHIFT Pair periodic nodes separated by a given shift.
+            %
+            %   [km, ks] = splitPeriodicNodesByShift(obj, k, dx, dy)
+            %   [km, ks] = splitPeriodicNodesByShift(obj, k, dx, dy, tol)
+            %
+            %   Inputs:
+            %       obj : Mesh/geometry object containing node coordinates
+            %       k   : Vector of node indices
+            %       dx  : Shift along x-axis
+            %       dy  : Shift along y-axis
+            %       tol : Geometrical tolerance
+            %
+            %   Outputs:
+            %       km  : Master node indices
+            %       ks  : Corresponding slave node indices
+            %
+            %   The function searches for periodic node pairs separated by
+            %   +[dx,dy] or -[dx,dy].
+            %
+            %   If tol is not specified, obj.gleps is used.
+
+            %--------------------------------------------------------------
+            % Check input
+            %--------------------------------------------------------------
+            Nk = numel(k);
+
+            if mod(Nk, 2) ~= 0
+                error('Number of point indices must be an even number.');
+            end
+
+            if Nk == 0
+                km = zeros(0, 1, 'like', k);
+                ks = zeros(0, 1, 'like', k);
+                return
+            end
+
+            % Default tolerance
+            if nargin < 5
+                tol = obj.gleps;
+            end
+
+            if tol < 0
+                error('The geometrical tolerance must be non-negative.');
+            end
+
+            %--------------------------------------------------------------
+            % Squared geometrical tolerance
+            %--------------------------------------------------------------
+            tol2 = tol^2;
+
+            %--------------------------------------------------------------
+            % Node coordinates
+            %--------------------------------------------------------------
+            pts = obj.nodes(k, :);
+
+            %--------------------------------------------------------------
+            % Preallocation
+            %--------------------------------------------------------------
+            Npairs = Nk / 2;
+
+            km = zeros(Npairs, 1, 'like', k);
+            ks = zeros(Npairs, 1, 'like', k);
+
+            % Logical mask for unpaired nodes
+            remaining = true(Nk, 1);
+
+            %--------------------------------------------------------------
+            % Pair nodes
+            %--------------------------------------------------------------
+            for n = 1:Npairs
+
+                %----------------------------------------------------------
+                % Find first unpaired node
+                %----------------------------------------------------------
+                i = find(remaining, 1, 'first');
+
+                if isempty(i)
+                    error('Unexpected error while pairing periodic nodes.');
+                end
+
+                % Current node is initially the master
+                km(n) = k(i);
+
+                % Coordinates of current node
+                p = pts(i, :);
+
+                % Mark current node as paired
+                remaining(i) = false;
+
+                %==========================================================
+                % Search in +shift direction
+                %==========================================================
+                ps = emdlab_g2d_shiftPoints(p, dx, dy);
+
+                candidates = find(remaining);
+
+                if ~isempty(candidates)
+
+                    % Difference between candidate points and target point
+                    ddx = pts(candidates, 1) - ps(1);
+                    ddy = pts(candidates, 2) - ps(2);
+
+                    % Squared distances
+                    d2 = ddx .* ddx + ddy .* ddy;
+
+                    % Find first matching point
+                    j = find(d2 < tol2, 1, 'first');
+
+                else
+                    j = [];
+                end
+
+                if ~isempty(j)
+
+                    % Matching node
+                    idx = candidates(j);
+
+                    ks(n) = k(idx);
+
+                    % Mark as paired
+                    remaining(idx) = false;
+
+                    continue
+                end
+
+                %==========================================================
+                % Search in -shift direction
+                %==========================================================
+                ps = emdlab_g2d_shiftPoints(p, -dx, -dy);
+
+                candidates = find(remaining);
+
+                if ~isempty(candidates)
+
+                    % Difference between candidate points and target point
+                    ddx = pts(candidates, 1) - ps(1);
+                    ddy = pts(candidates, 2) - ps(2);
+
+                    % Squared distances
+                    d2 = ddx .* ddx + ddy .* ddy;
+
+                    % Find first matching point
+                    j = find(d2 < tol2, 1, 'first');
+
+                else
+                    j = [];
+                end
+
+                if ~isempty(j)
+
+                    % The original node becomes the slave
+                    ks(n) = km(n);
+
+                    % The node at -shift becomes the master
+                    idx = candidates(j);
+                    km(n) = k(idx);
+
+                    % Mark as paired
+                    remaining(idx) = false;
+
+                    continue
+                end
+
+                %----------------------------------------------------------
+                % No periodic partner found
+                %----------------------------------------------------------
+                error(['These set of points do not form a set of periodic ', ...
+                    'points for the specified shift and tolerance.']);
+
+            end
+
+        end
+
+        function [km, ks] = splitPeriodicNodesByRotation(obj, k, rotAngle, x0, y0, tol)
+            %SPLITPERIODICNODESBYROTATION Pair periodic nodes separated by rotation.
+            %
+            %   [km, ks] = splitPeriodicNodesByRotation(obj, k, rotAngle)
+            %   [km, ks] = splitPeriodicNodesByRotation(obj, k, rotAngle, x0, y0)
+            %   [km, ks] = splitPeriodicNodesByRotation(obj, k, rotAngle, x0, y0, tol)
+            %
+            %   Inputs:
+            %       obj      : Mesh/geometry object containing node coordinates
+            %       k        : Vector of node indices
+            %       rotAngle : Rotation angle [rad]
+            %       x0       : x-coordinate of rotation centre
+            %       y0       : y-coordinate of rotation centre
+            %       tol      : Geometrical tolerance
+            %
+            %   Outputs:
+            %       km       : Master node indices
+            %       ks       : Corresponding slave node indices
+            %
+            %   The function searches for periodic node pairs separated by
+            %   +rotAngle or -rotAngle.
+            %
+            %   If x0 and y0 are not specified, the rotation centre is [0, 0].
+            %   If tol is not specified, obj.gleps is used.
+
+            %--------------------------------------------------------------
+            % Check input
+            %--------------------------------------------------------------
+            Nk = numel(k);
+
+            if mod(Nk, 2) ~= 0
+                error('Number of point indices must be an even number.');
+            end
+
+            if Nk == 0
+                km = zeros(0, 1, 'like', k);
+                ks = zeros(0, 1, 'like', k);
+                return
+            end
+
+            %--------------------------------------------------------------
+            % Default inputs
+            %--------------------------------------------------------------
+            if nargin < 4
+                x0 = 0;
+            end
+
+            if nargin < 5
+                y0 = 0;
+            end
+
+            if nargin < 6
+                tol = obj.gleps;
+            end
+
+            if tol < 0
+                error('The geometrical tolerance must be non-negative.');
+            end
+
+            %--------------------------------------------------------------
+            % Squared geometrical tolerance
+            %--------------------------------------------------------------
+            tol2 = tol^2;
+
+            %--------------------------------------------------------------
+            % Node coordinates
+            %--------------------------------------------------------------
+            pts = obj.nodes(k, :);
+
+            %--------------------------------------------------------------
+            % Preallocation
+            %--------------------------------------------------------------
+            Npairs = Nk / 2;
+
+            km = zeros(Npairs, 1, 'like', k);
+            ks = zeros(Npairs, 1, 'like', k);
+
+            % Logical mask for unpaired nodes
+            remaining = true(Nk, 1);
+
+            %--------------------------------------------------------------
+            % Pair nodes
+            %--------------------------------------------------------------
+            for n = 1:Npairs
+
+                %----------------------------------------------------------
+                % Find first unpaired node
+                %----------------------------------------------------------
+                i = find(remaining, 1, 'first');
+
+                if isempty(i)
+                    error('Unexpected error while pairing periodic nodes.');
+                end
+
+                % Current node is initially the master
+                km(n) = k(i);
+
+                % Coordinates of current node
+                p = pts(i, :);
+
+                % Mark current node as paired
+                remaining(i) = false;
+
+                %==========================================================
+                % Search in +rotation direction
+                %==========================================================
+                ps = emdlab_g2d_rotatePoints(p, rotAngle, x0, y0);
+
+                candidates = find(remaining);
+
+                if ~isempty(candidates)
+
+                    ddx = pts(candidates, 1) - ps(1);
+                    ddy = pts(candidates, 2) - ps(2);
+
+                    d2 = ddx .* ddx + ddy .* ddy;
+
+                    j = find(d2 < tol2, 1, 'first');
+
+                else
+                    j = [];
+                end
+
+                if ~isempty(j)
+
+                    % Matching node
+                    idx = candidates(j);
+
+                    ks(n) = k(idx);
+
+                    % Mark as paired
+                    remaining(idx) = false;
+
+                    continue
+                end
+
+                %==========================================================
+                % Search in -rotation direction
+                %==========================================================
+                ps = emdlab_g2d_rotatePoints(p, -rotAngle, x0, y0);
+
+                candidates = find(remaining);
+
+                if ~isempty(candidates)
+
+                    ddx = pts(candidates, 1) - ps(1);
+                    ddy = pts(candidates, 2) - ps(2);
+
+                    d2 = ddx .* ddx + ddy .* ddy;
+
+                    j = find(d2 < tol2, 1, 'first');
+
+                else
+                    j = [];
+                end
+
+                if ~isempty(j)
+
+                    % The original node becomes the slave
+                    ks(n) = km(n);
+
+                    % The node at -rotation becomes the master
+                    idx = candidates(j);
+                    km(n) = k(idx);
+
+                    % Mark as paired
+                    remaining(idx) = false;
+
+                    continue
+                end
+
+                %----------------------------------------------------------
+                % No periodic partner found
+                %----------------------------------------------------------
+                error(['These set of points do not form a set of periodic ', ...
+                    'points for the specified rotation and tolerance.']);
+
+            end
 
         end
 

@@ -759,27 +759,7 @@ classdef emdlab_m3d_hhmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyabl
         %% mesh visiualization
         
 
-        function varargout = showwf(obj)
-
-
-            [f,ax] = emdlab_r3d_geometry(0,0);
-            obj.ggmesh;
-
-
-            index = obj.facets(:, 5) ~= obj.facets(:, 6);
-            patch('Faces', obj.facets(index, 1:4), 'Vertices', ...
-                obj.nodes, 'FaceColor', ...
-                'c', 'EdgeColor', 'none', ...
-                'FaceAlpha', 0.4, 'parent', ax);
-
-            if nargout == 1
-                varargout{1} = f;
-            elseif nargout > 1
-                error('Too many output argument.');
-            end
-
-
-        end
+        
 
         function varargout = showContact(obj, mz1, mz2)
 

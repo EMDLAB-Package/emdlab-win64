@@ -90,14 +90,16 @@ classdef emdlab_solvers_ms2d_tl3_ihnl < handle & emdlab_solvers_ms2d_tlcp
             obj.edata.MagnetizationY = zeros(1, obj.m.Ne);
 
             % getting mesh zones
-            mzsName = fieldnames(obj.m.mzs);
+            mzNames = obj.m.getMeshZoneNames;
 
+            % triggering iterative solver
             obj.edata.areAllLinear = true;
+            
             % loop over mesh zones
             for i = 1:obj.m.Nmzs
 
                 % get pointer to mesh zone
-                mzptr = obj.m.mzs.(mzsName{i});
+                mzptr = obj.m.mzs.(mzNames{i});
 
                 % assigning magnetic reluctivity
                 if ~obj.m.mts.(mzptr.material).MagneticPermeability.isIsotropic

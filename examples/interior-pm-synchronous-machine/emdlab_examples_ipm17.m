@@ -1,5 +1,5 @@
 %{
-note: calculation of the rotor field of an u-shape ipm motor
+note: calculation of the rotor field of a double-v ipm motor
 %}
 
 % initialization

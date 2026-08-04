@@ -1,10 +1,10 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% 2D triangular mesh zone
+% Triangular mesh zone (2D element)
 
 classdef emdlab_m2d_tmz < handle & emdlab_g2d_constants & matlab.mixin.Copyable & emdlab_m2d_xmz
 
     methods
-        %% constructor and destructor
+        %% Constructor and Destructor
         function obj = emdlab_m2d_tmz(cl, nodes)
 
             if nargin < 2, error('Not enough input arguments.'); end
