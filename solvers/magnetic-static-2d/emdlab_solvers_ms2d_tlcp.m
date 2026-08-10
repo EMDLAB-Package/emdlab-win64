@@ -242,6 +242,10 @@ classdef emdlab_solvers_ms2d_tlcp < handle & emdlab_ui_console
             if nargin < 4, turns = 1; end
             if nargin < 5, kfill = 1; end
 
+            mzName = mzName(:)';
+            turns = turns(:)';
+            kfill = kfill(:)';
+
             coilName = obj.checkCoilExistence(coilName);
 
             % loop over mesh zone names vector

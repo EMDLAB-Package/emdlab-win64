@@ -1,8 +1,11 @@
 %{
 Solving 3D heat diffusion equation in box with
 non-zero temperature at left face and zero temperature for 
-the rest -> using tetrahedral mesh
+the rest -> using prism mesh
+
+Analytical solution:
 Tavg = 0.8905
+Qin = 18.01
 %}
 
 % initialization

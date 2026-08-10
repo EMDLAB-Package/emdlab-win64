@@ -1,7 +1,7 @@
 %{
 Solving 3D heat diffusion equation in box with
 fixed internal heat generation and zero temperature for 
-all boundary faces -> using hexahedral mesh
+all boundary faces -> using prism mesh
 Tavg = 55.8
 %}
 
@@ -15,19 +15,20 @@ addpath(genpath('C:\emdlab-win64'));
 W = 1; % width of the box
 H = 1; % height of the box
 Z = 1; % depth of the problem
-meshSize = 0.1; % maximum mesh size
+meshSize = 0.05; % maximum mesh size
 
 % define geometry
 g = emdlab_g2d_db;
-g.addRectangleLoop(0,0,W,H);
+g.addFace('z1', g.addRectangleLoop(0,0,W,H));
 
-% construct quadrilateral mesh
-qm = emdlab_m2d_qmdb();
-qm.addMeshZone('z1', g.getQMeshByEdges(1,2,3,4,ceil(W/meshSize),ceil(H/meshSize)));
+% construct triangular mesh
+g.setMeshMaxLength(meshSize);
+tm = g.generateMesh('mg0');
 
 % extrude quadrilateral mesh to generate hexahedron mesh
-m = emdlab_m3d_hhmdb;
-m.addMeshZone('z1', qm.mzs.z1.getExtrude(linspace(0,1,ceil(1/meshSize))));
+mz = tm.mzs.z1.buildPrismMeshByExtrusion(linspace(0,1,ceil(1/meshSize)));
+m = emdlab_m3d_pmdb;
+m.addMeshZone('z1', mz);
 
 % add & set materials
 m.addMaterial('copper', emdlab_mlib_copper);

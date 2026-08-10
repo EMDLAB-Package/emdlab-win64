@@ -8,7 +8,7 @@
 % nonlinear
 % with motion: remesh technology with fixed number of nodes
 
-classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & matlab.mixin.Copyable
+classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & matlab.mixin.Copyable & emdlab_ui_console
 
     properties
         % this flag is used to detect any motion in problem, when we have motion
@@ -85,7 +85,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             % preparing mesh data
             obj.m.evalKeMeFe_TL3(true);
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % assigning material and force data to each triangle for each mesh zone
             % getting mesh zones
@@ -178,11 +178,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             end
 
-            disp('Initialization of material and force data compeleted.')
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('Initialization of material and force data compeleted.', timeHolder);
 
             % Construction coils related matrices
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % check windings
             obj.checkCoils;
@@ -264,8 +263,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             end
 
-            disp('Coils related matrices are constructed.')
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('Coils related matrices are constructed.', timeHolder);
 
             % initialize results with zero A
             obj.results.A = zeros(obj.m.Nn, 1);
@@ -280,7 +278,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
         function rebuildKeMeFe(obj)
 
             % Rebuild of [K], [M] and [Fm]
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             mzNames = fieldnames(obj.m.mzs);
             xNe = 0;
@@ -352,8 +350,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             obj.mtcs.K11 = sparse(Iindex, Jindex, obj.edata.MagneticReluctivity .* obj.m.mtcs.Ke);
             obj.mtcs.M11 = sparse(Iindex, Jindex, obj.edata.ElectricConductivity .* obj.m.mtcs.Me * obj.units.k_length^2);
 
-            disp('Rebuild of [K], [M], and [Fm] compeleted.');
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('Rebuild of [K], [M], and [Fm] compeleted.', timeHolder);
 
             obj.isNeededToRebuild = false;
 
@@ -372,6 +369,8 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             % rebuild matrices in the case motion
             obj.rebuildKeMeFe;
+
+            timeHolder = obj.dispLine;
 
             % Assembeling [F]
             F1 = obj.mtcs.Fm;
@@ -437,11 +436,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
                     [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils);
             end
 
-            disp('All boundary condition imposed.');
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('All boundary condition imposed.', timeHolder);
 
             % solving [K][U] = [F]
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             solVector = full(K\F);
             obj.results.A = solVector(1:obj.m.Nn);
@@ -480,11 +478,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             end
 
-            disp('initial geuss evaluated.')
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('initial geuss evaluated.', timeHolder)
 
             % loop for nonlinear solver
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % initials values
             EResidual = inf;
@@ -533,7 +530,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             alphaNR = 0.7;
 
             % loop for non-linearity
-            fprintf('Iter|Error   |Residual|time\n');
+            obj.fprintf('Iter|Error   |Residual|time\n');
             while ((RelError > obj.solverSettings.relativeError) || (EResidual>obj.solverSettings.relativeEnergyResidual)) && ...
                     (Iterations < obj.solverSettings.maxIteration) && ~obj.edata.areAllLinear && any(F)
 
@@ -635,7 +632,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
                 obj.solverHistory.relativeError(end + 1) = RelError;
 
                 % printing Residual and RelError
-                fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
+                obj.fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
 
                 % go to next iteration
                 Iterations = Iterations + 1;
@@ -656,8 +653,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             end
 
             obj.solverHistory.iterations = Iterations;
-            disp(['Number of total iterations = ', num2str(Iterations - 1)]);
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage(['Number of total iterations = ', num2str(Iterations - 1)], timeHolder);
 
             % update field quantities
             obj.evalBe;
@@ -770,7 +766,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
                 obj.mtcs.Ksx,obj.mtcs.Kss];
             F = [F1;F2;F3;F4];
 
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % imposing boundary conditions on [K] and [F]
             % dbcs
@@ -797,11 +793,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
                     [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils+obj.NstarConnections);
             end
 
-            disp('All boundary condition imposed.');
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('All boundary condition imposed.', timeHolder);
 
             % solving [K][U] = [F]
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             solVector = full(K \ F);
             obj.results.A = solVector(1:obj.m.Nn);
@@ -842,11 +837,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
             end
 
-            disp('initial geuss evaluated.')
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('initial geuss evaluated.', timeHolder);
 
             % loop for nonlinear solver
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             % initials values
             RelEResidual = inf;
@@ -895,7 +889,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             alphaNR = 0.7;
 
             % loop for non-linearity
-            fprintf('Iter|Error   |Residual|time\n');
+            obj.fprintf('Iter|Error   |Residual|time\n');
             while ((RelError > obj.solverSettings.relativeError) || (RelEResidual>obj.solverSettings.relativeEnergyResidual)) ...
                     && (Iterations < obj.solverSettings.maxIteration) && ~obj.edata.areAllLinear && any(F)
 
@@ -990,7 +984,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
                 obj.solverHistory.relativeError(end + 1) = RelError;
 
                 % printing Residual and RelError
-                fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
+                obj.fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
 
                 % go to next iteration
                 Iterations = Iterations + 1;
@@ -1011,8 +1005,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             end
 
             obj.solverHistory.iterations = Iterations;
-            disp(['Number of total iterations = ', num2str(Iterations - 1)]);
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage(['Number of total iterations = ', num2str(Iterations - 1)], timeHolder);
 
             % change states
             obj.evalBe;
@@ -1079,7 +1072,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
         function rotateMovingRegion(obj, movingRegionName, rotAngle, xc, yc)
 
             % moving region rotation
-            tic, disp('-------------------------------------------------------');
+            timeHolder = obj.dispLine;
 
             if nargin < 4
                 xc = 0;
@@ -1113,8 +1106,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             mzptr.props.MagnetizationX = zeros(1,mzptr.Ne);
             mzptr.props.MagnetizationY = zeros(1,mzptr.Ne);
 
-            disp('rotation compeleted.');
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessage('rotation compeleted.', timeHolder);
 
             % updateJIT for rotating mesh zones
 

@@ -1,8 +1,8 @@
 %{
 Solving 3D heat diffusion equation in box with
-non-zero temperature at left face and zero temperature for 
+input heat-flux at left face and zero temperature for 
 the rest -> using prism mesh
-Tavg = 3.43612
+Tavg = 4.94711
 %}
 
 % initialization
@@ -40,11 +40,11 @@ s = emdlab_solvers_ts3d_tn(m);
 
 % set left face boundary condition
 left_idx = m.getFacetIndicesOnPlane([0,0,0],[1,0,0]);
-s.addHeatFluxBC('left', left_idx, 100);
+s.addFixedTemperatureBC('left', left_idx, @(x,y,z) 10*sin(pi*y).*sin(pi*z));
 
 % set boundary condition for the rest faces
 rest_idx = setdiff(m.getfbf, left_idx);
-s.addFixedTemperatureBC('rest', rest_idx, 0);
+s.addConvectionBC('rest', rest_idx, 10, 5)
 
 % solve & plot results
 s.solve
@@ -56,4 +56,3 @@ fprintf('Qin = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(left_idx));
 fprintf('Qout = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(rest_idx));
 right_idx = m.getFacetIndicesOnPlane([1,0,0],[1,0,0]);
 fprintf('Qright_face = %.4f\n', s.calculateNetHeatCrossingBoundaryFacets(right_idx));
-

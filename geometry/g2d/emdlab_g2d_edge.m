@@ -20,4 +20,32 @@ classdef emdlab_g2d_edge  < handle & matlab.mixin.Copyable & emdlab_g2d_constant
 
     end
 
+    methods
+
+        function flag = isSegment(obj)
+            if isa(obj.ptr, 'emdlab_g2d_segment')
+                flag = true;
+            else
+                flag = false;
+            end
+        end
+
+        function flag = isArc(obj)
+            if isa(obj.ptr, 'emdlab_g2d_arc')
+                flag = true;
+            else
+                flag = false;
+            end
+        end
+
+        function flag = isSpline(obj)
+            if isa(obj.ptr, 'emdlab_g2d_spline')
+                flag = true;
+            else
+                flag = false;
+            end
+        end
+
+    end
+
 end

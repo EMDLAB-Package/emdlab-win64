@@ -24,6 +24,13 @@ classdef emdlab_g2d_db < handle
         pyPath = "";
     end
 
+    properties (Dependent = true)
+        Npoints (1,1) double;
+        Nedges (1,1) double;
+        Nloops (1,1) double;
+        Nfaces (1,1) double;
+    end
+
     methods
         %% constructor and destructor
         function obj = emdlab_g2d_db()
@@ -42,6 +49,22 @@ classdef emdlab_g2d_db < handle
             end
             obj.pyPath = string(filePath);
             obj.pyPath = replace(obj.pyPath, '\', '\\');
+        end
+
+        function y = get.Npoints(obj)
+            y = numel(obj.points);
+        end
+
+        function y = get.Nedges(obj)
+            y = numel(obj.edges);
+        end
+
+        function y = get.Nloops(obj)
+            y = numel(obj.loops);
+        end
+
+        function y = get.Nfaces(obj)
+            y = numel(obj.faces);
         end
 
         %% point methods        

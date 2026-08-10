@@ -2450,7 +2450,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         function varargout = aux_addLineAirGap(obj, mzName, x0, y0, ux, uy, gap, Nlayers)
 
             % set defaults
-            if nargin<9, Nlayers = 1; end
+            if nargin<8, Nlayers = 1; end
 
             % normal vector of the middle line
             nx = -uy;
@@ -2464,7 +2464,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             sps = obj.nodes(k_right,:);
 
             % getting a moving contact object
-            agm = emdlab_mcs_lineAirGap(rps, sps, Nlayers);
+            agm = emdlab_mcs_lineAirGap(rps, sps, ux, uy, Nlayers);
 
             % adding air gap to mesh zones
             obj.addmz(mzName, agm.m);
