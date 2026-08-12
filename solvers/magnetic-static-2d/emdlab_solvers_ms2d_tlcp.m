@@ -1557,11 +1557,21 @@ classdef emdlab_solvers_ms2d_tlcp < handle & emdlab_ui_console
             index = obj.m.edges(:, 3) - obj.m.edges(:, 4);
             patch(ax, 'faces', obj.m.edges(logical(abs(index)), 1:2), 'vertices', obj.m.nodes, ...
                 'EdgeColor', [150,150,150]/255);
-            colormap(jet(15));
+            colormap(jet(12));
             cb = colorbar;
             cb.FontName = 'Verdana';
             cb.FontSize = 12;
             cb.Label.String = 'Flux Density [tesla]';
+%             climits = clim;
+%             cb.Ticks = linspace(climits(1), climits(2), 10)*100/100;
+%             ticks = cb.Ticks;
+%             cb.TickLabels = compose('%0.2f',ticks);
+
+            pMin = min(obj.m.nodes);
+            pMax = max(obj.m.nodes);
+            if (pMax(1)-pMin(1)) > 2*(pMax(2)-pMin(2))
+                cb.Location = 'southoutside';
+            end
 
             % evaluation of contour lines
             if obj.m.isTL3

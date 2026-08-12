@@ -67,7 +67,7 @@ classdef emdlab_g2d_db < handle
             y = numel(obj.faces);
         end
 
-        %% point methods        
+        %% point methods
         function varargout = addPoint(obj, varargin)
             % adding a new point to data base
             % this function returns point index and point handle
@@ -136,8 +136,8 @@ classdef emdlab_g2d_db < handle
                 obj.removeEdge(pIndex.tags(i));
             end
             obj.points(pIndex) = [];
-        
-        end      
+
+        end
 
         function pointHandle = getPointHandleByTag(obj, pTag)
 
@@ -763,7 +763,7 @@ classdef emdlab_g2d_db < handle
             end
 
         end
-        
+
         % edge extensions to draw complex geometries
         function varargout = extendSegmentBySegmentUpToPoint(obj, eIndex, x, y, seIndex)
 
@@ -1152,26 +1152,70 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function [newEdgeIndex, newPointIndex] = splitSegment(obj, eIndex)
+        function [newEdgeIndex, newPointIndex] = splitSegment(obj, eIndex, pIndex)
 
-            edgeHandle = obj.edges(eIndex).ptr;
-            tmp = edgeHandle.getCenter;
-            newPointIndex = obj.addPoint(tmp(1),tmp(2));
-            p2 = edgeHandle.p1;
-            edgeHandle.p1 = obj.points(newPointIndex);
-            newEdgeIndex = obj.addSegment(newPointIndex,obj.addPoint(p2));
+            if nargin == 2
+
+                edgeHandle = obj.edges(eIndex).ptr;
+                tmp = edgeHandle.getCenter;
+                newPointIndex = obj.addPoint(tmp(1),tmp(2));
+                p2 = edgeHandle.p1;
+                edgeHandle.p1 = obj.points(newPointIndex);
+                newEdgeIndex = obj.addSegment(newPointIndex,obj.addPoint(p2));
+                obj.points(newPointIndex).tags(end+1) = edgeHandle.tag;
+                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+
+            elseif nargin == 3
+
+
+                edgeHandle = obj.edges(eIndex).ptr;
+                if edgeHandle.isTag1(obj.points(pIndex)), return; end
+                if edgeHandle.isTag2(obj.points(pIndex)), return; end
+
+                p2 = edgeHandle.p1;
+                edgeHandle.p1 = obj.points(pIndex);
+                newEdgeIndex = obj.addSegment(pIndex,obj.addPoint(p2));
+                obj.points(pIndex).tags(end+1) = edgeHandle.tag;
+                obj.points(pIndex).tags(end+1) = obj.edges(newEdgeIndex).tag;
+                obj.points(pIndex).tags = unique(obj.points(pIndex).tags);
+                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+
+            else
+                error('Wrong number of input arguments.');
+            end
 
         end
 
-        function [newEdgeIndex, newPointIndex] = splitArc(obj, eIndex)
+        function [newEdgeIndex, newPointIndex] = splitArc(obj, eIndex, pIndex)
 
-            edgeHandle = obj.edges(eIndex).ptr;
-            tmp = edgeHandle.p0.getVector;
-            tmp = emdlab_g2d_rotatePoints(edgeHandle.p1.getVector,edgeHandle.getSignedAngle/2, tmp(1),tmp(2));
-            newPointIndex = obj.addPoint(tmp(1),tmp(2));
-            p2 = edgeHandle.p2;
-            edgeHandle.p2 = obj.points(newPointIndex);
-            newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),newPointIndex,obj.addPoint(p2),edgeHandle.direction);
+            if nargin == 2
+                edgeHandle = obj.edges(eIndex).ptr;
+                tmp = edgeHandle.p0.getVector;
+                tmp = emdlab_g2d_rotatePoints(edgeHandle.p1.getVector,edgeHandle.getSignedAngle/2, tmp(1),tmp(2));
+                newPointIndex = obj.addPoint(tmp(1),tmp(2));
+                p2 = edgeHandle.p2;
+                edgeHandle.p2 = obj.points(newPointIndex);
+                newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),newPointIndex,obj.addPoint(p2),edgeHandle.direction);
+                obj.points(newPointIndex).tags(end+1) = edgeHandle.tag;
+                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+
+            elseif nargin == 3
+
+                edgeHandle = obj.edges(eIndex).ptr;
+                if edgeHandle.isTag1(obj.points(pIndex)), return; end
+                if edgeHandle.isTag2(obj.points(pIndex)), return; end
+
+                p2 = edgeHandle.p2;
+                edgeHandle.p2 = obj.points(pIndex);
+                newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),pIndex,obj.addPoint(p2),edgeHandle.direction);
+                obj.points(pIndex).tags(end+1) = edgeHandle.tag;
+                obj.points(pIndex).tags(end+1) = obj.edges(newEdgeIndex).tag;
+                obj.points(pIndex).tags = unique(obj.points(pIndex).tags);
+                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+
+            else
+                error('Wrong number of input arguments.');
+            end
 
         end
 
@@ -1211,6 +1255,81 @@ classdef emdlab_g2d_db < handle
 
             % first remove all connected loops
             for lTag = obj.edges(eIndex).tags
+
+            end
+
+        end
+
+        function iFlag = intersectEdges(obj, eIndex1, eIndex2)
+
+            iFlag = false;
+            if obj.edges(eIndex1).isSegment && obj.edges(eIndex2).isSegment
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                [xi,yi] = obj.getIntersectionSegmentSegment(e1ptr.p0.x, e1ptr.p0.y, e1ptr.p1.x, e1ptr.p1.y, ...
+                    e2ptr.p0.x, e2ptr.p0.y, e2ptr.p1.x, e2ptr.p1.y, true);
+
+            elseif obj.edges(eIndex1).isArc && obj.edges(eIndex2).isSegment
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                tmp = e1ptr.getTheta1Theta2;
+                [xi,yi] = obj.getIntersectionSegmentArc(e2ptr.p0.x, e2ptr.p0.y, e2ptr.p1.x, e2ptr.p1.y, ...
+                    e1ptr.p0.x, e1ptr.p0.y, e1ptr.getRadius, tmp(1), tmp(2), true);
+
+            elseif obj.edges(eIndex1).isSegment && obj.edges(eIndex2).isArc
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                tmp = e2ptr.getTheta1Theta2;
+                [xi,yi] = obj.getIntersectionSegmentArc(e1ptr.p0.x, e1ptr.p0.y, e1ptr.p1.x, e1ptr.p1.y, ...
+                    e2ptr.p0.x, e2ptr.p0.y, e2ptr.getRadius, tmp(1), tmp(2), true);
+
+            elseif obj.edges(eIndex1).isArc && obj.edges(eIndex2).isArc
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                tmp1 = e1ptr.getTheta1Theta2;
+                tmp2 = e1ptr.getTheta1Theta2;
+                [xi,yi] = obj.getIntersectionArcArc(e1ptr.p0.x, e1ptr.p0.y, e1ptr.getRadius, tmp1(1), ...
+                    tmp1(2), e2ptr.p0.x, e2ptr.p0.y, e2ptr.getRadius, tmp2(1), tmp2(2), true);
+
+            end
+
+            if length(xi) == 1
+                pIndex = obj.addPoint(xi,yi);
+                if obj.edges(eIndex1).isSegment
+                    obj.splitSegment(eIndex1, pIndex);
+                else
+                    obj.splitArc(eIndex1, pIndex);
+                end
+                if obj.edges(eIndex2).isSegment
+                    obj.splitSegment(eIndex2, pIndex);
+                else
+                    obj.splitArc(eIndex2, pIndex);
+                end
+                iFlag = true;
+            end
+
+        end
+
+        function intersectAllEdges(obj)
+
+            while true
+                existFlag = true;
+
+                for i = 1:obj.Nedges
+                    for j = i+1:obj.Nedges
+                        if obj.intersectEdges(i,j)
+                            existFlag = false;
+                        end
+                    end
+                end
+
+                if existFlag
+                    break;
+                end
 
             end
 
@@ -1319,6 +1438,89 @@ classdef emdlab_g2d_db < handle
             end
 
             error('Loop was not found.');
+
+        end
+
+        function y = getEdgeLeftLoop(obj, eIndex)
+            y = obj.getEdgeLoop(eIndex, true);
+        end
+
+        function y = getEdgeRightLoop(obj, eIndex)
+            y = obj.getEdgeLoop(eIndex, false);
+        end
+
+        function y = getEdgeLoop(obj, eIndex, leftFlag)
+
+            p = obj.edges(eIndex).ptr.getPtr2;
+            elist = eIndex;
+            edir = 1;
+
+            while true
+
+                n = numel(p.tags);
+                eidx = zeros(1,n);
+
+                for i = 1:n
+                    eidx(i) = obj.getEdgeIndexByTag(p.tags(i));
+                end
+
+                eidx = setdiff(eidx, elist(end));
+
+                angles = zeros(1,n-1);
+                flags = zeros(1,n-1);
+
+                eptr = obj.edges(elist(end)).ptr;
+                tmp = eptr.getAngles;
+                if eptr.isTag1(p.tag)
+                    alpha = tmp(1);
+                else
+                    alpha = tmp(2);
+                end
+
+                for i = 1:n-1
+                    eptr = obj.edges(eidx(i)).ptr;
+                    tmp = eptr.getAngles;
+
+                    if eptr.isTag1(p.tag)
+                        if tmp(1) <= alpha
+                            angles(i) = alpha - tmp(1);
+                        else
+                            angles(i) = 2*pi + alpha - tmp(1);
+                        end
+                        flags(i) = 1;
+                    else
+                        if tmp(2) <= alpha
+                            angles(i) = alpha - tmp(2);
+                        else
+                            angles(i) = 2*pi + alpha - tmp(2);
+                        end
+                        flags(i) = -1;
+                    end
+
+                end
+
+                if leftFlag == 1
+                    [~,idx] = min(angles);
+                else
+                    [~,idx] = max(angles);
+                end
+
+                if eidx(idx) == eIndex
+                    break;
+                end
+
+                elist(end+1) = eidx(idx);
+                if flags(idx) == 1
+                    p = obj.edges(eidx(idx)).ptr.getPtr2;
+                    edir(end+1) = 1;
+                else
+                    p = obj.edges(eidx(idx)).ptr.getPtr1;
+                    edir(end+1) = -1;
+                end
+
+            end
+
+            y = elist.*edir;
 
         end
 
@@ -1669,7 +1871,7 @@ classdef emdlab_g2d_db < handle
                     X = [tip(1) base1(1) base2(1)];
                     Y = [tip(2) base1(2) base2(2)];
 
-                    patch(X,Y,'c','EdgeColor','none');
+                    patch(X,Y,'r','EdgeColor','none');
 
                 end
 
@@ -2834,104 +3036,267 @@ classdef emdlab_g2d_db < handle
             yi = y1 + t*uy1;
         end
 
-        % intersection of two finite segments
-        function [xi,yi] = getIntersectionSegmentSegment(x1,y1,x2,y2,x3,y3,x4,y4)
-            % Returns the intersection point(s) of two finite segments:
-            % Segment 1: (x1,y1)-(x2,y2)
-            % Segment 2: (x3,y3)-(x4,y4)
+        % Intersection of two finite line segments
+        function [xi, yi] = getIntersectionSegmentSegment( ...
+                x1, y1, x2, y2, x3, y3, x4, y4, interiorFlag)
+
+            if nargin < 9
+                interiorFlag = false;
+            end
+
+            %--------------------------------------------------------------
+            % Tolerance
+            %--------------------------------------------------------------
+            tol = 1e-6;
 
             % Direction vectors
             ux = x2 - x1;
             uy = y2 - y1;
+
             vx = x4 - x3;
             vy = y4 - y3;
 
-            % Solve:
-            % (x1,y1) + t*(ux,uy) = (x3,y3) + s*(vx,vy)
-            A = [ux, -vx;
-                uy, -vy];
+            % Squared lengths
+            L1sq = ux^2 + uy^2;
+            L2sq = vx^2 + vy^2;
 
-            b = [x3 - x1;
-                y3 - y1];
+            %--------------------------------------------------------------
+            % Handle zero-length segments
+            %--------------------------------------------------------------
+            if L1sq < tol^2 && L2sq < tol^2
 
-            detA = ux*(-vy) - uy*(-vx);
+                % Both are points
+                if hypot(x1-x3, y1-y3) < tol
 
-            % Parallel or nearly parallel
-            if abs(detA) < 1e-12
-                % Check if collinear by checking distance from point to line
-                if abs((x3 - x1)*uy - (y3 - y1)*ux) > 1e-12
-                    xi = []; yi = [];
-                    return; % parallel but not collinear
-                end
-
-                % Collinear: check 1D overlap on projection
-                % Project onto x or y depending on largest component
-                if abs(ux) >= abs(uy)
-                    % use x projection
-                    seg1 = sort([x1 x2]);
-                    seg2 = sort([x3 x4]);
-
-                    left  = max(seg1(1), seg2(1));
-                    right = min(seg1(2), seg2(2));
-
-                    if left > right
-                        xi = []; yi = [];
-                        return; % no overlap
-                    end
-
-                    % Overlapping interval in x → compute corresponding points
-                    if abs(ux) < 1e-12
-                        % vertical line but collinear case handled above
-                        xi = x1;
-                        yi = linspace(min(y1,y2), max(y1,y2), 2).';
+                    if interiorFlag
+                        xi = [];
+                        yi = [];
                     else
-                        t_left  = (left  - x1) / ux;
-                        t_right = (right - x1) / ux;
-                        xi = [left; right];
-                        yi = [y1 + t_left*uy; y1 + t_right*uy];
+                        xi = x1;
+                        yi = y1;
                     end
-
-                    return;
 
                 else
-                    % use y projection
-                    seg1 = sort([y1 y2]);
-                    seg2 = sort([y3 y4]);
+                    xi = [];
+                    yi = [];
+                end
 
-                    low  = max(seg1(1), seg2(1));
-                    high = min(seg1(2), seg2(2));
+                return;
+            end
 
-                    if low > high
-                        xi = []; yi = [];
-                        return; % no overlap
-                    end
+            if L1sq < tol^2
 
-                    if abs(uy) < 1e-12
-                        yi = y1;
-                        xi = linspace(min(x1,x2), max(x1,x2), 2).';
-                    else
-                        t_low  = (low  - y1) / uy;
-                        t_high = (high - y1) / uy;
-                        yi = [low; high];
-                        xi = [x1 + t_low*ux; x1 + t_high*ux];
-                    end
+                % Segment 1 is a point
+                cross = (x1-x3)*vy - (y1-y3)*vx;
 
+                if abs(cross) > tol
+                    xi = [];
+                    yi = [];
                     return;
                 end
+
+                % Parameter on segment 2
+                if abs(vx) >= abs(vy)
+                    s = (x1-x3) / vx;
+                else
+                    s = (y1-y3) / vy;
+                end
+
+                if interiorFlag
+                    valid = (s > 0) && (s < 1);
+                else
+                    valid = (s >= 0) && (s <= 1);
+                end
+
+                if valid
+                    xi = x1;
+                    yi = y1;
+                else
+                    xi = [];
+                    yi = [];
+                end
+
+                return;
             end
 
-            % Non-parallel case → unique intersection if t and s in [0,1]
-            ts = A \ b;
-            t = ts(1);
-            s = ts(2);
+            if L2sq < tol^2
 
-            if t < 0 || t > 1 || s < 0 || s > 1
-                xi = []; yi = [];
-                return; % intersection lies outside segments
+                % Segment 2 is a point
+                cross = (x3-x1)*uy - (y3-y1)*ux;
+
+                if abs(cross) > tol
+                    xi = [];
+                    yi = [];
+                    return;
+                end
+
+                % Parameter on segment 1
+                if abs(ux) >= abs(uy)
+                    t = (x3-x1) / ux;
+                else
+                    t = (y3-y1) / uy;
+                end
+
+                if interiorFlag
+                    valid = (t > 0) && (t < 1);
+                else
+                    valid = (t >= 0) && (t <= 1);
+                end
+
+                if valid
+                    xi = x3;
+                    yi = y3;
+                else
+                    xi = [];
+                    yi = [];
+                end
+
+                return;
             end
 
+            %--------------------------------------------------------------
+            % Cross product
+            %--------------------------------------------------------------
+            crossUV = ux*vy - uy*vx;
+
+            %--------------------------------------------------------------
+            % Parallel / collinear case
+            %--------------------------------------------------------------
+            if abs(crossUV) < tol
+
+                % Check whether the segments are collinear
+                crossP = (x3-x1)*uy - (y3-y1)*ux;
+
+                if abs(crossP) > tol
+                    xi = [];
+                    yi = [];
+                    return;
+                end
+
+                %----------------------------------------------------------
+                % Collinear segments
+                %----------------------------------------------------------
+                if abs(ux) >= abs(uy)
+
+                    % Project onto x
+                    a1 = min(x1,x2);
+                    a2 = max(x1,x2);
+
+                    b1 = min(x3,x4);
+                    b2 = max(x3,x4);
+
+                    left  = max(a1,b1);
+                    right = min(a2,b2);
+
+                    if interiorFlag
+
+                        % Strict overlap
+                        if right - left <= tol
+                            xi = [];
+                            yi = [];
+                            return;
+                        end
+
+                    else
+
+                        % Inclusive overlap
+                        if right < left - tol
+                            xi = [];
+                            yi = [];
+                            return;
+                        end
+
+                    end
+
+                    % Convert overlap limits back to segment 1
+                    t1 = (left  - x1) / ux;
+                    t2 = (right - x1) / ux;
+
+                    xi = [left; right];
+                    yi = [y1 + t1*uy;
+                        y1 + t2*uy];
+
+                else
+
+                    % Project onto y
+                    a1 = min(y1,y2);
+                    a2 = max(y1,y2);
+
+                    b1 = min(y3,y4);
+                    b2 = max(y3,y4);
+
+                    low  = max(a1,b1);
+                    high = min(a2,b2);
+
+                    if interiorFlag
+
+                        if high - low <= tol
+                            xi = [];
+                            yi = [];
+                            return;
+                        end
+
+                    else
+
+                        if high < low - tol
+                            xi = [];
+                            yi = [];
+                            return;
+                        end
+
+                    end
+
+                    t1 = (low  - y1) / uy;
+                    t2 = (high - y1) / uy;
+
+                    xi = [x1 + t1*ux;
+                        x1 + t2*ux];
+
+                    yi = [low; high];
+
+                end
+
+                return;
+            end
+
+            %--------------------------------------------------------------
+            % Non-parallel case
+            %--------------------------------------------------------------
+            dx = x3 - x1;
+            dy = y3 - y1;
+
+            t = (dx*vy - dy*vx) / crossUV;
+            s = (dx*uy - dy*ux) / crossUV;
+
+            %--------------------------------------------------------------
+            % Check whether intersection is inside segments
+            %--------------------------------------------------------------
+            if interiorFlag
+
+                if t <= tol || t >= 1-tol || ...
+                        s <= tol || s >= 1-tol
+
+                    xi = [];
+                    yi = [];
+                    return;
+                end
+
+            else
+
+                if t < -tol || t > 1+tol || ...
+                        s < -tol || s > 1+tol
+
+                    xi = [];
+                    yi = [];
+                    return;
+                end
+
+            end
+
+            % Intersection point
             xi = x1 + t*ux;
             yi = y1 + t*uy;
+
         end
 
         % intersection of an infinite line with a finite segment
@@ -3296,151 +3661,643 @@ classdef emdlab_g2d_db < handle
         end
 
         % intersection of a finite segment with a finite arc
-        function [xi, yi] = getIntersectionSegmentArc(x1, y1, x2, y2, xc, yc, r, theta1, theta2)
-            % Intersection of a segment and a circular arc
-            % Segment: (x1,y1) -> (x2,y2)
-            % Arc: center (xc,yc), radius r, start/end angles in degrees
-            % Returns intersection points lying on both the segment and the arc
+        function [xi, yi] = getIntersectionSegmentArc( ...
+                x1, y1, x2, y2, xc, yc, r, theta1, theta2, interiorFlag)
+
+            % Intersection of a finite segment with a finite circular arc
+            %
+            % Segment:
+            %   (x1,y1) -> (x2,y2)
+            %
+            % Arc:
+            %   center = (xc,yc)
+            %   radius = r
+            %   start/end angles = theta1, theta2 [degrees]
+            %
+            % interiorFlag:
+            %   false -> include segment and arc endpoints
+            %   true  -> exclude segment and arc endpoints
+            %
+            % Returns:
+            %   0 points -> no intersection
+            %   1 point  -> one intersection / tangent
+            %   2 points -> two intersections
 
             xi = [];
             yi = [];
 
-            % --- Step 0: check angles ---
+            if nargin < 10
+                interiorFlag = false;
+            end
+
+            % -------------------------------------------------------------
+            % Tolerance
+            % -------------------------------------------------------------
+            tol = 1e-12;
+
+            % -------------------------------------------------------------
+            % Check inputs
+            % -------------------------------------------------------------
+            if r <= 0
+                error('Radius must be positive.');
+            end
+
             if theta1 == theta2
                 error('theta1 and theta2 must not be equal.');
             end
 
-            % Convert degrees to radians
+            % -------------------------------------------------------------
+            % Convert angles to radians [0, 2*pi)
+            % -------------------------------------------------------------
             theta1 = mod(deg2rad(theta1), 2*pi);
             theta2 = mod(deg2rad(theta2), 2*pi);
 
-            % --- Step 1: compute intersection of infinite line with circle ---
+            % -------------------------------------------------------------
+            % Segment direction
+            % -------------------------------------------------------------
             dx = x2 - x1;
             dy = y2 - y1;
 
-            % Quadratic coefficients
-            x1s = x1 - xc;
-            y1s = y1 - yc;
-
             A = dx^2 + dy^2;
-            B = 2*(x1s*dx + y1s*dy);
-            C = x1s^2 + y1s^2 - r^2;
 
-            D = B^2 - 4*A*C;
-            if D < 0
-                return; % no intersection
-            end
+            % -------------------------------------------------------------
+            % Degenerate segment
+            % -------------------------------------------------------------
+            if A <= tol^2
 
-            sqrtD = sqrt(D);
-            t_vals = [(-B + sqrtD)/(2*A), (-B - sqrtD)/(2*A)];
+                % Segment is just a point.
+                dist = hypot(x1-xc, y1-yc);
 
-            % --- Step 2: filter points that lie on segment and on arc ---
-            for t = t_vals
-                if t < 0 || t > 1
-                    continue; % outside segment
+                if abs(dist-r) > tol
+                    return;
                 end
 
-                px = x1 + t*dx;
-                py = y1 + t*dy;
+                % Angle of point relative to circle center
+                angle = mod(atan2(y1-yc,x1-xc),2*pi);
 
-                % Compute angle from arc center to point
-                angle = atan2(py - yc, px - xc);
-                angle = mod(angle, 2*pi);
-
-                % Check if point is on arc
+                % Check whether point lies on arc
                 if theta1 < theta2
-                    on_arc = (angle >= theta1) && (angle <= theta2);
+
+                    if interiorFlag
+                        on_arc = ...
+                            (angle > theta1+tol) && ...
+                            (angle < theta2-tol);
+                    else
+                        on_arc = ...
+                            (angle >= theta1-tol) && ...
+                            (angle <= theta2+tol);
+                    end
+
                 else
-                    % Arc crosses 2pi → 0
-                    on_arc = (angle >= theta1) || (angle <= theta2);
+
+                    % Arc crosses 0/360 degrees
+                    if interiorFlag
+                        on_arc = ...
+                            (angle > theta1+tol) || ...
+                            (angle < theta2-tol);
+                    else
+                        on_arc = ...
+                            (angle >= theta1-tol) || ...
+                            (angle <= theta2+tol);
+                    end
+
+                end
+
+                % A point has no interior
+                if interiorFlag
+                    return;
                 end
 
                 if on_arc
-                    xi(end+1,1) = px;
-                    yi(end+1,1) = py;
+                    xi = x1;
+                    yi = y1;
                 end
+
+                return;
             end
+
+            % -------------------------------------------------------------
+            % Intersection of infinite line with circle
+            % -------------------------------------------------------------
+            xs = x1 - xc;
+            ys = y1 - yc;
+
+            B = 2*(xs*dx + ys*dy);
+            C = xs^2 + ys^2 - r^2;
+
+            D = B^2 - 4*A*C;
+
+            % -------------------------------------------------------------
+            % No intersection
+            % -------------------------------------------------------------
+            if D < -tol
+                return;
+            end
+
+            % Numerical protection for tangent
+            if D < 0
+                D = 0;
+            end
+
+            sqrtD = sqrt(D);
+
+            % -------------------------------------------------------------
+            % Calculate candidate parameters
+            % -------------------------------------------------------------
+            if sqrtD <= tol
+
+                % Tangent -> one point
+                t_vals = -B/(2*A);
+
+            else
+
+                % Two intersection points
+                t_vals = [ ...
+                    (-B-sqrtD)/(2*A), ...
+                    (-B+sqrtD)/(2*A)];
+
+            end
+
+            % -------------------------------------------------------------
+            % Check candidate points
+            % -------------------------------------------------------------
+            for k = 1:length(t_vals)
+
+                t = t_vals(k);
+
+                % ---------------------------------------------------------
+                % Check whether point is inside finite segment
+                % ---------------------------------------------------------
+                if interiorFlag
+
+                    % Strictly inside segment
+                    if t <= tol || t >= 1-tol
+                        continue;
+                    end
+
+                else
+
+                    % Include segment endpoints
+                    if t < -tol || t > 1+tol
+                        continue;
+                    end
+
+                end
+
+                % Correct small numerical errors
+                t = max(0,min(1,t));
+
+                % ---------------------------------------------------------
+                % Intersection point
+                % ---------------------------------------------------------
+                px = x1 + t*dx;
+                py = y1 + t*dy;
+
+                % ---------------------------------------------------------
+                % Calculate angular position on circle
+                % ---------------------------------------------------------
+                angle = mod(atan2(py-yc,px-xc),2*pi);
+
+                % ---------------------------------------------------------
+                % Check whether point lies on finite arc
+                % ---------------------------------------------------------
+                if theta1 < theta2
+
+                    if interiorFlag
+
+                        % Strictly inside arc
+                        on_arc = ...
+                            (angle > theta1+tol) && ...
+                            (angle < theta2-tol);
+
+                    else
+
+                        % Include arc endpoints
+                        on_arc = ...
+                            (angle >= theta1-tol) && ...
+                            (angle <= theta2+tol);
+
+                    end
+
+                else
+
+                    % Arc crosses 0/360 degrees
+                    if interiorFlag
+
+                        on_arc = ...
+                            (angle > theta1+tol) || ...
+                            (angle < theta2-tol);
+
+                    else
+
+                        on_arc = ...
+                            (angle >= theta1-tol) || ...
+                            (angle <= theta2+tol);
+
+                    end
+
+                end
+
+                if ~on_arc
+                    continue;
+                end
+
+                % ---------------------------------------------------------
+                % Add intersection point
+                % ---------------------------------------------------------
+                if isempty(xi)
+
+                    xi = px;
+                    yi = py;
+
+                else
+
+                    % Avoid duplicate points
+                    duplicate = false;
+
+                    for j = 1:length(xi)
+
+                        if hypot(px-xi(j),py-yi(j)) <= tol
+                            duplicate = true;
+                            break;
+                        end
+
+                    end
+
+                    if ~duplicate
+                        xi(end+1,1) = px;
+                        yi(end+1,1) = py;
+                    end
+
+                end
+
+            end
+
         end
 
         % intersection of two finite arcs
-        function [xi, yi] = getIntersectionArcArc(xc1, yc1, r1, theta11, theta12, xc2, yc2, r2, theta21, theta22)
-            % Intersection of two circular arcs
-            % Arc1: center (xc1,yc1), radius r1, start/end angles in degrees
-            % Arc2: center (xc2,yc2), radius r2, start/end angles in degrees
-            % Returns intersection points lying on both arcs
+        function [xi, yi] = getIntersectionArcArc( ...
+                xc1, yc1, r1, theta11, theta12, ...
+                xc2, yc2, r2, theta21, theta22, interiorFlag)
+
+            % Intersection of two finite circular arcs
+            %
+            % Arc 1:
+            %   center = (xc1,yc1)
+            %   radius = r1
+            %   start/end angles = theta11, theta12 [degrees]
+            %
+            % Arc 2:
+            %   center = (xc2,yc2)
+            %   radius = r2
+            %   start/end angles = theta21, theta22 [degrees]
+            %
+            % interiorFlag:
+            %   false -> include arc endpoints
+            %   true  -> exclude arc endpoints
+            %
+            % Returns:
+            %   0 points -> no intersection
+            %   1 point  -> one intersection / tangent
+            %   2 points -> two intersections
 
             xi = [];
             yi = [];
 
-            % --- Step 0: check angles ---
+            if nargin < 11
+                interiorFlag = false;
+            end
+
+            % -------------------------------------------------------------
+            % Tolerance
+            % -------------------------------------------------------------
+            tol = 1e-12;
+
+            % -------------------------------------------------------------
+            % Check inputs
+            % -------------------------------------------------------------
+            if r1 <= 0 || r2 <= 0
+                error('Radii must be positive.');
+            end
+
             if theta11 == theta12 || theta21 == theta22
                 error('Start and end angles must not be equal.');
             end
 
-            % Convert degrees to radians
+            % -------------------------------------------------------------
+            % Convert angles to radians [0, 2*pi)
+            % -------------------------------------------------------------
             theta11 = mod(deg2rad(theta11), 2*pi);
             theta12 = mod(deg2rad(theta12), 2*pi);
+
             theta21 = mod(deg2rad(theta21), 2*pi);
             theta22 = mod(deg2rad(theta22), 2*pi);
 
-            % --- Step 1: compute circle-circle intersection points ---
+            % -------------------------------------------------------------
+            % Distance between circle centers
+            % -------------------------------------------------------------
             dx = xc2 - xc1;
             dy = yc2 - yc1;
-            d = sqrt(dx^2 + dy^2);
 
-            % Check for no intersection
-            if d > r1 + r2 || d < abs(r1 - r2) || (d==0 && abs(r1-r2)<1e-12)
-                return; % no intersection or identical circles
+            d = hypot(dx,dy);
+
+            % -------------------------------------------------------------
+            % Coincident centers
+            % -------------------------------------------------------------
+            if d <= tol
+
+                % Different radii -> no intersection
+                if abs(r1-r2) > tol
+                    return;
+                end
+
+                % Same circle.
+                %
+                % The arcs may overlap. In that case there are infinitely
+                % many intersection points. We check the four arc
+                % endpoints and return the common endpoints.
+                %
+                % This does not attempt to return the complete overlapping
+                % arc.
+
+                thetaList = [theta11 theta12 theta21 theta22];
+
+                for k = 1:4
+
+                    angle = thetaList(k);
+
+                    % Point on the common circle
+                    px = xc1 + r1*cos(angle);
+                    py = yc1 + r1*sin(angle);
+
+                    % -----------------------------------------------------
+                    % Check Arc 1
+                    % -----------------------------------------------------
+                    angle1 = mod(atan2(py-yc1,px-xc1),2*pi);
+
+                    if theta11 < theta12
+
+                        if interiorFlag
+                            on_arc1 = ...
+                                (angle1 > theta11+tol) && ...
+                                (angle1 < theta12-tol);
+                        else
+                            on_arc1 = ...
+                                (angle1 >= theta11-tol) && ...
+                                (angle1 <= theta12+tol);
+                        end
+
+                    else
+
+                        % Arc crosses 0/360 degrees
+                        if interiorFlag
+                            on_arc1 = ...
+                                (angle1 > theta11+tol) || ...
+                                (angle1 < theta12-tol);
+                        else
+                            on_arc1 = ...
+                                (angle1 >= theta11-tol) || ...
+                                (angle1 <= theta12+tol);
+                        end
+
+                    end
+
+                    if ~on_arc1
+                        continue;
+                    end
+
+                    % -----------------------------------------------------
+                    % Check Arc 2
+                    % -----------------------------------------------------
+                    angle2 = mod(atan2(py-yc2,px-xc2),2*pi);
+
+                    if theta21 < theta22
+
+                        if interiorFlag
+                            on_arc2 = ...
+                                (angle2 > theta21+tol) && ...
+                                (angle2 < theta22-tol);
+                        else
+                            on_arc2 = ...
+                                (angle2 >= theta21-tol) && ...
+                                (angle2 <= theta22+tol);
+                        end
+
+                    else
+
+                        % Arc crosses 0/360 degrees
+                        if interiorFlag
+                            on_arc2 = ...
+                                (angle2 > theta21+tol) || ...
+                                (angle2 < theta22-tol);
+                        else
+                            on_arc2 = ...
+                                (angle2 >= theta21-tol) || ...
+                                (angle2 <= theta22+tol);
+                        end
+
+                    end
+
+                    if ~on_arc2
+                        continue;
+                    end
+
+                    % -----------------------------------------------------
+                    % Add point if it is not already present
+                    % -----------------------------------------------------
+                    if isempty(xi)
+
+                        xi = px;
+                        yi = py;
+
+                    else
+
+                        duplicate = false;
+
+                        for j = 1:length(xi)
+
+                            if hypot(px-xi(j),py-yi(j)) <= tol
+                                duplicate = true;
+                                break;
+                            end
+
+                        end
+
+                        if ~duplicate
+                            xi(end+1,1) = px;
+                            yi(end+1,1) = py;
+                        end
+
+                    end
+                end
+
+                return;
             end
 
-            % Distance from circle1 center to intersection line
-            a = (r1^2 - r2^2 + d^2) / (2*d);
+            % -------------------------------------------------------------
+            % Check whether circles intersect
+            % -------------------------------------------------------------
 
-            % Height from line to intersection points
-            h_sq = r1^2 - a^2;
-            h = sqrt(max(h_sq, 0));
+            % Circles too far apart
+            if d > r1+r2+tol
+                return;
+            end
 
-            % Midpoint between intersection points
+            % One circle completely inside the other
+            if d < abs(r1-r2)-tol
+                return;
+            end
+
+            % -------------------------------------------------------------
+            % Circle-circle intersection
+            % -------------------------------------------------------------
+
+            a = (r1^2-r2^2+d^2)/(2*d);
+
+            h2 = r1^2-a^2;
+
+            % Numerical protection
+            if h2 < -tol
+                return;
+            end
+
+            h = sqrt(max(h2,0));
+
+            % Point on line connecting circle centers
             xm = xc1 + a*dx/d;
             ym = yc1 + a*dy/d;
 
-            % Two intersection points
-            rx = -dy * (h/d);
-            ry =  dx * (h/d);
+            % Perpendicular displacement
+            rx = -dy*h/d;
+            ry =  dx*h/d;
 
-            pts = [xm + rx, ym + ry;
-                xm - rx, ym - ry];
+            % -------------------------------------------------------------
+            % Tangent or two intersections
+            % -------------------------------------------------------------
+            if h <= tol
 
-            % --- Step 2: filter points on both arcs ---
-            for k = 1:2
+                % Tangent circles
+                pts = [xm ym];
+
+            else
+
+                % Two circle intersections
+                pts = [ ...
+                    xm+rx, ym+ry;
+                    xm-rx, ym-ry];
+
+            end
+
+            % -------------------------------------------------------------
+            % Check each point against both finite arcs
+            % -------------------------------------------------------------
+            for k = 1:size(pts,1)
+
                 px = pts(k,1);
                 py = pts(k,2);
 
-                % Angle relative to Arc1 center
-                angle1 = atan2(py - yc1, px - xc1);
-                angle1 = mod(angle1, 2*pi);
+                % ---------------------------------------------------------
+                % Angle relative to Arc 1
+                % ---------------------------------------------------------
+                angle1 = mod(atan2(py-yc1,px-xc1),2*pi);
 
                 if theta11 < theta12
-                    on_arc1 = (angle1 >= theta11) && (angle1 <= theta12);
+
+                    if interiorFlag
+                        on_arc1 = ...
+                            (angle1 > theta11+tol) && ...
+                            (angle1 < theta12-tol);
+                    else
+                        on_arc1 = ...
+                            (angle1 >= theta11-tol) && ...
+                            (angle1 <= theta12+tol);
+                    end
+
                 else
-                    on_arc1 = (angle1 >= theta11) || (angle1 <= theta12);
+
+                    % Arc 1 crosses 0/360 degrees
+                    if interiorFlag
+                        on_arc1 = ...
+                            (angle1 > theta11+tol) || ...
+                            (angle1 < theta12-tol);
+                    else
+                        on_arc1 = ...
+                            (angle1 >= theta11-tol) || ...
+                            (angle1 <= theta12+tol);
+                    end
+
                 end
 
-                % Angle relative to Arc2 center
-                angle2 = atan2(py - yc2, px - xc2);
-                angle2 = mod(angle2, 2*pi);
+                if ~on_arc1
+                    continue;
+                end
+
+                % ---------------------------------------------------------
+                % Angle relative to Arc 2
+                % ---------------------------------------------------------
+                angle2 = mod(atan2(py-yc2,px-xc2),2*pi);
 
                 if theta21 < theta22
-                    on_arc2 = (angle2 >= theta21) && (angle2 <= theta22);
+
+                    if interiorFlag
+                        on_arc2 = ...
+                            (angle2 > theta21+tol) && ...
+                            (angle2 < theta22-tol);
+                    else
+                        on_arc2 = ...
+                            (angle2 >= theta21-tol) && ...
+                            (angle2 <= theta22+tol);
+                    end
+
                 else
-                    on_arc2 = (angle2 >= theta21) || (angle2 <= theta22);
+
+                    % Arc 2 crosses 0/360 degrees
+                    if interiorFlag
+                        on_arc2 = ...
+                            (angle2 > theta21+tol) || ...
+                            (angle2 < theta22-tol);
+                    else
+                        on_arc2 = ...
+                            (angle2 >= theta21-tol) || ...
+                            (angle2 <= theta22+tol);
+                    end
+
                 end
 
-                if on_arc1 && on_arc2
-                    xi(end+1,1) = px;
-                    yi(end+1,1) = py;
+                if ~on_arc2
+                    continue;
                 end
+
+                % ---------------------------------------------------------
+                % Add intersection point
+                % ---------------------------------------------------------
+                if isempty(xi)
+
+                    xi = px;
+                    yi = py;
+
+                else
+
+                    duplicate = false;
+
+                    for j = 1:length(xi)
+
+                        if hypot(px-xi(j),py-yi(j)) <= tol
+                            duplicate = true;
+                            break;
+                        end
+
+                    end
+
+                    if ~duplicate
+                        xi(end+1,1) = px;
+                        yi(end+1,1) = py;
+                    end
+
+                end
+
             end
+
         end
 
         %% point distance from edge objects

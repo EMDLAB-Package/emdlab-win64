@@ -14,7 +14,7 @@ if nargin == 0
     alpha_v = 130;
     g_v = 1.1;
     wtrib = 1;
-    wrrib = 1;
+    wrrib = 0;
     d0 = 6;
     d1 = 5;
     d2 = 3;
@@ -135,15 +135,18 @@ if wrrib == 0
     e21 = g.addSegment(p19,p17);
     e22 = g.addSegment(p17,p6);
     e23 = g.addArc(p18,p17,p19,1);
+    g.splitArc(e23);
+    g.splitArc(e13);
+    g.splitArc(e19);
 
-    l1 = g.addLoop(e1,-e14,-e12,-e13,-e10,e3,-e20,-e17,-e19,-e15,e5,e6,e7,-e23,e22,e8);
-    l2 = g.addLoop(e9,e10,e11,e12);
-    l3 = g.addLoop(e15,e16,e17,e18);
-    l4 = g.addLoop(e13,-e11);
-    l5 = g.addLoop(e2,-e9,e14);
-    l6 = g.addLoop(e19,-e16);
-    l7 = g.addLoop(e4,-e18,e20);
-    l8 = g.addLoop(e23,e21);
+    l1 = g.addLoop(g.getEdgeLeftLoop(e1));
+    l2 = g.addLoop(g.getEdgeLeftLoop(e12));
+    l3 = g.addLoop(g.getEdgeLeftLoop(e17));
+    l4 = g.addLoop(g.getEdgeLeftLoop(e13));
+    l5 = g.addLoop(g.getEdgeLeftLoop(e19));
+    l6 = g.addLoop(g.getEdgeLeftLoop(e2));
+    l7 = g.addLoop(g.getEdgeLeftLoop(e4));
+    l8 = g.addLoop(g.getEdgeLeftLoop(e23));
 
     g.addFace(name1, l1);
     g.addFace(name2 + "1", l2);

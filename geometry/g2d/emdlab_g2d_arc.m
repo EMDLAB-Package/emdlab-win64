@@ -373,6 +373,71 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
             text(pc(1)+vec(1)/2,pc(2)+vec(2)/2,label);
         end
 
+      function y = getAngles(obj)
+    % Angle of tangent lines at p1 and p2 w.r.t. x-axis, in [0, 2*pi)
+    % y(1): tangent angle at p1
+    % y(2): tangent angle at p2
+
+    y = zeros(1,2);
+
+    % radius angles from center to endpoints
+
+    % tangent angles
+    if obj.direction
+        % CCW arc
+        u = obj.getu1; 
+        u = [-u(2),u(1)];
+        y(1) = atan2(u(2),u(1));
+        u = obj.getu2; 
+        u = [u(2),-u(1)];
+        y(2) = atan2(u(2),u(1));
+    else
+        % CW arc
+        u = obj.getu1; 
+        u = [u(2),-u(1)];
+        y(1) = atan2(u(2),u(1));
+        u = obj.getu2; 
+        u = [-u(2),u(1)];
+        y(2) = atan2(u(2),u(1));
+    end
+
+    mod(y, 2*pi);
+
+end
+
+
+function y = isTag1(obj, pTag)
+            if strcmpi(obj.p1.tag, pTag)
+                y = true;
+            else
+                y = false;
+            end
+        end
+
+        function y = isTag2(obj, pTag)
+            if strcmpi(obj.p2.tag, pTag)
+                y = true;
+            else
+                y = false;
+            end
+        end
+
+        function y = getPtr1(obj)
+            y = obj.p1;
+        end
+        function y = getPtr2(obj)
+            y = obj.p2;
+        end
+
+        function y = getTheta1Theta2(obj)
+        
+            tmp = obj.p1 - obj.p0;
+            y(1) = tmp.getAngle;
+            tmp = obj.p2 - obj.p0;
+            y(2) = tmp.getAngle;
+            y = rad2deg(y);
+        
+        end
     end
 
 end

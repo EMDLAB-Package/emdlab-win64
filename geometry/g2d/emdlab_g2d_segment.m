@@ -137,6 +137,48 @@ classdef emdlab_g2d_segment < handle
 
         end
 
+        function y = getAngles(obj)
+    % y(1): Angle of vector P0 -> P1
+    % y(2): Angle of vector P1 -> P0
+    
+    y = zeros(1, 2);
+    
+    % Vector 1: P0 to P1
+    dy1 = obj.p1.y - obj.p0.y;
+    dx1 = obj.p1.x - obj.p0.x;
+    y(1) = atan2(dy1, dx1);
+    
+    % Vector 2: P1 to P0 (This is mathematically just the angle of vector 1 + pi)
+    % You don't need to recalculate atan2 here if you are confident in y(1)
+    y(2) = atan2(-dy1, -dx1);
+
+    mod(y, 2*pi);
+
+        end
+
+        function y = isTag1(obj, pTag)
+            if strcmpi(obj.p0.tag, pTag)
+                y = true;
+            else
+                y = false;
+            end
+        end
+
+        function y = isTag2(obj, pTag)
+            if strcmpi(obj.p1.tag, pTag)
+                y = true;
+            else
+                y = false;
+            end
+        end
+        
+        function y = getPtr1(obj)
+            y = obj.p0;
+        end
+        function y = getPtr2(obj)
+            y = obj.p1;
+        end
+
     end
 
 end

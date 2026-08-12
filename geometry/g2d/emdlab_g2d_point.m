@@ -304,6 +304,10 @@ classdef emdlab_g2d_point  < handle & matlab.mixin.Copyable & emdlab_g2d_constan
             newObj.moveRadial(varargin{:});
         end
 
+        function y = getAngle(obj)
+            y = mod(atan2(obj.y, obj.x), 2*pi);
+        end
+
     end
 
 end
