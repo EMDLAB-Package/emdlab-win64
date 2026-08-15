@@ -12,11 +12,11 @@ classdef emdlab_g2d_loop < handle
         % direction of each edge
         directions (1,:) logical;
 
-        % the object tag
-        tag (1,:) char = '';
+        % the object id
+        id (1,1) double = 0;
 
-        % tag of faces that used this loop for their constrcution
-        tags (1,:) string;
+        % id of faces that used this loop for their constrcution
+        ids (1,:) double;
 
         % edge list
         edgesIndexList (1,:) double;

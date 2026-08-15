@@ -1,6 +1,6 @@
 % linear machine models
 
-function emdlab_g2d_lib_lm1(g, p, q, Nwl, shp, ws, wt, ds, dymc, Lemc, mcta, dar, dyrc, gap, np, Ley)
+function m = emdlab_g2d_lib_lm1(g, p, q, Nwl, shp, ws, wt, ds, dymc, Lemc, mcta, dar, dyrc, gap, np, Ley)
 
 % defult arguments for debug
 if nargin == 0
@@ -104,9 +104,9 @@ elseif Nwl == 2
         idx1 = 2 + (i-1)*6;
         eidx_new1 = g.addSegmentByCoordinates(x_tmp(idx1),y_tmp(idx1),x_tmp(idx1+5),y_tmp(idx1+5));
         eidx_new2 = g.addSegmentByCoordinates(x_tmp(idx1+1),y_tmp(idx1+1),x_tmp(idx1+4),y_tmp(idx1+4));
-        g.addFace('ca_1_' + string(i), g.addLoop(g.getEdgeLeftLoop(eidx_new1)));
+        g.addFace('ca_1_' + string(i), g.getEdgeLeftLoop(eidx_new1));
         g.setFaceColor('ca_1_' + string(i),0,255,255);
-        g.addFace('ca_2_' + string(i), g.addLoop(g.getEdgeLeftLoop(eidx_new2)));
+        g.addFace('ca_2_' + string(i), g.getEdgeLeftLoop(eidx_new2));
         g.setFaceColor('ca_2_' + string(i),0,255,255);
     end
 
@@ -117,7 +117,7 @@ elseif Nwl == 2
     g.addSegmentByCoordinates(x1,y1,-x1,y1);
     g.addSegmentByCoordinates(-x1,y1,-x1,gap/2);
     g.addSegmentByCoordinates(-x1,gap/2,-x0-Lemc,gap/2);
-    g.addFace('moving_air', g.addLoop(g.getEdgeLeftLoop(ei)))
+    g.addFace('moving_air', g.getEdgeLeftLoop(ei))
     g.setFaceColor('moving_air', 0, 255, 255)
 
 else
@@ -140,9 +140,9 @@ g.addSegmentByCoordinates(x1,-gap/2-dar,x1,-gap/2);
 
 % add faces
 g.addFace('moving_core', l_mc);
-g.addFace('rail_air', g.addLoop(g.getEdgeLeftLoop(ei1)));
-g.addFace('rail_core', g.addLoop(g.getEdgeLeftLoop(ei2)));
-g.addFace('rail_caluminum', g.addLoop(g.getEdgeLeftLoop(ei3)));
+g.addFace('rail_air', g.getEdgeLeftLoop(ei1));
+g.addFace('rail_core', g.getEdgeLeftLoop(ei2));
+g.addFace('rail_caluminum', g.getEdgeLeftLoop(ei3));
 
 % set face colors
 g.setFaceColor('moving_core',200,200,200)
@@ -155,4 +155,6 @@ close all;
 if nargin ==0, g.showSketch; end
 if nargin ==0, g.showFaces; end
 
+g.setMeshMaxLength(ds/3);
+m = g.generateMesh('mg0');
 end

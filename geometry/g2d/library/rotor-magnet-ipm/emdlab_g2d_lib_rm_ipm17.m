@@ -139,14 +139,14 @@ if wrrib == 0
     g.splitArc(e13);
     g.splitArc(e19);
 
-    l1 = g.addLoop(g.getEdgeLeftLoop(e1));
-    l2 = g.addLoop(g.getEdgeLeftLoop(e12));
-    l3 = g.addLoop(g.getEdgeLeftLoop(e17));
-    l4 = g.addLoop(g.getEdgeLeftLoop(e13));
-    l5 = g.addLoop(g.getEdgeLeftLoop(e19));
-    l6 = g.addLoop(g.getEdgeLeftLoop(e2));
-    l7 = g.addLoop(g.getEdgeLeftLoop(e4));
-    l8 = g.addLoop(g.getEdgeLeftLoop(e23));
+    l1 = g.getEdgeLeftLoop(e1);
+    l2 = g.getEdgeLeftLoop(e12);
+    l3 = g.getEdgeLeftLoop(e17);
+    l4 = g.getEdgeLeftLoop(e13);
+    l5 = g.getEdgeLeftLoop(e19);
+    l6 = g.getEdgeLeftLoop(e2);
+    l7 = g.getEdgeLeftLoop(e4);
+    l8 = g.getEdgeLeftLoop(e23);
 
     g.addFace(name1, l1);
     g.addFace(name2 + "1", l2);

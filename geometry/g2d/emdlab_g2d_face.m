@@ -10,14 +10,17 @@ classdef emdlab_g2d_face < handle
         % a cell to store loops
         loops (1,:) emdlab_g2d_loop;
 
-        % the object tag
-        tag (1,:) char = '';
+        % the object id
+        id (1,1) double = 0;
 
         % constraint mesh points
         meshPoints (:,2) double;
 
         % color
         color (1,3) double = rand(1,3);
+
+        % name
+        name (1,:) char;
 
     end
 

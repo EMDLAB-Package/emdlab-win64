@@ -17,11 +17,28 @@ classdef emdlab_g2d_db < handle
         % faces
         faces (1,:) emdlab_g2d_face;
 
+        % geometrical tolerance
+        gtol (1,1) double = 1e-5;
+
     end
 
-    properties (SetAccess=protected)
+    properties (SetAccess = protected)
+
+        % index holders for ids: identification numbers
+        PIDH (1,1) double = 0;
+        EIDH (1,1) double = 0;
+        LIDH (1,1) double = 0;
+        FIDH (1,1) double = 0;
+
+        % id mappers
+        pid2pi (1,:) double;
+        eid2ei (1,:) double;
+        lid2li (1,:) double;
+        fid2fi (1,:) double;
+
         % python path
         pyPath = "";
+
     end
 
     properties (Dependent = true)
@@ -67,10 +84,31 @@ classdef emdlab_g2d_db < handle
             y = numel(obj.faces);
         end
 
+        function updateIDMappers(obj)
+
+            obj.pid2pi = zeros(1,obj.PIDH);
+            obj.eid2ei = zeros(1,obj.EIDH);
+            obj.lid2li = zeros(1,obj.LIDH);
+            obj.fid2fi = zeros(1,obj.FIDH);
+            for i = 1:obj.Npoints
+                obj.pid2pi(obj.points(i).id) = i;
+            end
+            for i = 1:obj.Nedges
+                obj.eid2ei(obj.edges(i).id) = i;
+            end
+            for i = 1:obj.Nloops
+                obj.lid2li(obj.loops(i).id) = i;
+            end
+            for i = 1:obj.Nfaces
+                obj.fid2fi(obj.faces(i).id) = i;
+            end
+
+        end
+
         %% point methods
         function varargout = addPoint(obj, varargin)
             % adding a new point to data base
-            % this function returns point index and point handle
+            % this function returns point id and point handle
 
             % check the varargin type
             if numel(varargin) == 2
@@ -93,14 +131,13 @@ classdef emdlab_g2d_db < handle
             % check for existance of already defined point in the same location
             for i = 1:numel(obj.points)
 
-                if norm(obj.points(i).getVector() - [x,y]) < 1e-6
+                if norm(obj.points(i).getVector() - [x,y]) < obj.gtol
 
-                    pointHandle = obj.points(i);
                     if nargout == 1
-                        varargout{1} = i;
+                        varargout{1} = obj.points(i).id;
                     elseif nargout == 2
-                        varargout{1} = i;
-                        varargout{2} = pointHandle;
+                        varargout{1} = obj.points(i).id;
+                        varargout{2} = obj.points(i);
                     elseif nargout > 2
                         error('The number of output arguments is too high.');
                     end
@@ -111,71 +148,61 @@ classdef emdlab_g2d_db < handle
             end
 
             % get an instance of point class
-            pointHandle = emdlab_g2d_point(x,y);
-            obj.points(end+1) = pointHandle;
+            obj.points(end+1) = emdlab_g2d_point(x,y);
 
             % generate point tag
-            pointIndex = numel(obj.points);
-            pointHandle.tag = ['p', num2str(pointIndex)];
+            obj.PIDH = obj.PIDH + 1;
+            obj.points(end).id = obj.PIDH;
+            obj.pid2pi(obj.PIDH) = obj.Npoints;
 
             if nargout == 1
-                varargout{1} = pointIndex;
+                varargout{1} = obj.PIDH;
             elseif nargout == 2
-                varargout{1} = pointIndex;
-                varargout{2} = pointHandle;
+                varargout{1} = obj.PIDH;
+                varargout{2} = obj.points(end);
             elseif nargout > 2
                 error('The number of output arguments is too high.');
             end
 
         end
 
-        function removePoint(obj, pIndex)
+        function removePoints(obj, varargin)
 
             % remove connected edges to this point firt
-            for i = 1:numel(pIndex.tags)
-                obj.removeEdge(pIndex.tags(i));
+            for i = 1:numel(varargin)
+                for j = 1:numel(varargin{i})
+                    pointID = varargin{i}(j);
+                    obj.removeEdges(pIndex.ids(i));
+                end
             end
+
             obj.points(pIndex) = [];
 
         end
 
-        function pointHandle = getPointHandleByTag(obj, pTag)
+        function pointIndex = getPointIndexByID(obj, pointID)
 
             % check for existance of already defined point in data base
-            for i = 1:numel(obj.points)
-
-                if strcmp(obj.points(i).tag,pTag)
-
-                    pointHandle = obj.points(i);
-                    return;
-
-                end
-
+            if obj.pid2pi(pointID) == 0
+                error('Point with specified ID was not found.');
+            else
+                pointIndex = obj.pid2pi(pointID);
             end
-
-            error('Point was not found.');
 
         end
 
-        function pointIndex = getPointIndexByTag(obj, pTag)
+        function pointHandle = getPointHandleByID(obj, pointID)
 
             % check for existance of already defined point in data base
-            for i = 1:numel(obj.points)
-
-                if strcmp(obj.points(i).tag,pTag)
-
-                    pointIndex = i;
-                    return;
-
-                end
-
+            if obj.pid2pi(pointID) == 0
+                error('Point with specified ID was not found.');
+            else
+                pointHandle = obj.points(obj.pid2pi(pointID));
             end
-
-            error('Point was not found.');
 
         end
 
-        function pointIndex = getPointIndexByCoordinates(obj, x, y)
+        function pointID = getPointIDByCoordinates(obj, x, y)
 
             if ~numel(obj.points)
                 error('There is no defined point.');
@@ -187,7 +214,7 @@ classdef emdlab_g2d_db < handle
 
                 distance = norm(obj.points(i).getVector - [x,y]);
                 if distance < minDistance
-                    pointIndex = i;
+                    pointID = obj.points(i).id;
                     minDistance = distance;
                 end
 
@@ -195,20 +222,22 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function [x,y] = getPointCoordinates(obj, pIndex)
+        function [x,y] = getPointCoordinates(obj, pointID)
+            pIndex = obj.pid2pi(pointID);
             x = obj.points(pIndex).x;
             y = obj.points(pIndex).y;
         end
 
-        function setPointXCoordinate(obj, pIndex, newX)
-            obj.points(pIndex).x = newX;
+        function setPointXCoordinate(obj, pointID, newX)
+            obj.points(obj.pid2pi(pointID)).x = newX;
         end
 
-        function setPointYCoordinate(obj, pIndex, newY)
-            obj.points(pIndex).y = newY;
+        function setPointYCoordinate(obj, pointID, newY)
+            obj.points(obj.pid2pi(pointID)).y = newY;
         end
 
-        function setPointCoordinates(obj, pIndex, newX, newY)
+        function setPointCoordinates(obj, pointID, newX, newY)
+            pIndex = obj.pid2pi(pointID);
             obj.points(pIndex).x = newX;
             obj.points(pIndex).y = newY;
         end
@@ -216,7 +245,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsAlongYAxis(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).x = obj.points(varargin{1}).x;
+                obj.points(obj.pid2pi(varargin{i})).x = obj.points(obj.pid2pi(varargin{1})).x;
             end
 
         end
@@ -224,27 +253,27 @@ classdef emdlab_g2d_db < handle
         function alignPointsAlongXAxis(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
 
         function alignPointsAlongRAxis(obj, varargin)
 
-            u_ref = obj.points(varargin{1}).getUnitVector;
+            u_ref = obj.points(obj.pid2pi(varargin{1})).getUnitVector;
             for i = 2:numel(varargin)
-                r_i = obj.points(varargin{i}).getDistanceFromOrigin;
-                obj.points(varargin{i}).setCoordinates(r_i*u_ref(1), r_i*u_ref(2));
+                r_i = obj.points(obj.pid2pi(varargin{i})).getDistanceFromOrigin;
+                obj.points(obj.pid2pi(varargin{i})).setCoordinates(r_i*u_ref(1), r_i*u_ref(2));
             end
 
         end
 
         function alignPointsAlongTAxis(obj, varargin)
 
-            r_ref = obj.points(varargin{1}).getDistanceFromOrigin;
+            r_ref = obj.points(obj.pid2pi(varargin{1})).getDistanceFromOrigin;
             for i = 2:numel(varargin)
-                u_i = obj.points(varargin{i}).getUnitVector;
-                obj.points(varargin{i}).setCoordinates(r_ref*u_i(1), r_ref*u_i(2));
+                u_i = obj.points(obj.pid2pi(varargin{i})).getUnitVector;
+                obj.points(obj.pid2pi(varargin{i})).setCoordinates(r_ref*u_i(1), r_ref*u_i(2));
             end
 
         end
@@ -253,7 +282,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsXX(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).x = obj.points(varargin{1}).x;
+                obj.points(obj.pid2pi(varargin{i})).x = obj.points(obj.pid2pi(varargin{1})).x;
             end
 
         end
@@ -261,7 +290,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsXY(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -269,7 +298,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsXR(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -277,7 +306,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsXT(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -285,7 +314,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsYX(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -293,7 +322,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsYY(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -301,7 +330,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsYR(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -309,7 +338,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsYT(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -317,7 +346,7 @@ classdef emdlab_g2d_db < handle
         function alignPointsRX(obj, varargin)
 
             for i = 2:numel(varargin)
-                obj.points(varargin{i}).y = obj.points(varargin{1}).y;
+                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
             end
 
         end
@@ -441,44 +470,41 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function u = getUnitVectorP0P1(obj, p0Index, p1Index)
-            u = obj.points(p1Index).getVector - obj.points(p0Index).getVector;
+        function u = getUnitVectorP0P1(obj, p0ID, p1ID)
+            u = obj.points(obj.pid2pi(p1ID)).getVector - obj.points(obj.pid2pi(p0ID)).getVector;
             u = u/norm(u);
         end
 
         %% edge methods
         % adding a new segment to data base
-        % this function returns edge index and edge handle
-        function varargout = addSegment(obj, p0Index, p1Index)
+        % this function returns edge id and edge handle
+        function varargout = addSegment(obj, p0ID, p1ID)
 
-            % check for char inputs
-            if ischar(p0Index)
-                p0Index = obj.getPointIndexByTag(p0Index);
-            end
+            % get point indices
+            p0Index = obj.pid2pi(p0ID);
+            p1Index = obj.pid2pi(p1ID);
 
-            if ischar(p1Index)
-                p1Index = obj.getPointIndexByTag(p1Index);
-            end
-
-            % get an instance of edge class
+            % get an instance of the edge class
             edgeHandle = emdlab_g2d_edge;
+
             % set pointer class to segment
             edgeHandle.ptr = emdlab_g2d_segment(obj.points(p0Index),obj.points(p1Index));
             obj.edges(end+1) = edgeHandle;
 
-            % generate edge tag
-            edgeIndex = numel(obj.edges);
-            edgeHandle.tag = ['e', num2str(edgeIndex)];
-            edgeHandle.ptr.tag = edgeHandle.tag;
+            % assign edge id
+            obj.EIDH = obj.EIDH + 1;
+            edgeHandle.id = obj.EIDH;
+            edgeHandle.pid = [p0ID, p1ID];
+            obj.eid2ei(obj.EIDH) = obj.Nedges;
 
-            % add edge tag to connected points
-            obj.points(p0Index).tags(end+1) = edgeHandle.tag;
-            obj.points(p1Index).tags(end+1) = edgeHandle.tag;
+            % add edge id to end point ids
+            obj.points(p0Index).ids(end+1) = obj.EIDH;
+            obj.points(p1Index).ids(end+1) = obj.EIDH;
 
             if nargout == 1
-                varargout{1} = edgeIndex;
+                varargout{1} = obj.EIDH;
             elseif nargout == 2
-                varargout{1} = edgeIndex;
+                varargout{1} = obj.EIDH;
                 varargout{2} = edgeHandle;
             elseif nargout > 2
                 error('The number of output arguments is too high.');
@@ -488,28 +514,14 @@ classdef emdlab_g2d_db < handle
 
         % adding a new spline to data base
         % this function returns edge index and edge handle
-        function varargout = addSpline(obj, ptsIndex)
+        function varargout = addSpline(obj, pointIDs)
 
             % number of points
-            Np = numel(ptsIndex);
-            pts = repmat(emdlab_g2d_point,1,Np);
+            Np = length(pointIDs);
+            pts = repmat(emdlab_g2d_point, 1, Np);
 
-            if isa(ptsIndex, 'cell')
-
-                for i = 1:Np
-                    if ischar(ptsIndex{i})
-                        pts(i) = obj.points(obj.getPointIndexByTag(ptsIndex{i}));
-                    else
-                        pts(i) = obj.points(ptsIndex{i});
-                    end
-                end
-
-            else
-
-                for i = 1:Np
-                    pts(i) = obj.points(ptsIndex(i));
-                end
-
+            for i = 1:Np
+                pts(i) = obj.points(obj.pid2pi(pointIDs(i)));
             end
 
             % get an instance of edge class
@@ -519,15 +531,16 @@ classdef emdlab_g2d_db < handle
             edgeHandle.ptr = emdlab_g2d_spline(pts);
             obj.edges(end+1) = edgeHandle;
 
-            % generate edge tag
-            edgeIndex = numel(obj.edges);
-            edgeHandle.tag = ['e', num2str(edgeIndex)];
-            edgeHandle.ptr.tag = edgeHandle.tag;
+            % assign edge id
+            obj.EIDH = obj.EIDH + 1;
+            edgeHandle.id = obj.EIDH;
+            edgeHandle.pid = [pts(1).id, pts(end).id];
+            obj.eid2ei(obj.EIDH) = obj.Nedges;
 
             if nargout == 1
-                varargout{1} = edgeIndex;
+                varargout{1} = obj.EIDH;
             elseif nargout == 2
-                varargout{1} = edgeIndex;
+                varargout{1} = obj.EIDH;
                 varargout{2} = edgeHandle;
             elseif nargout > 2
                 error('The number of output arguments is too high.');
@@ -538,15 +551,15 @@ classdef emdlab_g2d_db < handle
         % add a new segment by direct coordinates passing
         function varargout = addSegmentByCoordinates(obj, x1, y1, x2, y2)
 
-            p1Index = obj.addPoint(x1,y1);
-            p2Index = obj.addPoint(x2,y2);
+            p1ID = obj.addPoint(x1,y1);
+            p2ID = obj.addPoint(x2,y2);
 
             if nargout == 0
-                obj.addSegment(p1Index,p2Index);
+                obj.addSegment(p1ID,p2ID);
             elseif nargout == 1
-                varargout{1} = obj.addSegment(p1Index,p2Index);
+                varargout{1} = obj.addSegment(p1ID,p2ID);
             elseif nargout == 2
-                [varargout{1},varargout{2}] = obj.addSegment(p1Index,p2Index);
+                [varargout{1},varargout{2}] = obj.addSegment(p1ID,p2ID);
             elseif nargout > 2
                 error('The number of output arguments is too high.');
             end
@@ -562,17 +575,17 @@ classdef emdlab_g2d_db < handle
             end
 
             Nx = length(x);
-            ptsIndex = zeros(1,Nx);
+            pointIDs = zeros(1,Nx);
             for i = 1:Nx
-                ptsIndex(i) = obj.addPoint(x(i),y(i));
+                pointIDs(i) = obj.addPoint(x(i),y(i));
             end
 
             if nargout == 0
-                obj.addSpline(ptsIndex);
+                obj.addSpline(pointIDs);
             elseif nargout == 1
-                varargout{1} = obj.addSpline(ptsIndex);
+                varargout{1} = obj.addSpline(pointIDs);
             elseif nargout == 2
-                [varargout{1},varargout{2}] = obj.addSpline(ptsIndex);
+                [varargout{1},varargout{2}] = obj.addSpline(pointIDs);
             elseif nargout > 2
                 error('The number of output arguments is too high.');
             end
@@ -580,20 +593,12 @@ classdef emdlab_g2d_db < handle
         end
 
         % adding a new arc to data base
-        function varargout = addArc(obj, p0Index, p1Index, p2Index, direction)
+        function varargout = addArc(obj, p0ID, p1ID, p2ID, direction)
 
-            % check for char inputs
-            if ischar(p0Index)
-                p0Index = obj.getPointIndexByTag(p0Index);
-            end
-
-            if ischar(p1Index)
-                p1Index = obj.getPointIndexByTag(p1Index);
-            end
-
-            if ischar(p2Index)
-                p2Index = obj.getPointIndexByTag(p2Index);
-            end
+            % get point indices
+            p0Index = obj.pid2pi(p0ID);
+            p1Index = obj.pid2pi(p1ID);
+            p2Index = obj.pid2pi(p2ID);
 
             % get an instance of edge class
             edgeHandle = emdlab_g2d_edge;
@@ -603,20 +608,21 @@ classdef emdlab_g2d_db < handle
             edgeHandle.ptr = emdlab_g2d_arc(obj.points(p0Index),obj.points(p1Index),obj.points(p2Index), direction);
             obj.edges(end+1) = edgeHandle;
 
-            % generate edge tag
-            edgeIndex = numel(obj.edges);
-            edgeHandle.tag = ['e', num2str(edgeIndex)];
-            edgeHandle.ptr.tag = edgeHandle.tag;
+            % assign edge id
+            obj.EIDH = obj.EIDH + 1;
+            edgeHandle.id = obj.EIDH;
+            edgeHandle.pid = [p1ID, p2ID];
+            obj.eid2ei(obj.EIDH) = obj.Nedges;
 
-            % add edge to point tags
-            obj.points(p0Index).tags(end+1) = edgeHandle.tag;
-            obj.points(p1Index).tags(end+1) = edgeHandle.tag;
-            obj.points(p2Index).tags(end+1) = edgeHandle.tag;
+            % add edge id to end point ids
+            obj.points(p0Index).uids(end+1) = edgeHandle.id;
+            obj.points(p1Index).ids(end+1) = edgeHandle.id;
+            obj.points(p2Index).ids(end+1) = edgeHandle.id;
 
             if nargout == 1
-                varargout{1} = edgeIndex;
+                varargout{1} = obj.EIDH;
             elseif nargout == 2
-                varargout{1} = edgeIndex;
+                varargout{1} = obj.EIDH;
                 varargout{2} = edgeHandle;
             elseif nargout > 2
                 error('The number of output arguments is too high.');
@@ -626,17 +632,17 @@ classdef emdlab_g2d_db < handle
 
         function varargout = addArcByCoordinates(obj, x1, y1, x2, y2, x3, y3, direction)
 
-            p1Index = obj.addPoint(x1,y1);
-            p2Index = obj.addPoint(x2,y2);
-            p3Index = obj.addPoint(x3,y3);
+            p1ID = obj.addPoint(x1,y1);
+            p2ID = obj.addPoint(x2,y2);
+            p3ID = obj.addPoint(x3,y3);
             if nargin<8, direction = true; end
 
             if nargout == 0
-                obj.addArc(p1Index, p2Index, p3Index, direction);
+                obj.addArc(p1ID, p2ID, p3ID, direction);
             elseif nargout == 1
-                varargout{1} = obj.addArc(p1Index, p2Index, p3Index, direction);
+                varargout{1} = obj.addArc(p1ID, p2ID, p3ID, direction);
             elseif nargout == 2
-                [varargout{1},varargout{2}] = obj.addArc(p1Index, p2Index, p3Index, direction);
+                [varargout{1},varargout{2}] = obj.addArc(p1ID, p2ID, p3ID, direction);
             elseif nargout > 2
                 error('The number of output arguments is too high.');
             end
@@ -646,40 +652,40 @@ classdef emdlab_g2d_db < handle
         function varargout = addArcByCoordinatesCPA(obj, x1, y1, x2, y2, arcAngle)
             % CPA: center -> point -> arc
 
-            p1Index = obj.addPoint(x1,y1);
-            p2Index = obj.addPoint(x2,y2);
+            p1ID = obj.addPoint(x1,y1);
+            p2ID = obj.addPoint(x2,y2);
             [x3,y3] = emdlab_g2d_rotatePointsXY(x2,y2,arcAngle,x1,y1);
-            p3Index = obj.addPoint(x3,y3);
+            p3ID = obj.addPoint(x3,y3);
             direction = arcAngle > 0;
 
             if nargout == 0
-                obj.addArc(p1Index, p2Index, p3Index, direction);
+                obj.addArc(p1ID, p2ID, p3ID, direction);
             elseif nargout == 1
-                varargout{1} = obj.addArc(p1Index, p2Index, p3Index, direction);
+                varargout{1} = obj.addArc(p1ID, p2ID, p3ID, direction);
             elseif nargout == 2
-                [varargout{1},varargout{2}] = obj.addArc(p1Index, p2Index, p3Index, direction);
+                [varargout{1},varargout{2}] = obj.addArc(p1ID, p2ID, p3ID, direction);
             elseif nargout > 2
                 error('The number of output arguments is too high.');
             end
 
         end
 
-        function varargout = addArcByCoordinatesCPA2(obj, x1, y1, xc, yc, arcAngle)
+        function varargout = addArcByCoordinatesCPA2(obj, x0, y0, xm, ym, arcAngle)
             % CPA: center -> point -> arc2 -> arc is in both directions
 
-            p1Index = obj.addPoint(x1,y1);
-            [x2,y2] = emdlab_g2d_rotatePointsXY(xc,yc,-arcAngle/2,x1,y1);
-            p2Index = obj.addPoint(x2,y2);
-            [x3,y3] = emdlab_g2d_rotatePointsXY(xc,yc,arcAngle/2,x1,y1);
-            p3Index = obj.addPoint(x3,y3);
+            p0ID = obj.addPoint(x0,y0);
+            [x1,y1] = emdlab_g2d_rotatePointsXY(xm,ym,-arcAngle/2,x0,y0);
+            p1ID = obj.addPoint(x1,y1);
+            [x2,y2] = emdlab_g2d_rotatePointsXY(xm,ym,arcAngle/2,x0,y0);
+            p2ID = obj.addPoint(x2,y2);
             direction = arcAngle > 0;
 
             if nargout == 0
-                obj.addArc(p1Index, p2Index, p3Index, direction);
+                obj.addArc(p0ID, p1ID, p2ID, direction);
             elseif nargout == 1
-                varargout{1} = obj.addArc(p1Index, p2Index, p3Index, direction);
+                varargout{1} = obj.addArc(p0ID, p1ID, p2ID, direction);
             elseif nargout == 2
-                [varargout{1},varargout{2}] = obj.addArc(p1Index, p2Index, p3Index, direction);
+                [varargout{1},varargout{2}] = obj.addArc(p0ID, p1ID, p2ID, direction);
             elseif nargout > 2
                 error('The number of output arguments is too high.');
             end
@@ -687,14 +693,26 @@ classdef emdlab_g2d_db < handle
         end
 
         % get edge handle
-        function edgeHandle = getEdgeHandleByIndex(obj, eIndex)
+        function edgeIndex = getEdgeIndexByID(obj, edgeID)
 
             % check for existance of already defined edge in data base
-            if eIndex <= numel(obj.edges)
-                edgeHandle = obj.edges(eIndex).ptr;
+            if obj.eid2ei(edgeID) == 0
+                error('Edge with specified ID was not found.');
             else
-                error('Edge was not found.');
+                edgeIndex = obj.eid2ei(edgeID);
             end
+
+        end
+
+        function edgeHandle = getEdgeHandleByID(obj, edgeID)
+
+            % check for existance of already defined edge in data base
+            if obj.eid2ei(edgeID) == 0
+                error('Edge with specified ID was not found.');
+            else
+                edgeHandle = obj.edges(obj.eid2ei(edgeID));
+            end
+
 
         end
 
@@ -703,27 +721,9 @@ classdef emdlab_g2d_db < handle
             % check for existance of already defined edge in data base
             for i = 1:numel(obj.edges)
 
-                if strcmp(obj.edges(i).tag,eTag)
+                if strcmp(obj.edges(i).id,eTag)
 
                     edgeHandle = obj.edges(i).ptr;
-                    return;
-
-                end
-
-            end
-
-            error('Edge was not found.');
-
-        end
-
-        function edgeIndex = getEdgeIndexByTag(obj, eTag)
-
-            % check for existance of already defined edge in data base
-            for i = 1:numel(obj.edges)
-
-                if strcmp(obj.edges(i).tag,eTag)
-
-                    edgeIndex = i;
                     return;
 
                 end
@@ -740,11 +740,11 @@ classdef emdlab_g2d_db < handle
             eptr = obj.edges(eIndex).ptr;
             switch class(eptr)
                 case 'emdlab_g2d_segment'
-                    pIndex = obj.getPointIndexByTag(eptr.p0.tag);
+                    pIndex = obj.getPointIndexByID(eptr.p0.id);
                 case 'emdlab_g2d_arc'
-                    pIndex = obj.getPointIndexByTag(eptr.p1.tag);
+                    pIndex = obj.getPointIndexByID(eptr.p1.id);
                 case 'emdlab_g2d_spline'
-                    pIndex = obj.getPointIndexByTag(eptr.pts(1).tag);
+                    pIndex = obj.getPointIndexByID(eptr.pts(1).id);
             end
 
         end
@@ -755,11 +755,11 @@ classdef emdlab_g2d_db < handle
             eptr = obj.edges(eIndex).ptr;
             switch class(eptr)
                 case 'emdlab_g2d_segment'
-                    pIndex = obj.getPointIndexByTag(eptr.p1.tag);
+                    pIndex = obj.getPointIndexByID(eptr.p1.id);
                 case 'emdlab_g2d_arc'
-                    pIndex = obj.getPointIndexByTag(eptr.p2.tag);
+                    pIndex = obj.getPointIndexByID(eptr.p2.id);
                 case 'emdlab_g2d_spline'
-                    pIndex = obj.getPointIndexByTag(eptr.pts(end).tag);
+                    pIndex = obj.getPointIndexByID(eptr.pts(end).id);
             end
 
         end
@@ -1063,18 +1063,35 @@ classdef emdlab_g2d_db < handle
 
         function varargout = addRectangle(obj, x0, y0, w, h)
 
-            p1Index = obj.addPoint(x0,y0);
-            p2Index = obj.addPoint(x0+w,y0);
-            p3Index = obj.addPoint(x0+w,y0+h);
-            p4Index = obj.addPoint(x0,y0+h);
+            p1ID = obj.addPoint(x0,y0);
+            p2ID = obj.addPoint(x0+w,y0);
+            p3ID = obj.addPoint(x0+w,y0+h);
+            p4ID = obj.addPoint(x0,y0+h);
 
-            e1Index = obj.addSegment(p1Index, p2Index);
-            e2Index = obj.addSegment(p2Index, p3Index);
-            e3Index = obj.addSegment(p3Index, p4Index);
-            e4Index = obj.addSegment(p4Index, p1Index);
+            e1ID = obj.addSegment(p1ID, p2ID);
+            e2ID = obj.addSegment(p2ID, p3ID);
+            e3ID = obj.addSegment(p3ID, p4ID);
+            e4ID = obj.addSegment(p4ID, p1ID);
 
             if nargout == 1
-                varargout{1} = [e1Index, e2Index, e3Index, e4Index];
+                varargout{1} = [e1ID, e2ID, e3ID, e4ID];
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
+        function varargout = addCircle(obj, x0, y0, r)
+
+            p1Index = obj.addPoint(x0,y0);
+            p2Index = obj.addPoint(x0+r,y0);
+            p3Index = obj.addPoint(x0-r,y0);
+
+            e1Index = obj.addArc(p1Index, p2Index, p3Index, 1);
+            e2Index = obj.addArc(p1Index, p3Index, p2Index, 1);
+
+            if nargout == 1
+                varargout{1} = [e1Index, e2Index];
             elseif nargout > 1
                 error('The number of output arguments is too high.');
             end
@@ -1101,8 +1118,36 @@ classdef emdlab_g2d_db < handle
 
         end
 
+        function varargout = addClosedPolyline(obj, x, y)
+
+            Nx = length(x);
+            Ny = length(y);
+
+            if Nx~=Ny
+                error('Number of x and y coordinates must be the same.');
+            end
+
+            p_indices = zeros(1,Nx);
+            for i = 1:length(x)
+                p_indices(i) = obj.addPoint(x(i),y(i));
+            end
+
+            p_indices(end+1) = p_indices(1);
+            e_indices = zeros(1,Nx);
+            for i = 1:Nx
+                e_indices(i) = obj.addSegment(p_indices(i),p_indices(i+1));
+            end
+
+            if nargout == 1
+                varargout{1} = e_indices;
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
         %% edge edits
-        function indicesOfNewEdges = splitEdge(obj, edgeIndex, splitRatio)
+        function indicesOfNewEdges = splitEdgeByRatios(obj, edgeIndex, splitRatio)
 
             % splitRatio is a vector of ratios
             if any(splitRatio >= 1) || any(splitRatio <= 0)
@@ -1127,7 +1172,7 @@ classdef emdlab_g2d_db < handle
                 case 'emdlab_g2d_segment'
 
                     % get index of edge end point
-                    p1Index = obj.getPointIndexByTag(eptr.p1.tag);
+                    p1Index = obj.getPointIndexByID(eptr.p1.id);
 
                     % calculate new points to split the edge
                     newp = eptr.p0.getVector;
@@ -1152,33 +1197,75 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function [newEdgeIndex, newPointIndex] = splitSegment(obj, eIndex, pIndex)
+        function varargout = splitEdge(obj, edgeID, varargin)
+
+            eptr = obj.edges(obj.eid2ei(edgeID));
+
+            if eptr.isSegment
+
+                switch nargout
+                    case 0
+                       obj.splitSegment(edgeID, varargin{:});
+                    case 1
+                        varargout{1} = obj.splitSegment(edgeID, varargin{:});
+                    case 2
+                        [varargout{1}, varargout{2}] = obj.splitSegment(edgeID, varargin{:});
+                    otherwise
+                        error('Wrong number of output arguments.');
+                end
+                
+            elseif eptr.isArc
+
+                switch nargout
+                    case 0
+                        obj.splitArc(edgeID, varargin{:});
+                    case 1
+                        varargout{1} = obj.splitArc(edgeID, varargin{:});
+                    case 2
+                        [varargout{1}, varargout{2}] = obj.splitArc(edgeID, varargin{:});
+                    otherwise
+                        error('Wrong number of output arguments.');
+                end
+
+            else 
+                error('Unsupported edge type.');
+            end
+
+        end
+
+        function [newEdgeID, newPointID] = splitSegment(obj, edgeID, pointID)
+
+            % edge & segment pointers
+            eptr = obj.edges(obj.eid2ei(edgeID));
+            sptr = eptr.ptr;
 
             if nargin == 2
 
-                edgeHandle = obj.edges(eIndex).ptr;
-                tmp = edgeHandle.getCenter;
-                newPointIndex = obj.addPoint(tmp(1),tmp(2));
-                p2 = edgeHandle.p1;
-                edgeHandle.p1 = obj.points(newPointIndex);
-                newEdgeIndex = obj.addSegment(newPointIndex,obj.addPoint(p2));
-                obj.points(newPointIndex).tags(end+1) = edgeHandle.tag;
-                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+                tmp = sptr.getCenter;
+                newPointID = obj.addPoint(tmp(1),tmp(2));
+                p2 = sptr.p1;
+                sptr.p1 = obj.points(obj.pid2pi(newPointID));
+                newEdgeID = obj.addSegment(newPointID, p2.id);
+                obj.points(obj.pid2pi(newPointID)).ids(end+1) = eptr.id;
+                p2.ids = setdiff(p2.ids, eptr.id);
+                eptr.pid(2) = newPointID;
 
             elseif nargin == 3
 
+                % point pointer
+                pptr = obj.points(obj.pid2pi(pointID));
 
-                edgeHandle = obj.edges(eIndex).ptr;
-                if edgeHandle.isTag1(obj.points(pIndex)), return; end
-                if edgeHandle.isTag2(obj.points(pIndex)), return; end
+                if eptr.pid(1) == pptr.id, return; end
+                if eptr.pid(2) == pptr.id, return; end
 
-                p2 = edgeHandle.p1;
-                edgeHandle.p1 = obj.points(pIndex);
-                newEdgeIndex = obj.addSegment(pIndex,obj.addPoint(p2));
-                obj.points(pIndex).tags(end+1) = edgeHandle.tag;
-                obj.points(pIndex).tags(end+1) = obj.edges(newEdgeIndex).tag;
-                obj.points(pIndex).tags = unique(obj.points(pIndex).tags);
-                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+                p2 = sptr.p1;
+                sptr.p1 = pptr;
+                newEdgeID = obj.addSegment(pointID, p2.id);
+                pptr.ids(end+1) = eptr.id;
+                pptr.ids(end+1) = obj.edges(newEdgeID).id;
+                pptr.ids = unique(pptr.ids);
+                p2.ids = setdiff(p2.ids, eptr.id);
+                eptr.pid(2) = pptr.id;
 
             else
                 error('Wrong number of input arguments.');
@@ -1186,32 +1273,40 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function [newEdgeIndex, newPointIndex] = splitArc(obj, eIndex, pIndex)
+        function [newEdgeID, newPointID] = splitArc(obj, edgeID, pointID)
+
+            % edge & arc pointers
+            eptr = obj.edges(obj.eid2ei(edgeID));
+            aptr = eptr.ptr;
 
             if nargin == 2
-                edgeHandle = obj.edges(eIndex).ptr;
-                tmp = edgeHandle.p0.getVector;
-                tmp = emdlab_g2d_rotatePoints(edgeHandle.p1.getVector,edgeHandle.getSignedAngle/2, tmp(1),tmp(2));
-                newPointIndex = obj.addPoint(tmp(1),tmp(2));
-                p2 = edgeHandle.p2;
-                edgeHandle.p2 = obj.points(newPointIndex);
-                newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),newPointIndex,obj.addPoint(p2),edgeHandle.direction);
-                obj.points(newPointIndex).tags(end+1) = edgeHandle.tag;
-                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+                
+                tmp = aptr.p0.getVector;
+                tmp = emdlab_g2d_rotatePoints(aptr.p1.getVector, aptr.getSignedAngle/2, tmp(1),tmp(2));
+                newPointID = obj.addPoint(tmp(1),tmp(2));
+                p2 = aptr.p2;
+                aptr.p2 = obj.points(newPointID);
+                newEdgeID = obj.addArc(aptr.p0.id, newPointID, p2.id, aptr.direction);
+                obj.points(obj.pid2pi(newPointID)).ids(end+1) = eptr.id;
+                p2.ids = setdiff(p2.ids, eptr.id);
+                eptr.pid(2) = newPointID;
 
             elseif nargin == 3
 
-                edgeHandle = obj.edges(eIndex).ptr;
-                if edgeHandle.isTag1(obj.points(pIndex)), return; end
-                if edgeHandle.isTag2(obj.points(pIndex)), return; end
+                % point pointer
+                pptr = obj.points(obj.pid2pi(pointID));
 
-                p2 = edgeHandle.p2;
-                edgeHandle.p2 = obj.points(pIndex);
-                newEdgeIndex = obj.addArc(obj.addPoint(edgeHandle.p0.getVector),pIndex,obj.addPoint(p2),edgeHandle.direction);
-                obj.points(pIndex).tags(end+1) = edgeHandle.tag;
-                obj.points(pIndex).tags(end+1) = obj.edges(newEdgeIndex).tag;
-                obj.points(pIndex).tags = unique(obj.points(pIndex).tags);
-                p2.tags = setdiff(p2.tags, edgeHandle.tag);
+                if eptr.pid(1) == pptr.id, return; end
+                if eptr.pid(2) == pptr.id, return; end
+
+                p2 = aptr.p2;
+                aptr.p2 = pptr;
+                newEdgeID = obj.addArc(aptr.p0.id, pptr.id, p2.id, aptr.direction);
+                pptr.ids(end+1) = eptr.id;
+                pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
+                pptr.ids = unique(pptr.ids);
+                p2.ids = setdiff(p2.ids, eptr.id);
+                eptr.pid(2) = pptr.id;
 
             else
                 error('Wrong number of input arguments.');
@@ -1251,65 +1346,76 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function removeEdge(obj, eIndex)
+        function removeEdges(obj, varargin)
 
-            % first remove all connected loops
-            for lTag = obj.edges(eIndex).tags
+            %             % first remove all connected loops
+            %             for lTag = obj.edges(eIndex).ids
+            %
+            %             end
+
+            % id and number of edges that will be removed
+            eIDs = cell2mat(varargin);
+            Ne = length(eIDs);
+
+            eIndices = zeros(1,Ne);
+            pIndices = zeros(2,Ne);
+
+            for i = 1:Ne    
+
+                eIndices(i) = obj.eid2ei(eIDs(i));
+                p1 = obj.edges(eIndices(i)).ptr.getPtr1;
+                p2 = obj.edges(eIndices(i)).ptr.getPtr2;
+                p1.ids = setdiff(p1.ids, eIDs(i));
+                p2.ids = setdiff(p2.ids, eIDs(i));
+                
+                if isempty(p1.ids) && isempty(p1.uids)
+                    pIndices(1,i) = obj.pid2pi(p1.id);
+                end
+                if isempty(p2.ids) && isempty(p2.uids)
+                    pIndices(2,i) = obj.pid2pi(p2.id);
+                end
 
             end
+
+            obj.edges(eIndices) = [];
+            pIndices = unique(pIndices(:));
+            if pIndices(1) == 0, pIndices(1) = []; end
+            obj.points(pIndices) = [];
+            obj.updateIDMappers;
 
         end
 
-        function iFlag = intersectEdges(obj, eIndex1, eIndex2)
+        function removeExcessEdges(obj)
+
+            eIDs = zeros(1,obj.Nedges);
+            for i = 1:obj.Nedges
+                if isempty(obj.edges(i).ids)
+                    eIDs(i) = obj.edges(i).id;
+                end
+            end
+            eIDs(eIDs == 0) = [];
+            obj.removeEdges(eIDs);
+
+        end
+
+        function iFlag = intersectEdges(obj, edgeID1, edgeID2)
 
             iFlag = false;
-            if obj.edges(eIndex1).isSegment && obj.edges(eIndex2).isSegment
+            [xi,yi] = obj.getIntersection(edgeID1, edgeID2);
 
-                e1ptr = obj.edges(eIndex1).ptr;
-                e2ptr = obj.edges(eIndex2).ptr;
-                [xi,yi] = obj.getIntersectionSegmentSegment(e1ptr.p0.x, e1ptr.p0.y, e1ptr.p1.x, e1ptr.p1.y, ...
-                    e2ptr.p0.x, e2ptr.p0.y, e2ptr.p1.x, e2ptr.p1.y, true);
+            if ~isempty(xi)
+                ne = obj.Nedges;
+                for i = 1:length(xi)
 
-            elseif obj.edges(eIndex1).isArc && obj.edges(eIndex2).isSegment
+                    pointID = obj.addPoint(xi(i),yi(i));
+                    obj.splitEdge(edgeID1, pointID);
+                    obj.splitEdge(edgeID2, pointID);
 
-                e1ptr = obj.edges(eIndex1).ptr;
-                e2ptr = obj.edges(eIndex2).ptr;
-                tmp = e1ptr.getTheta1Theta2;
-                [xi,yi] = obj.getIntersectionSegmentArc(e2ptr.p0.x, e2ptr.p0.y, e2ptr.p1.x, e2ptr.p1.y, ...
-                    e1ptr.p0.x, e1ptr.p0.y, e1ptr.getRadius, tmp(1), tmp(2), true);
-
-            elseif obj.edges(eIndex1).isSegment && obj.edges(eIndex2).isArc
-
-                e1ptr = obj.edges(eIndex1).ptr;
-                e2ptr = obj.edges(eIndex2).ptr;
-                tmp = e2ptr.getTheta1Theta2;
-                [xi,yi] = obj.getIntersectionSegmentArc(e1ptr.p0.x, e1ptr.p0.y, e1ptr.p1.x, e1ptr.p1.y, ...
-                    e2ptr.p0.x, e2ptr.p0.y, e2ptr.getRadius, tmp(1), tmp(2), true);
-
-            elseif obj.edges(eIndex1).isArc && obj.edges(eIndex2).isArc
-
-                e1ptr = obj.edges(eIndex1).ptr;
-                e2ptr = obj.edges(eIndex2).ptr;
-                tmp1 = e1ptr.getTheta1Theta2;
-                tmp2 = e1ptr.getTheta1Theta2;
-                [xi,yi] = obj.getIntersectionArcArc(e1ptr.p0.x, e1ptr.p0.y, e1ptr.getRadius, tmp1(1), ...
-                    tmp1(2), e2ptr.p0.x, e2ptr.p0.y, e2ptr.getRadius, tmp2(1), tmp2(2), true);
-
-            end
-
-            if length(xi) == 1
-                pIndex = obj.addPoint(xi,yi);
-                if obj.edges(eIndex1).isSegment
-                    obj.splitSegment(eIndex1, pIndex);
-                else
-                    obj.splitArc(eIndex1, pIndex);
+                    if ne ~= obj.Nedges
+                        iFlag = true;
+                        break;
+                    end
                 end
-                if obj.edges(eIndex2).isSegment
-                    obj.splitSegment(eIndex2, pIndex);
-                else
-                    obj.splitArc(eIndex2, pIndex);
-                end
-                iFlag = true;
             end
 
         end
@@ -1317,11 +1423,12 @@ classdef emdlab_g2d_db < handle
         function intersectAllEdges(obj)
 
             while true
+
                 existFlag = true;
 
                 for i = 1:obj.Nedges
                     for j = i+1:obj.Nedges
-                        if obj.intersectEdges(i,j)
+                        if obj.intersectEdges(obj.edges(i).id,obj.edges(j).id)
                             existFlag = false;
                         end
                     end
@@ -1335,9 +1442,32 @@ classdef emdlab_g2d_db < handle
 
         end
 
+        function buildSketch(obj)
+
+            obj.intersectAllEdges;
+            while true
+
+                elist = [];
+
+                for i = 1:obj.Npoints
+                    if length(obj.points(i).ids) == 1
+                        elist(end+1) = obj.points(i).ids;
+                    end
+                end
+                
+                if isempty(elist)
+                    break;
+                end
+
+                obj.removeEdges(elist);
+
+            end
+
+        end
+
         %% loop methods
         % adding a new loop to data base
-        % this function returns loop index and loop handle
+        % this function returns loop id and loop handle
         function varargout = addLoop(obj, varargin)
 
             % get a loop class instance
@@ -1349,43 +1479,27 @@ classdef emdlab_g2d_db < handle
 
                 for j = 1:numel(varargin{i})
 
-                    if ischar(varargin{i}(j))
-
-                        % get edge tag and remove spaces
-                        edgeTag = strrep(varargin{i}(j), ' ', '');
-
-                        if strcmpi(edgeTag(1), '-')
-                            edgeIndex = obj.getEdgeIndexByTag(edgeTag(2:end));
-                            loopHandle.addEdge(obj.edges(edgeIndex).ptr, false, -edgeIndex);
-                        else
-                            edgeIndex = obj.getEdgeIndexByTag(edgeTag);
-                            loopHandle.addEdge(obj.edges(edgeIndex).ptr, true, edgeIndex);
-                        end
-
-                    else
-
-                        edgeIndex = abs(varargin{i}(j));
-                        loopHandle.addEdge(obj.edges(edgeIndex).ptr, varargin{i}(j)>0, varargin{i}(j));
-
-                    end
+                    edgeID = abs(varargin{i}(j));
+                    loopHandle.addEdge(obj.edges(obj.eid2ei(edgeID)).ptr, varargin{i}(j)>0, obj.eid2ei(edgeID));
 
                 end
 
             end
 
-            % generate loop tag
-            loopIndex = numel(obj.loops);
-            loopHandle.tag = ['l', num2str(loopIndex)];
+            % assign loop id
+            obj.LIDH = obj.LIDH + 1;
+            loopHandle.id = obj.LIDH;
+            obj.lid2li(obj.LIDH) = obj.Nloops;
 
-            % add loop tag to connected edges
-            for edgeIndex = abs(loopHandle.edgesIndexList)
-                obj.edges(edgeIndex).tags(end+1) = loopHandle.tag;
+            % add loop id to connected edges
+            for edgeIndex = loopHandle.edgesIndexList
+                obj.edges(edgeIndex).ids(end+1) = obj.LIDH;
             end
 
             if nargout == 1
-                varargout{1} = loopIndex;
+                varargout{1} = obj.LIDH;
             elseif nargout == 2
-                varargout{1} = loopIndex;
+                varargout{1} = obj.LIDH;
                 varargout{2} = loopHandle;
             elseif nargout > 2
                 error('The number of output arguments is too high.');
@@ -1393,17 +1507,22 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function removeLoop(obj, loopIndex)
+        function removeLoop(obj, loopID)
 
-            if ischar(loopIndex)
-                loopIndex = obj.getLoopIndexByTag(loopIndex);
-            end
+            % get loop index
+            loopIndex = obj.lid2li(loopID);
 
             % first remove all connected faces to this loop
-            for faceTag = obj.loops(loopIndex).tags
-                obj.removeFace(faceTag);
+            for faceID = obj.loops(loopIndex).ids
+                obj.removeFace(faceID);
             end
 
+            % remove id of this edge from its edges
+            for e = obj.loops(loopIndex).edges
+                e.ids = setdiff(e.ids, obj.loops(loopIndex).id);
+            end
+
+            % remove loop
             obj.loops(loopIndex) = [];
 
         end
@@ -1415,7 +1534,7 @@ classdef emdlab_g2d_db < handle
             end
 
             % first remove all connected faces to this loop
-            for faceTag = obj.loops(loopIndex).tags
+            for faceTag = obj.loops(loopIndex).ids
                 obj.removeFace(faceTag);
             end
 
@@ -1428,7 +1547,7 @@ classdef emdlab_g2d_db < handle
             % check for existance of already defined loop in data base
             for i = 1:numel(obj.loops)
 
-                if strcmp(obj.loops(i).tag,lTag)
+                if strcmp(obj.loops(i).id,lTag)
 
                     loopIndex = i;
                     return;
@@ -1441,47 +1560,81 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function y = getEdgeLeftLoop(obj, eIndex)
-            y = obj.getEdgeLoop(eIndex, true);
+        function y = getEdgeLeftLoop(obj, edgeID)
+            y = obj.getEdgeLoop(edgeID, true);
         end
 
-        function y = getEdgeRightLoop(obj, eIndex)
-            y = obj.getEdgeLoop(eIndex, false);
+        function y = getEdgeRightLoop(obj, edgeID)
+            y = obj.getEdgeLoop(edgeID, false);
         end
 
-        function y = getEdgeLoop(obj, eIndex, leftFlag)
+        function [loopIndex, loopPointer] = getEdgeLoop(obj, edgeID, leftFlag, loopDefineFlag)
 
-            p = obj.edges(eIndex).ptr.getPtr2;
+            % do you need defining a loop by running this function or not?
+            if nargin<4, loopDefineFlag = true; end
+
+            % edge index to start walking
+            eIndex = obj.eid2ei(edgeID);
+
+            % get end point of the target edge
+            p = obj.points(obj.pid2pi(obj.edges(eIndex).pid(2)));
             elist = eIndex;
             edir = 1;
 
+            % loop for walking
             while true
 
-                n = numel(p.tags);
-                eidx = zeros(1,n);
-
-                for i = 1:n
-                    eidx(i) = obj.getEdgeIndexByTag(p.tags(i));
+                % number of edges connected to the point
+                n = length(p.ids);
+                if n == 1
+                    loopIndex = [];
+                    loopPointer = [];
+                    return;
                 end
 
-                eidx = setdiff(eidx, elist(end));
+                % find index of edges connected to the point by ids
+                eidx = zeros(1,n);
+                for i = 1:n
+                    eidx(i) = obj.eid2ei(p.ids(i));
+                end
 
-                angles = zeros(1,n-1);
-                flags = zeros(1,n-1);
+                % remove current edge from edge index list
+                eidx = setdiff(eidx, elist(end));
+                hflags = false(1,n-1);
+                for i = 1:n-1
+                    hflags(i) = obj.edges(eidx(i)).isHanging;
+                end
+                eidx = eidx(~hflags);
+
+                n = length(eidx);
+                angles = zeros(1,n);
+                flags = zeros(1,n);
+                %                 curveture = zeros(1,n);
 
                 eptr = obj.edges(elist(end)).ptr;
                 tmp = eptr.getAngles;
-                if eptr.isTag1(p.tag)
+                if eptr.isID1(p.id)
                     alpha = tmp(1);
                 else
                     alpha = tmp(2);
                 end
 
-                for i = 1:n-1
+                %                 if obj.edges(elist(end)).isArc
+                %                     crv = 1/eptr.getRadius;
+                %                 else
+                %                     crv = 0;
+                %                 end
+
+                for i = 1:n
                     eptr = obj.edges(eidx(i)).ptr;
                     tmp = eptr.getAngles;
+                    %                     if obj.edges(eidx(i)).isArc
+                    %                         curveture(i) = 1/eptr.getRadius;
+                    %                     else
+                    %                         curveture(i) = 0;
+                    %                     end
 
-                    if eptr.isTag1(p.tag)
+                    if eptr.isID1(p.id)
                         if tmp(1) <= alpha
                             angles(i) = alpha - tmp(1);
                         else
@@ -1500,8 +1653,28 @@ classdef emdlab_g2d_db < handle
                 end
 
                 if leftFlag == 1
+                    %                     for i = 1:n
+                    %                         if abs(angles(i))<1e-5
+                    %                             if curveture(i) < crv
+                    %                                 angles(i) = 2*pi;
+                    %                             end
+                    %                         end
+                    %                     end
+                    %                     tmp = [1:n;angles;-curveture]';
+                    %                     tmp = sortrows(tmp, [2,3]);
+                    %                     idx = tmp(1,1);
                     [~,idx] = min(angles);
                 else
+                    %                     for i = 1:n
+                    %                         if abs(angles(i))<1e-5
+                    %                             if curveture(i) < crv
+                    %                                 angles(i) = 2*pi;
+                    %                             end
+                    %                         end
+                    %                     end
+                    %                     tmp = [1:n;-angles;curveture]';
+                    %                     tmp = sortrows(tmp, [2,3]);
+                    %                     idx = tmp(1,1);
                     [~,idx] = max(angles);
                 end
 
@@ -1520,43 +1693,166 @@ classdef emdlab_g2d_db < handle
 
             end
 
-            y = elist.*edir;
+            if obj.edges(eIndex).ptr.isID2(p.id)
+                loopIndex = [];
+                loopPointer = [];
+                return;
+            end
+
+            loopIndex = zeros(1,length(elist));
+            for i = 1:length(elist)
+                loopIndex(i) = obj.edges(elist(i)).id;
+            end
+
+            if ~loopDefineFlag
+                loopPointer = [];
+                return;
+            else
+                loopIndex = loopIndex.*edir;
+            end
+
+            [loopIndex, loopPointer] = obj.addLoop(loopIndex);
+
+            p = loopPointer.getMeshNodesMinimal;
+
+            pNext = circshift(p, -1, 1);
+            signedArea = 0.5 * sum(p(:,1) .* pNext(:,2) - pNext(:,1) .* p(:,2));
+
+            % make it counterclockwise
+            if signedArea < 0
+                loopPointer.edges = fliplr(loopPointer.edges);
+                loopPointer.directions = fliplr(~loopPointer.directions);
+                loopPointer.edgesIndexList = fliplr(loopPointer.edgesIndexList);
+            end
+
+            % make it canonical
+            [~,idx] = min(abs(loopPointer.edgesIndexList));
+
+            loopPointer.edgesIndexList = circshift(loopPointer.edgesIndexList,-idx+1);
+            loopPointer.edges = circshift(loopPointer.edges,-idx+1);
+            loopPointer.directions = circshift(loopPointer.directions,-idx+1);
+
+        end
+
+        function varargout = updateAllHangingEdges(obj)
+
+            for i = 1:obj.Nedges
+                obj.edges(i).isHanging = false;
+            end
+
+            hedges = 1:obj.Nedges;
+            idx = 1;
+            while true
+
+                leftLoop = obj.getEdgeLoop(obj.edges(hedges(idx)).id, true, false);
+                rightLoop = obj.getEdgeLoop(obj.edges(hedges(idx)).id, false, false);
+
+                if isempty(leftLoop) && isempty(rightLoop)
+                    idx = idx + 1;
+                else
+                    hedges = setdiff(hedges, [leftLoop, rightLoop]);
+                    idx = 1;
+                end
+
+                if idx > length(hedges)
+                    break;
+                end
+
+            end
+
+            for i = hedges
+                obj.edges(i).isHanging = true;
+            end
+
+            if nargout == 1
+                varargout{1} = hedges;
+            end
+
+        end
+
+        function removeHangingEdges(obj)
+            hedges = obj.updateAllHangingEdges;
+            obj.removeEdges(hedges);
+        end
+
+        function copyRotateEdges(obj, eTagIndex, Ncopy, rotAngle)
+
+            if nargin<4, rotAngle = 2*pi/Ncopy; end
+
+            for i = 1:numel(eTagIndex)
+
+                eptr = obj.edges(obj.getEdgeIndexByID(['e', num2str(eTagIndex(i))]));
+                if eptr.isSegment
+                    for j = 2:Ncopy
+                        [p0x,p0y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p0.x,eptr.ptr.p0.y,(j-1)*rotAngle);
+                        [p1x,p1y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p1.x,eptr.ptr.p1.y,(j-1)*rotAngle);
+                        obj.addSegmentByCoordinates(p0x,p0y,p1x,p1y);
+                    end
+                else
+                    for j = 2:Ncopy
+                        [p0x,p0y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p0.x,eptr.ptr.p0.y,(j-1)*rotAngle);
+                        [p1x,p1y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p1.x,eptr.ptr.p1.y,(j-1)*rotAngle);
+                        [p2x,p2y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p2.x,eptr.ptr.p2.y,(j-1)*rotAngle);
+                        obj.addArcByCoordinates(0,0,p1x,p1y,p2x,p2y,eptr.ptr.direction);
+                    end
+                end
+
+            end
+
+
 
         end
 
         %% face methods
         % adding a new face to data base
-        % this function returns the face handle
+        % this function returns the face id and face handle
         function varargout = addFace(obj, faceName, varargin)
 
             % get face class instance
             faceHandle = emdlab_g2d_face;
-            faceHandle.tag = faceName;
+
+            % assign face id
+            obj.FIDH = obj.FIDH + 1;
+            faceHandle.id = obj.FIDH;
+            faceHandle.name = faceName;
             faceHandle.color = rand(1,3);
             obj.faces(end+1) = faceHandle;
 
             for i = 1:numel(varargin)
 
                 for j = 1:numel(varargin{i})
-                    faceHandle.addLoop(obj.loops(varargin{i}(j)));
-                    obj.loops(varargin{i}(j)).tags(end+1) = faceName;
+                    loopIndex = obj.lid2li(varargin{i}(j));
+                    faceHandle.addLoop(obj.loops(loopIndex));
+                    obj.loops(loopIndex).ids(end+1) = obj.FIDH;
                 end
 
             end
 
             if nargout == 1
-                varargout{1} = faceHandle;
-            elseif nargout > 1
+                varargout{1} = obj.FIDH;
+            elseif nargout == 2
+                varargout{1} = obj.FIDH;
+                varargout{2} = faceHandle;
+            elseif nargout > 2
                 error('The number of output arguments is too hight');
             end
 
         end
 
-        function removeFace(obj, faceIndex)
+        function removeFace(obj, faceID_faceName)
 
-            if ischar(faceIndex)
-                faceIndex = obj.getFaceIndexByTag(faceIndex);
+            if ischar(faceID_faceName) || isstring(faceID_faceName)
+                faceIndex = obj.getFaceIndexByName(char(faceID_faceName));
+            else
+                faceIndex = obj.fid2fi(faceID_faceName);
             end
+
+            % remove id of this face from its loops
+            for l = obj.faces(faceIndex).loops
+                l.ids = setdiff(l.ids, obj.faces(faceIndex).id);
+            end
+
+            % remove face
             obj.faces(faceIndex) = [];
 
         end
@@ -1564,21 +1860,21 @@ classdef emdlab_g2d_db < handle
         function removeFaceRecursive(obj, faceIndex)
 
             if ischar(faceIndex)
-                faceIndex = obj.getFaceIndexByTag(faceIndex);
+                faceIndex = obj.getFaceIndexByName(faceIndex);
             end
             for i = 1:obj.faces(faceIndex).Nloops
-                obj.removeLoop(obj.faces(faceIndex).loops(i).tag);
+                obj.removeLoop(obj.faces(faceIndex).loops(i).id);
             end
             obj.faces(faceIndex) = [];
 
         end
 
-        function faceIndex = getFaceIndexByTag(obj, fTag)
+        function faceIndex = getFaceIndexByName(obj, faceName)
 
             % check for existance of already defined face in data base
             for i = 1:numel(obj.faces)
 
-                if strcmp(obj.faces(i).tag,fTag)
+                if strcmp(obj.faces(i).name, faceName)
 
                     faceIndex = i;
                     return;
@@ -1591,8 +1887,180 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function setFaceColor(obj, faceTag, R, G, B)
-            obj.faces(obj.getFaceIndexByTag(faceTag)).color = [R,G,B]/255;
+        function setFaceColor(obj, faceID_faceName, R, G, B)
+            if ischar(faceID_faceName) || isstring(faceID_faceName)
+                faceIndex = obj.getFaceIndexByName(char(faceID_faceName));
+            else
+                faceIndex = obj.fid2fi(faceID_faceName);
+            end
+            obj.faces(faceIndex).color = [R,G,B]/255;
+        end
+
+        function buildFaces(obj)
+
+            obj.buildSketch;
+            obj.faces(:) = [];
+
+            idx = 1:obj.Nedges;
+            flg = false(1,obj.Nedges);
+            for i = 1:obj.Nedges
+                flg(i) = obj.edges(i).isHanging;
+            end
+            idx = idx(~flg);
+
+            l_tmp = cell(1,2*length(idx));
+            sli = [];
+
+            for i = 1:length(idx)
+                l_tmp{2*i-1} = obj.getEdgeLoop(obj.edges(idx(i)).id, true, false);
+                l_tmp{2*i} = obj.getEdgeLoop(obj.edges(idx(i)).id, false, false);
+                if isequal(l_tmp{2*i-1}, l_tmp{2*i})
+                    sli(end+1) = idx(i);
+                end
+            end
+
+            nmax = 0;
+            for i = 1:numel(l_tmp)
+                nmax = max(nmax, length(l_tmp{i}));
+            end
+
+            %             ecl = zeros(obj.Nedges, 2);
+            %             for i = 1:obj.Nedges
+            %                 ecl(i,:) = [obj.getPointIndexByTag(obj.edges(i).ptr.getPtr1.id),...
+            %                     obj.getPointIndexByTag(obj.edges(i).ptr.getPtr2.id)];
+            %             end
+
+            cl = zeros(numel(l_tmp),nmax);
+
+            for i = 1:numel(l_tmp)
+                cl(i,1:length(l_tmp{i})) = l_tmp{i};
+            end
+
+            emdlab_mex_m3d_makeFacetsCanonical(cl);
+            for i = 1:size(cl,1)
+                idx = find(cl(i,:) == 0, 1) - 1;
+                if cl(i,2) > cl(i,idx)
+                    cl(i,2:idx) = fliplr(cl(i,2:idx));
+                end
+            end
+
+            cl = unique(cl,'rows');
+
+            tmp = unique(cl(:,1));
+
+            l_tmpi = zeros(1,2*length(tmp));
+            l_tmp = cell(1,2*length(tmp));
+
+            for i = 1:length(tmp)
+                l_tmpi(2*i-1) = obj.getEdgeLoop(obj.edges(tmp(i)).id, true);
+                l_tmpi(2*i) = obj.getEdgeLoop(obj.edges(tmp(i)).id, false);
+                l_tmp{2*i-1} = obj.loops(l_tmpi(2*i-1)).edgesIndexList;
+                l_tmp{2*i} = obj.loops(l_tmpi(2*i)).edgesIndexList;
+            end
+
+            % sort loops vs number of their edges
+            tmp = zeros(1,length(l_tmpi));
+            for i = 1:length(l_tmpi)
+                tmp(i) = length(l_tmp{i});
+            end
+            [~,idx] = sort(tmp);
+
+            l_tmpi = l_tmpi(idx);
+            l_tmp = l_tmp(idx);
+
+            % find unique loops
+            tmp = [];
+            for i = 1:length(l_tmpi)
+                for j = i+1:length(l_tmpi)
+                    if isequal(l_tmp{i},l_tmp{j})
+                        tmp(end+1) = i;
+                        break;
+                    end
+                end
+            end
+
+            idx = setdiff(1:length(l_tmpi),tmp);
+            l_tmpi = l_tmpi(idx);
+            l_tmp = l_tmp(idx);
+
+            %             for i = 1:length(idx)
+            %                 for j = i:length(idx)
+            %                 end
+            %             end
+
+            fidx = 0;
+            for i = 1:length(idx)
+                fidx = fidx + 1;
+                obj.addFace(['f', num2str(fidx)], l_tmpi(i));
+            end
+
+            %             properties = cellfun(@(s) s.edges, l_tmp);
+            %
+            % % 2. Find the unique indices
+            % % 'ia' contains the indices of the first occurrences of the unique values
+            % [~, ia, ~] = unique(properties, 'stable');
+            %
+            % % 3. Index back into the original cell array
+            % uniqueCellOfStructs = cellOfStructs(ia);
+
+            %             idx = 0;
+            %             fidx = 0;
+            %             while true
+            %
+            %                 idx = idx + 1;
+            %
+            %                 if idx > size(cl,1)
+            %                     break;
+            %                 end
+            %
+            %                 flg = cl(idx,:) == 0;
+            %                 if all(flg)
+            %                     continue;
+            %                 else
+            %                     eTag = obj.edges(cl(idx,find(flg == false, 1))).id;
+            %                     eTagIndex = str2double(eTag(2:end));
+            %                 end
+            %
+            %                 [li, llptr] = obj.getEdgeLoop(eTagIndex,true);
+            %                 fidx = fidx + 1;
+            %                 obj.addFace(['f', num2str(fidx)], li);
+            %
+            %                 [li, rlptr] = obj.getEdgeLoop(eTagIndex,false);
+            %                 fidx = fidx + 1;
+            %                 obj.addFace(['f', num2str(fidx)], li);
+            %
+            %                 elist = [llptr.edgesIndexList,rlptr.edgesIndexList];
+            %
+            %                 for j = idx+1:size(cl,1)
+            %                     tmp = setdiff(cl(j,:), elist);
+            %                     cl(j,:) = 0;
+            %                     cl(j,1:length(tmp)) = tmp;
+            %                 end
+            %
+            %             end
+
+        end
+
+        function constructFaces(obj)
+
+            obj.intersectAllEdges;
+            obj.updateAllHangingEdges;
+
+            l_tmp = {};
+            for i = 1:obj.Nedges
+                [~,~,l1] = obj.getEdgeLeftLoop(obj.edges(i).id);
+                [~,~,l2] = obj.getEdgeRightLoop(obj.edges(i).id);
+
+                if all(~cellfun(@(x) isequal(x, l1), l_tmp))
+                    l_tmp{end+1} = l1;
+                end
+
+                if all(~cellfun(@(x) isequal(x, l2), l_tmp))
+                    l_tmp{end+1} = l2;
+                end
+
+            end
+
         end
 
         %% mesh generation methods
@@ -1615,8 +2083,8 @@ classdef emdlab_g2d_db < handle
 
             % add mesh zones
             for i = 1:numel(obj.faces)
-                m.addMeshZone(obj.faces(i).tag, obj.faces(i).getMesh(meshGenerator));
-                m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
+                m.addMeshZone(obj.faces(i).name, obj.faces(i).getMesh(meshGenerator));
+                m.mzs.(obj.faces(i).name).color = obj.faces(i).color;
             end
 
         end
@@ -1639,8 +2107,8 @@ classdef emdlab_g2d_db < handle
 
             % add mesh zones
             for i = 1:numel(obj.faces)
-                m.addMeshZone(obj.faces(i).tag, obj.faces(i).getMesh(meshGenerator));
-                m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
+                m.addMeshZone(obj.faces(i).id, obj.faces(i).getMesh(meshGenerator));
+                m.mzs.(obj.faces(i).id).color = obj.faces(i).color;
             end
 
         end
@@ -1726,31 +2194,38 @@ classdef emdlab_g2d_db < handle
 
         %% visualization methos
         % show the geometry sketch
-        function varargout = showSketch(obj, showTags, showWFM)
+        function varargout = showSketch(obj, showTagsFlag, showWFMFlag)
+            % WFM: wireframe mesh
 
             if nargin<2
-                showTags = true;
-                showWFM = false;
+                showTagsFlag = true;
+                showWFMFlag = false;
             elseif nargin<3
-                showWFM = false;
+                showWFMFlag = false;
             end
 
-            f = figure('NumberTitle', 'on', 'WindowState', 'maximized', 'name', 'EMDLAB Geometry Visualization', 'color', [0.9,0.9,0.9]);
+            f = figure('NumberTitle', 'on', 'name', ...
+                'EMDLAB Geometry Visualization', 'color', [0.9,0.9,0.9],'Position',[0,0,1000,600], ...
+                'Visible','off');
+            movegui(f,'center');
+            f.Visible = 'on';
             hold all;
 
             % plot points: Np = the number of points
             Np = numel(obj.points);
             p = zeros(Np,2);
+
             for i = 1:Np
                 p(i,1) = obj.points(i).x;
                 p(i,2) = obj.points(i).y;
             end
+
             if ~isempty(p)
                 pointTags = cell(1,Np);
                 for i = 1:Np
-                    pointTags{i} = obj.points(i).tag;
+                    pointTags{i} = "p" + obj.points(i).id;
                 end
-                if showTags
+                if showTagsFlag
                     text(p(:,1), p(:,2), pointTags, 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', 'BackgroundColor', 'y');
                 end
                 plot(p(:,1), p(:,2), 's', 'LineWidth', 1.5, 'MarkerEdgeColor','k');
@@ -1782,16 +2257,16 @@ classdef emdlab_g2d_db < handle
 
             if ~isempty(v)
                 patch('faces', cl, 'vertices', v, 'edgecolor', 'b', 'linewidth',1.2);
-                if showTags
+                if showTagsFlag
 
                     edgeTags = cell(1,Ne);
                     for i = 1:Ne
-                        edgeTags{i} = obj.edges(i).tag;
+                        edgeTags{i} = "e" + obj.edges(i).id;
                     end
                     text(c(:,1), c(:,2), edgeTags, 'BackgroundColor', 'w', ...
                         'HorizontalAlignment','center','VerticalAlignment','middle');
                 end
-                if showWFM
+                if showWFMFlag
                     plot(v(:,1), v(:,2), 'o', 'color', 'k', 'markersize',5, 'markerfacecolor','k');
                 end
             end
@@ -1904,7 +2379,7 @@ classdef emdlab_g2d_db < handle
                 %% 4️⃣ point tags
                 pointTags = cell(1,Np);
                 for i = 1:Np
-                    pointTags{i} = obj.points(i).tag;
+                    pointTags{i} = obj.points(i).id;
                 end
 
                 text(p(:,1),p(:,2),pointTags,...
@@ -1918,7 +2393,7 @@ classdef emdlab_g2d_db < handle
             %% 5️⃣ edge tags (top layer)
             edgeTags = cell(1,Ne);
             for i = 1:Ne
-                edgeTags{i} = obj.edges(i).tag;
+                edgeTags{i} = obj.edges(i).id;
             end
 
             text(c(:,1),c(:,2),edgeTags,...
@@ -1940,10 +2415,17 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function showFaces(obj)
+        function showFaces(obj, varargin)
 
             m = obj.generateMesh('mm');
-            m.showg;
+            obj.showSketch(0);
+            ax = gca;
+            for i = 1:numel(ax.Children)
+                set(ax.Children(i), 'HitTest','off','PickableParts','none');
+            end
+            m.showg(gca);
+            ax = gca;
+            ax.Children = flipud(ax.Children);
 
         end
         %% adding primitive loops
@@ -2418,19 +2900,19 @@ classdef emdlab_g2d_db < handle
 
                 if isa(obj.edges(i).ptr, 'emdlab_g2d_segment')
 
-                    fprintf(fid, 'Line(%d) = {%d, %d};\n', i, obj.getPointIndexByTag(obj.edges(i).ptr.p0.tag), ...
-                        obj.getPointIndexByTag(obj.edges(i).ptr.p1.tag));
+                    fprintf(fid, 'Line(%d) = {%d, %d};\n', i, obj.getPointIndexByID(obj.edges(i).ptr.p0.id), ...
+                        obj.getPointIndexByID(obj.edges(i).ptr.p1.id));
 
                 elseif isa(obj.edges(i).ptr, 'emdlab_g2d_arc')
 
-                    fprintf(fid, 'Circle(%d) = {%d, %d, %d};\n', i, obj.getPointIndexByTag(obj.edges(i).ptr.p1.tag), ...
-                        obj.getPointIndexByTag(obj.edges(i).ptr.p0.tag), obj.getPointIndexByTag(obj.edges(i).ptr.p2.tag));
+                    fprintf(fid, 'Circle(%d) = {%d, %d, %d};\n', i, obj.getPointIndexByID(obj.edges(i).ptr.p1.id), ...
+                        obj.getPointIndexByID(obj.edges(i).ptr.p0.id), obj.getPointIndexByID(obj.edges(i).ptr.p2.id));
 
                 elseif isa(obj.edges(i).ptr, 'emdlab_g2d_spline')
 
                     pointsList = zeros(1,numel(obj.edges(i).ptr.pts));
                     for j = 1:numel(obj.edges(i).ptr.pts)
-                        pointsList(j) = obj.getPointIndexByTag(obj.edges(i).ptr.pts(j).tag);
+                        pointsList(j) = obj.getPointIndexByID(obj.edges(i).ptr.pts(j).id);
                     end
                     pointsList = join(string(pointsList), ", ");
                     fprintf(fid, 'Spline(%d) = {%s};\n', i, pointsList);
@@ -2442,7 +2924,12 @@ classdef emdlab_g2d_db < handle
             % add loops
             for i = 1:numel(obj.loops)
 
-                fprintf(fid, 'Curve Loop(%d) = {%s};\n',i, join(string(obj.loops(i).edgesIndexList), ', '));
+                edgesIndexList = zeros(1,obj.loops(i).Nedges);
+                for j = 1:obj.loops(i).Nedges
+                    edgesIndexList(j) = obj.getEdgeIndexByID(obj.loops(i).edges{j}.id);
+                end
+
+                fprintf(fid, 'Curve Loop(%d) = {%s};\n', i, join(string(edgesIndexList), ', '));
 
             end
 
@@ -2451,7 +2938,7 @@ classdef emdlab_g2d_db < handle
 
                 tmp_str = strings(1,length(obj.faces(i).loops));
                 for j = 1:length(obj.faces(i).loops)
-                    tmp_str(j) = string(obj.getLoopIndexByTag(obj.faces(i).loops(j).tag));
+                    tmp_str(j) = string(obj.getLoopIndexByTag(obj.faces(i).loops(j).id));
                 end
 
                 fprintf(fid, 'Plane Surface(%d) = {%s};\n', i, strjoin(tmp_str,','));
@@ -2503,8 +2990,8 @@ classdef emdlab_g2d_db < handle
                 index = (p21(:,1).*p31(:,2) - p21(:,2).*p31(:,1)) < 0;
                 cl(index,:) = cl(index,[1,3,2]);
 
-                m.addMeshZone(obj.faces(i).tag, emdlab_m2d_tmz(cl, xpoints));
-                m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
+                m.addMeshZone(obj.faces(i).id, emdlab_m2d_tmz(cl, xpoints));
+                m.mzs.(obj.faces(i).id).color = obj.faces(i).color;
 
             end
 
@@ -2550,8 +3037,8 @@ classdef emdlab_g2d_db < handle
                 index = (p21(:,1).*p31(:,2) - p21(:,2).*p31(:,1)) < 0;
                 cl(index,:) = cl(index,[1,4,3,2]);
 
-                m.addMeshZone(obj.faces(i).tag, emdlab_m2d_qmz(cl, xpoints));
-                m.mzs.(obj.faces(i).tag).color = obj.faces(i).color;
+                m.addMeshZone(obj.faces(i).id, emdlab_m2d_qmz(cl, xpoints));
+                m.mzs.(obj.faces(i).id).color = obj.faces(i).color;
 
             end
 
@@ -2560,7 +3047,7 @@ classdef emdlab_g2d_db < handle
         function extrudeAndSaveStepSTL(obj, faceName, z1, z2)
 
             obj.write_geo_file;
-            index = obj.getFaceIndexByTag(faceName);
+            index = obj.getFaceIndexByName(faceName);
 
             % define a new geo file
             fid = fopen("C:\emdlab-win64\tmp\emdlab_gmsh_geoFile.geo", 'a');
@@ -2622,7 +3109,7 @@ classdef emdlab_g2d_db < handle
                     % addfaces
                     for i = 1:numel(obj.faces)
 
-                        faceName = obj.faces(i).tag;
+                        faceName = obj.faces(i).id;
                         lNames = strings(1,numel(obj.faces(i).loops));
                         lIndex = 0;
 
@@ -2636,23 +3123,23 @@ classdef emdlab_g2d_db < handle
                             for j = 1:numel(l.edges)
 
                                 eptr = l.edges{j};
-                                eNames(j) = lName + eptr.tag;
+                                eNames(j) = lName + eptr.id;
 
                                 if isa(eptr, 'emdlab_g2d_segment')
 
-                                    fprintf(fid2, 'call drawSegment(oEditor, %d, %d, "%s")\n', obj.getPointIndexByTag(eptr.p0.tag), ...
-                                        obj.getPointIndexByTag(eptr.p1.tag), eNames(j));
+                                    fprintf(fid2, 'call drawSegment(oEditor, %d, %d, "%s")\n', obj.getPointIndexByID(eptr.p0.id), ...
+                                        obj.getPointIndexByID(eptr.p1.id), eNames(j));
 
                                 elseif isa(eptr, 'emdlab_g2d_arc')
 
-                                    fprintf(fid2, 'call drawArcCPA(oEditor, %d, %d, %d, "%s")\n', obj.getPointIndexByTag(eptr.p0.tag), ...
-                                        obj.getPointIndexByTag(eptr.p1.tag), obj.getEdgeIndexByTag(eptr.tag), eNames(j));
+                                    fprintf(fid2, 'call drawArcCPA(oEditor, %d, %d, %d, "%s")\n', obj.getPointIndexByID(eptr.p0.id), ...
+                                        obj.getPointIndexByID(eptr.p1.id), obj.getEdgeIndexByID(eptr.id), eNames(j));
 
                                 elseif isa(eptr, 'emdlab_g2d_spline')
 
                                     %                             pointsList = zeros(1,numel(obj.edges(i).ptr.pts));
                                     %                             for j = 1:numel(obj.edges(i).ptr.pts)
-                                    %                                 pointsList(j) = obj.getPointIndexByTag(obj.edges(i).ptr.pts(j).tag);
+                                    %                                 pointsList(j) = obj.getPointIndexByTag(obj.edges(i).ptr.pts(j).id);
                                     %                             end
                                     %                             pointsList = join(string(pointsList), ", ");
                                     %                             fprintf(fid, 'Spline(%d) = {%s};\n', i, pointsList);
@@ -2731,6 +3218,48 @@ classdef emdlab_g2d_db < handle
 
             % run modified script
             system('C:\emdlab-win64\geometry\g2d\emdlab_g2d_maxwellScript.vbs');
+
+        end
+
+        %% get intersection of two edge objects
+        function [xi, yi] = getIntersection(obj, edgeID1, edgeID2)
+
+            eIndex1 = obj.eid2ei(edgeID1);
+            eIndex2 = obj.eid2ei(edgeID2);
+
+            if obj.edges(eIndex1).isSegment && obj.edges(eIndex2).isSegment
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                [xi,yi] = obj.getIntersectionSegmentSegment(e1ptr.p0.x, e1ptr.p0.y, e1ptr.p1.x, e1ptr.p1.y, ...
+                    e2ptr.p0.x, e2ptr.p0.y, e2ptr.p1.x, e2ptr.p1.y);
+
+            elseif obj.edges(eIndex1).isArc && obj.edges(eIndex2).isSegment
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                tmp = e1ptr.getTheta1Theta2;
+                [xi,yi] = obj.getIntersectionSegmentArc(e2ptr.p0.x, e2ptr.p0.y, e2ptr.p1.x, e2ptr.p1.y, ...
+                    e1ptr.p0.x, e1ptr.p0.y, e1ptr.getRadius, tmp(1), tmp(2));
+
+            elseif obj.edges(eIndex1).isSegment && obj.edges(eIndex2).isArc
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                tmp = e2ptr.getTheta1Theta2;
+                [xi,yi] = obj.getIntersectionSegmentArc(e1ptr.p0.x, e1ptr.p0.y, e1ptr.p1.x, e1ptr.p1.y, ...
+                    e2ptr.p0.x, e2ptr.p0.y, e2ptr.getRadius, tmp(1), tmp(2));
+
+            elseif obj.edges(eIndex1).isArc && obj.edges(eIndex2).isArc
+
+                e1ptr = obj.edges(eIndex1).ptr;
+                e2ptr = obj.edges(eIndex2).ptr;
+                tmp1 = e1ptr.getTheta1Theta2;
+                tmp2 = e2ptr.getTheta1Theta2;
+                [xi,yi] = obj.getIntersectionArcArc(e1ptr.p0.x, e1ptr.p0.y, e1ptr.getRadius, tmp1(1), ...
+                    tmp1(2), e2ptr.p0.x, e2ptr.p0.y, e2ptr.getRadius, tmp2(1), tmp2(2));
+
+            end
 
         end
 
@@ -3036,267 +3565,104 @@ classdef emdlab_g2d_db < handle
             yi = y1 + t*uy1;
         end
 
-        % Intersection of two finite line segments
-        function [xi, yi] = getIntersectionSegmentSegment( ...
-                x1, y1, x2, y2, x3, y3, x4, y4, interiorFlag)
-
-            if nargin < 9
-                interiorFlag = false;
-            end
-
-            %--------------------------------------------------------------
-            % Tolerance
-            %--------------------------------------------------------------
-            tol = 1e-6;
+        % intersection of two finite segments
+        function [xi,yi] = getIntersectionSegmentSegment(x1, y1, x2, y2, x3, y3, x4, y4)
+            % Returns the intersection point(s) of two finite segments:
+            % Segment 1: (x1,y1)-(x2,y2)
+            % Segment 2: (x3,y3)-(x4,y4)
 
             % Direction vectors
             ux = x2 - x1;
             uy = y2 - y1;
-
             vx = x4 - x3;
             vy = y4 - y3;
 
-            % Squared lengths
-            L1sq = ux^2 + uy^2;
-            L2sq = vx^2 + vy^2;
+            % Solve:
+            % (x1,y1) + t*(ux,uy) = (x3,y3) + s*(vx,vy)
+            A = [ux, -vx;
+                uy, -vy];
 
-            %--------------------------------------------------------------
-            % Handle zero-length segments
-            %--------------------------------------------------------------
-            if L1sq < tol^2 && L2sq < tol^2
+            b = [x3 - x1;
+                y3 - y1];
 
-                % Both are points
-                if hypot(x1-x3, y1-y3) < tol
+            detA = ux*(-vy) - uy*(-vx);
 
-                    if interiorFlag
-                        xi = [];
-                        yi = [];
-                    else
+            % Parallel or nearly parallel
+            if abs(detA) < 1e-5
+                % Check if collinear by checking distance from point to line
+                if abs((x3 - x1)*uy - (y3 - y1)*ux) > 1e-12
+                    xi = []; yi = [];
+                    return; % parallel but not collinear
+                end
+
+                % Collinear: check 1D overlap on projection
+                % Project onto x or y depending on largest component
+                if abs(ux) >= abs(uy)
+                    % use x projection
+                    seg1 = sort([x1 x2]);
+                    seg2 = sort([x3 x4]);
+
+                    left  = max(seg1(1), seg2(1));
+                    right = min(seg1(2), seg2(2));
+
+                    if left > right
+                        xi = []; yi = [];
+                        return; % no overlap
+                    end
+
+                    % Overlapping interval in x → compute corresponding points
+                    if abs(ux) < 1e-5
+                        % vertical line but collinear case handled above
                         xi = x1;
+                        yi = linspace(min(y1,y2), max(y1,y2), 2).';
+                    else
+                        t_left  = (left  - x1) / ux;
+                        t_right = (right - x1) / ux;
+                        xi = [left; right];
+                        yi = [y1 + t_left*uy; y1 + t_right*uy];
+                    end
+
+                    return;
+
+                else
+                    % use y projection
+                    seg1 = sort([y1 y2]);
+                    seg2 = sort([y3 y4]);
+
+                    low  = max(seg1(1), seg2(1));
+                    high = min(seg1(2), seg2(2));
+
+                    if low > high
+                        xi = []; yi = [];
+                        return; % no overlap
+                    end
+
+                    if abs(uy) < 1e-5
                         yi = y1;
-                    end
-
-                else
-                    xi = [];
-                    yi = [];
-                end
-
-                return;
-            end
-
-            if L1sq < tol^2
-
-                % Segment 1 is a point
-                cross = (x1-x3)*vy - (y1-y3)*vx;
-
-                if abs(cross) > tol
-                    xi = [];
-                    yi = [];
-                    return;
-                end
-
-                % Parameter on segment 2
-                if abs(vx) >= abs(vy)
-                    s = (x1-x3) / vx;
-                else
-                    s = (y1-y3) / vy;
-                end
-
-                if interiorFlag
-                    valid = (s > 0) && (s < 1);
-                else
-                    valid = (s >= 0) && (s <= 1);
-                end
-
-                if valid
-                    xi = x1;
-                    yi = y1;
-                else
-                    xi = [];
-                    yi = [];
-                end
-
-                return;
-            end
-
-            if L2sq < tol^2
-
-                % Segment 2 is a point
-                cross = (x3-x1)*uy - (y3-y1)*ux;
-
-                if abs(cross) > tol
-                    xi = [];
-                    yi = [];
-                    return;
-                end
-
-                % Parameter on segment 1
-                if abs(ux) >= abs(uy)
-                    t = (x3-x1) / ux;
-                else
-                    t = (y3-y1) / uy;
-                end
-
-                if interiorFlag
-                    valid = (t > 0) && (t < 1);
-                else
-                    valid = (t >= 0) && (t <= 1);
-                end
-
-                if valid
-                    xi = x3;
-                    yi = y3;
-                else
-                    xi = [];
-                    yi = [];
-                end
-
-                return;
-            end
-
-            %--------------------------------------------------------------
-            % Cross product
-            %--------------------------------------------------------------
-            crossUV = ux*vy - uy*vx;
-
-            %--------------------------------------------------------------
-            % Parallel / collinear case
-            %--------------------------------------------------------------
-            if abs(crossUV) < tol
-
-                % Check whether the segments are collinear
-                crossP = (x3-x1)*uy - (y3-y1)*ux;
-
-                if abs(crossP) > tol
-                    xi = [];
-                    yi = [];
-                    return;
-                end
-
-                %----------------------------------------------------------
-                % Collinear segments
-                %----------------------------------------------------------
-                if abs(ux) >= abs(uy)
-
-                    % Project onto x
-                    a1 = min(x1,x2);
-                    a2 = max(x1,x2);
-
-                    b1 = min(x3,x4);
-                    b2 = max(x3,x4);
-
-                    left  = max(a1,b1);
-                    right = min(a2,b2);
-
-                    if interiorFlag
-
-                        % Strict overlap
-                        if right - left <= tol
-                            xi = [];
-                            yi = [];
-                            return;
-                        end
-
+                        xi = linspace(min(x1,x2), max(x1,x2), 2).';
                     else
-
-                        % Inclusive overlap
-                        if right < left - tol
-                            xi = [];
-                            yi = [];
-                            return;
-                        end
-
+                        t_low  = (low  - y1) / uy;
+                        t_high = (high - y1) / uy;
+                        yi = [low; high];
+                        xi = [x1 + t_low*ux; x1 + t_high*ux];
                     end
 
-                    % Convert overlap limits back to segment 1
-                    t1 = (left  - x1) / ux;
-                    t2 = (right - x1) / ux;
-
-                    xi = [left; right];
-                    yi = [y1 + t1*uy;
-                        y1 + t2*uy];
-
-                else
-
-                    % Project onto y
-                    a1 = min(y1,y2);
-                    a2 = max(y1,y2);
-
-                    b1 = min(y3,y4);
-                    b2 = max(y3,y4);
-
-                    low  = max(a1,b1);
-                    high = min(a2,b2);
-
-                    if interiorFlag
-
-                        if high - low <= tol
-                            xi = [];
-                            yi = [];
-                            return;
-                        end
-
-                    else
-
-                        if high < low - tol
-                            xi = [];
-                            yi = [];
-                            return;
-                        end
-
-                    end
-
-                    t1 = (low  - y1) / uy;
-                    t2 = (high - y1) / uy;
-
-                    xi = [x1 + t1*ux;
-                        x1 + t2*ux];
-
-                    yi = [low; high];
-
-                end
-
-                return;
-            end
-
-            %--------------------------------------------------------------
-            % Non-parallel case
-            %--------------------------------------------------------------
-            dx = x3 - x1;
-            dy = y3 - y1;
-
-            t = (dx*vy - dy*vx) / crossUV;
-            s = (dx*uy - dy*ux) / crossUV;
-
-            %--------------------------------------------------------------
-            % Check whether intersection is inside segments
-            %--------------------------------------------------------------
-            if interiorFlag
-
-                if t <= tol || t >= 1-tol || ...
-                        s <= tol || s >= 1-tol
-
-                    xi = [];
-                    yi = [];
                     return;
                 end
-
-            else
-
-                if t < -tol || t > 1+tol || ...
-                        s < -tol || s > 1+tol
-
-                    xi = [];
-                    yi = [];
-                    return;
-                end
-
             end
 
-            % Intersection point
+            % Non-parallel case → unique intersection if t and s in [0,1]
+            ts = A \ b;
+            t = ts(1);
+            s = ts(2);
+
+            if t < 0 || t > 1 || s < 0 || s > 1
+                xi = []; yi = [];
+                return; % intersection lies outside segments
+            end
+
             xi = x1 + t*ux;
             yi = y1 + t*uy;
-
         end
 
         % intersection of an infinite line with a finite segment
@@ -3661,643 +4027,151 @@ classdef emdlab_g2d_db < handle
         end
 
         % intersection of a finite segment with a finite arc
-        function [xi, yi] = getIntersectionSegmentArc( ...
-                x1, y1, x2, y2, xc, yc, r, theta1, theta2, interiorFlag)
-
-            % Intersection of a finite segment with a finite circular arc
-            %
-            % Segment:
-            %   (x1,y1) -> (x2,y2)
-            %
-            % Arc:
-            %   center = (xc,yc)
-            %   radius = r
-            %   start/end angles = theta1, theta2 [degrees]
-            %
-            % interiorFlag:
-            %   false -> include segment and arc endpoints
-            %   true  -> exclude segment and arc endpoints
-            %
-            % Returns:
-            %   0 points -> no intersection
-            %   1 point  -> one intersection / tangent
-            %   2 points -> two intersections
+        function [xi, yi] = getIntersectionSegmentArc(x1, y1, x2, y2, xc, yc, r, theta1, theta2)
+            % Intersection of a segment and a circular arc
+            % Segment: (x1,y1) -> (x2,y2)
+            % Arc: center (xc,yc), radius r, start/end angles in degrees
+            % Returns intersection points lying on both the segment and the arc
 
             xi = [];
             yi = [];
 
-            if nargin < 10
-                interiorFlag = false;
-            end
-
-            % -------------------------------------------------------------
-            % Tolerance
-            % -------------------------------------------------------------
-            tol = 1e-12;
-
-            % -------------------------------------------------------------
-            % Check inputs
-            % -------------------------------------------------------------
-            if r <= 0
-                error('Radius must be positive.');
-            end
-
+            % --- Step 0: check angles ---
             if theta1 == theta2
                 error('theta1 and theta2 must not be equal.');
             end
 
-            % -------------------------------------------------------------
-            % Convert angles to radians [0, 2*pi)
-            % -------------------------------------------------------------
+            % Convert degrees to radians
             theta1 = mod(deg2rad(theta1), 2*pi);
             theta2 = mod(deg2rad(theta2), 2*pi);
 
-            % -------------------------------------------------------------
-            % Segment direction
-            % -------------------------------------------------------------
+            % --- Step 1: compute intersection of infinite line with circle ---
             dx = x2 - x1;
             dy = y2 - y1;
 
+            % Quadratic coefficients
+            x1s = x1 - xc;
+            y1s = y1 - yc;
+
             A = dx^2 + dy^2;
-
-            % -------------------------------------------------------------
-            % Degenerate segment
-            % -------------------------------------------------------------
-            if A <= tol^2
-
-                % Segment is just a point.
-                dist = hypot(x1-xc, y1-yc);
-
-                if abs(dist-r) > tol
-                    return;
-                end
-
-                % Angle of point relative to circle center
-                angle = mod(atan2(y1-yc,x1-xc),2*pi);
-
-                % Check whether point lies on arc
-                if theta1 < theta2
-
-                    if interiorFlag
-                        on_arc = ...
-                            (angle > theta1+tol) && ...
-                            (angle < theta2-tol);
-                    else
-                        on_arc = ...
-                            (angle >= theta1-tol) && ...
-                            (angle <= theta2+tol);
-                    end
-
-                else
-
-                    % Arc crosses 0/360 degrees
-                    if interiorFlag
-                        on_arc = ...
-                            (angle > theta1+tol) || ...
-                            (angle < theta2-tol);
-                    else
-                        on_arc = ...
-                            (angle >= theta1-tol) || ...
-                            (angle <= theta2+tol);
-                    end
-
-                end
-
-                % A point has no interior
-                if interiorFlag
-                    return;
-                end
-
-                if on_arc
-                    xi = x1;
-                    yi = y1;
-                end
-
-                return;
-            end
-
-            % -------------------------------------------------------------
-            % Intersection of infinite line with circle
-            % -------------------------------------------------------------
-            xs = x1 - xc;
-            ys = y1 - yc;
-
-            B = 2*(xs*dx + ys*dy);
-            C = xs^2 + ys^2 - r^2;
+            B = 2*(x1s*dx + y1s*dy);
+            C = x1s^2 + y1s^2 - r^2;
 
             D = B^2 - 4*A*C;
-
-            % -------------------------------------------------------------
-            % No intersection
-            % -------------------------------------------------------------
-            if D < -tol
-                return;
-            end
-
-            % Numerical protection for tangent
             if D < 0
-                D = 0;
+                return; % no intersection
             end
 
             sqrtD = sqrt(D);
+            t_vals = [(-B + sqrtD)/(2*A), (-B - sqrtD)/(2*A)];
 
-            % -------------------------------------------------------------
-            % Calculate candidate parameters
-            % -------------------------------------------------------------
-            if sqrtD <= tol
-
-                % Tangent -> one point
-                t_vals = -B/(2*A);
-
-            else
-
-                % Two intersection points
-                t_vals = [ ...
-                    (-B-sqrtD)/(2*A), ...
-                    (-B+sqrtD)/(2*A)];
-
-            end
-
-            % -------------------------------------------------------------
-            % Check candidate points
-            % -------------------------------------------------------------
-            for k = 1:length(t_vals)
-
-                t = t_vals(k);
-
-                % ---------------------------------------------------------
-                % Check whether point is inside finite segment
-                % ---------------------------------------------------------
-                if interiorFlag
-
-                    % Strictly inside segment
-                    if t <= tol || t >= 1-tol
-                        continue;
-                    end
-
-                else
-
-                    % Include segment endpoints
-                    if t < -tol || t > 1+tol
-                        continue;
-                    end
-
+            % --- Step 2: filter points that lie on segment and on arc ---
+            for t = t_vals
+                if t < 0 || t > 1
+                    continue; % outside segment
                 end
 
-                % Correct small numerical errors
-                t = max(0,min(1,t));
-
-                % ---------------------------------------------------------
-                % Intersection point
-                % ---------------------------------------------------------
                 px = x1 + t*dx;
                 py = y1 + t*dy;
 
-                % ---------------------------------------------------------
-                % Calculate angular position on circle
-                % ---------------------------------------------------------
-                angle = mod(atan2(py-yc,px-xc),2*pi);
+                % Compute angle from arc center to point
+                angle = atan2(py - yc, px - xc);
+                angle = mod(angle, 2*pi);
 
-                % ---------------------------------------------------------
-                % Check whether point lies on finite arc
-                % ---------------------------------------------------------
+                % Check if point is on arc
                 if theta1 < theta2
-
-                    if interiorFlag
-
-                        % Strictly inside arc
-                        on_arc = ...
-                            (angle > theta1+tol) && ...
-                            (angle < theta2-tol);
-
-                    else
-
-                        % Include arc endpoints
-                        on_arc = ...
-                            (angle >= theta1-tol) && ...
-                            (angle <= theta2+tol);
-
-                    end
-
+                    on_arc = (angle >= theta1) && (angle <= theta2);
                 else
-
-                    % Arc crosses 0/360 degrees
-                    if interiorFlag
-
-                        on_arc = ...
-                            (angle > theta1+tol) || ...
-                            (angle < theta2-tol);
-
-                    else
-
-                        on_arc = ...
-                            (angle >= theta1-tol) || ...
-                            (angle <= theta2+tol);
-
-                    end
-
+                    % Arc crosses 2pi → 0
+                    on_arc = (angle >= theta1) || (angle <= theta2);
                 end
 
-                if ~on_arc
-                    continue;
+                if on_arc
+                    xi(end+1,1) = px;
+                    yi(end+1,1) = py;
                 end
-
-                % ---------------------------------------------------------
-                % Add intersection point
-                % ---------------------------------------------------------
-                if isempty(xi)
-
-                    xi = px;
-                    yi = py;
-
-                else
-
-                    % Avoid duplicate points
-                    duplicate = false;
-
-                    for j = 1:length(xi)
-
-                        if hypot(px-xi(j),py-yi(j)) <= tol
-                            duplicate = true;
-                            break;
-                        end
-
-                    end
-
-                    if ~duplicate
-                        xi(end+1,1) = px;
-                        yi(end+1,1) = py;
-                    end
-
-                end
-
             end
-
         end
 
         % intersection of two finite arcs
-        function [xi, yi] = getIntersectionArcArc( ...
-                xc1, yc1, r1, theta11, theta12, ...
-                xc2, yc2, r2, theta21, theta22, interiorFlag)
-
-            % Intersection of two finite circular arcs
-            %
-            % Arc 1:
-            %   center = (xc1,yc1)
-            %   radius = r1
-            %   start/end angles = theta11, theta12 [degrees]
-            %
-            % Arc 2:
-            %   center = (xc2,yc2)
-            %   radius = r2
-            %   start/end angles = theta21, theta22 [degrees]
-            %
-            % interiorFlag:
-            %   false -> include arc endpoints
-            %   true  -> exclude arc endpoints
-            %
-            % Returns:
-            %   0 points -> no intersection
-            %   1 point  -> one intersection / tangent
-            %   2 points -> two intersections
+        function [xi, yi] = getIntersectionArcArc(xc1, yc1, r1, theta11, theta12, xc2, yc2, r2, theta21, theta22)
+            % Intersection of two circular arcs
+            % Arc1: center (xc1,yc1), radius r1, start/end angles in degrees
+            % Arc2: center (xc2,yc2), radius r2, start/end angles in degrees
+            % Returns intersection points lying on both arcs
 
             xi = [];
             yi = [];
 
-            if nargin < 11
-                interiorFlag = false;
-            end
-
-            % -------------------------------------------------------------
-            % Tolerance
-            % -------------------------------------------------------------
-            tol = 1e-12;
-
-            % -------------------------------------------------------------
-            % Check inputs
-            % -------------------------------------------------------------
-            if r1 <= 0 || r2 <= 0
-                error('Radii must be positive.');
-            end
-
+            % --- Step 0: check angles ---
             if theta11 == theta12 || theta21 == theta22
                 error('Start and end angles must not be equal.');
             end
 
-            % -------------------------------------------------------------
-            % Convert angles to radians [0, 2*pi)
-            % -------------------------------------------------------------
+            % Convert degrees to radians
             theta11 = mod(deg2rad(theta11), 2*pi);
             theta12 = mod(deg2rad(theta12), 2*pi);
-
             theta21 = mod(deg2rad(theta21), 2*pi);
             theta22 = mod(deg2rad(theta22), 2*pi);
 
-            % -------------------------------------------------------------
-            % Distance between circle centers
-            % -------------------------------------------------------------
+            % --- Step 1: compute circle-circle intersection points ---
             dx = xc2 - xc1;
             dy = yc2 - yc1;
+            d = sqrt(dx^2 + dy^2);
 
-            d = hypot(dx,dy);
-
-            % -------------------------------------------------------------
-            % Coincident centers
-            % -------------------------------------------------------------
-            if d <= tol
-
-                % Different radii -> no intersection
-                if abs(r1-r2) > tol
-                    return;
-                end
-
-                % Same circle.
-                %
-                % The arcs may overlap. In that case there are infinitely
-                % many intersection points. We check the four arc
-                % endpoints and return the common endpoints.
-                %
-                % This does not attempt to return the complete overlapping
-                % arc.
-
-                thetaList = [theta11 theta12 theta21 theta22];
-
-                for k = 1:4
-
-                    angle = thetaList(k);
-
-                    % Point on the common circle
-                    px = xc1 + r1*cos(angle);
-                    py = yc1 + r1*sin(angle);
-
-                    % -----------------------------------------------------
-                    % Check Arc 1
-                    % -----------------------------------------------------
-                    angle1 = mod(atan2(py-yc1,px-xc1),2*pi);
-
-                    if theta11 < theta12
-
-                        if interiorFlag
-                            on_arc1 = ...
-                                (angle1 > theta11+tol) && ...
-                                (angle1 < theta12-tol);
-                        else
-                            on_arc1 = ...
-                                (angle1 >= theta11-tol) && ...
-                                (angle1 <= theta12+tol);
-                        end
-
-                    else
-
-                        % Arc crosses 0/360 degrees
-                        if interiorFlag
-                            on_arc1 = ...
-                                (angle1 > theta11+tol) || ...
-                                (angle1 < theta12-tol);
-                        else
-                            on_arc1 = ...
-                                (angle1 >= theta11-tol) || ...
-                                (angle1 <= theta12+tol);
-                        end
-
-                    end
-
-                    if ~on_arc1
-                        continue;
-                    end
-
-                    % -----------------------------------------------------
-                    % Check Arc 2
-                    % -----------------------------------------------------
-                    angle2 = mod(atan2(py-yc2,px-xc2),2*pi);
-
-                    if theta21 < theta22
-
-                        if interiorFlag
-                            on_arc2 = ...
-                                (angle2 > theta21+tol) && ...
-                                (angle2 < theta22-tol);
-                        else
-                            on_arc2 = ...
-                                (angle2 >= theta21-tol) && ...
-                                (angle2 <= theta22+tol);
-                        end
-
-                    else
-
-                        % Arc crosses 0/360 degrees
-                        if interiorFlag
-                            on_arc2 = ...
-                                (angle2 > theta21+tol) || ...
-                                (angle2 < theta22-tol);
-                        else
-                            on_arc2 = ...
-                                (angle2 >= theta21-tol) || ...
-                                (angle2 <= theta22+tol);
-                        end
-
-                    end
-
-                    if ~on_arc2
-                        continue;
-                    end
-
-                    % -----------------------------------------------------
-                    % Add point if it is not already present
-                    % -----------------------------------------------------
-                    if isempty(xi)
-
-                        xi = px;
-                        yi = py;
-
-                    else
-
-                        duplicate = false;
-
-                        for j = 1:length(xi)
-
-                            if hypot(px-xi(j),py-yi(j)) <= tol
-                                duplicate = true;
-                                break;
-                            end
-
-                        end
-
-                        if ~duplicate
-                            xi(end+1,1) = px;
-                            yi(end+1,1) = py;
-                        end
-
-                    end
-                end
-
-                return;
+            % Check for no intersection
+            if d > r1 + r2 || d < abs(r1 - r2) || (d==0 && abs(r1-r2)<1e-12)
+                return; % no intersection or identical circles
             end
 
-            % -------------------------------------------------------------
-            % Check whether circles intersect
-            % -------------------------------------------------------------
+            % Distance from circle1 center to intersection line
+            a = (r1^2 - r2^2 + d^2) / (2*d);
 
-            % Circles too far apart
-            if d > r1+r2+tol
-                return;
-            end
+            % Height from line to intersection points
+            h_sq = r1^2 - a^2;
+            h = sqrt(max(h_sq, 0));
 
-            % One circle completely inside the other
-            if d < abs(r1-r2)-tol
-                return;
-            end
-
-            % -------------------------------------------------------------
-            % Circle-circle intersection
-            % -------------------------------------------------------------
-
-            a = (r1^2-r2^2+d^2)/(2*d);
-
-            h2 = r1^2-a^2;
-
-            % Numerical protection
-            if h2 < -tol
-                return;
-            end
-
-            h = sqrt(max(h2,0));
-
-            % Point on line connecting circle centers
+            % Midpoint between intersection points
             xm = xc1 + a*dx/d;
             ym = yc1 + a*dy/d;
 
-            % Perpendicular displacement
-            rx = -dy*h/d;
-            ry =  dx*h/d;
+            % Two intersection points
+            rx = -dy * (h/d);
+            ry =  dx * (h/d);
 
-            % -------------------------------------------------------------
-            % Tangent or two intersections
-            % -------------------------------------------------------------
-            if h <= tol
+            pts = [xm + rx, ym + ry;
+                xm - rx, ym - ry];
 
-                % Tangent circles
-                pts = [xm ym];
-
-            else
-
-                % Two circle intersections
-                pts = [ ...
-                    xm+rx, ym+ry;
-                    xm-rx, ym-ry];
-
-            end
-
-            % -------------------------------------------------------------
-            % Check each point against both finite arcs
-            % -------------------------------------------------------------
-            for k = 1:size(pts,1)
-
+            % --- Step 2: filter points on both arcs ---
+            for k = 1:2
                 px = pts(k,1);
                 py = pts(k,2);
 
-                % ---------------------------------------------------------
-                % Angle relative to Arc 1
-                % ---------------------------------------------------------
-                angle1 = mod(atan2(py-yc1,px-xc1),2*pi);
+                % Angle relative to Arc1 center
+                angle1 = atan2(py - yc1, px - xc1);
+                angle1 = mod(angle1, 2*pi);
 
                 if theta11 < theta12
-
-                    if interiorFlag
-                        on_arc1 = ...
-                            (angle1 > theta11+tol) && ...
-                            (angle1 < theta12-tol);
-                    else
-                        on_arc1 = ...
-                            (angle1 >= theta11-tol) && ...
-                            (angle1 <= theta12+tol);
-                    end
-
+                    on_arc1 = (angle1 >= theta11) && (angle1 <= theta12);
                 else
-
-                    % Arc 1 crosses 0/360 degrees
-                    if interiorFlag
-                        on_arc1 = ...
-                            (angle1 > theta11+tol) || ...
-                            (angle1 < theta12-tol);
-                    else
-                        on_arc1 = ...
-                            (angle1 >= theta11-tol) || ...
-                            (angle1 <= theta12+tol);
-                    end
-
+                    on_arc1 = (angle1 >= theta11) || (angle1 <= theta12);
                 end
 
-                if ~on_arc1
-                    continue;
-                end
-
-                % ---------------------------------------------------------
-                % Angle relative to Arc 2
-                % ---------------------------------------------------------
-                angle2 = mod(atan2(py-yc2,px-xc2),2*pi);
+                % Angle relative to Arc2 center
+                angle2 = atan2(py - yc2, px - xc2);
+                angle2 = mod(angle2, 2*pi);
 
                 if theta21 < theta22
-
-                    if interiorFlag
-                        on_arc2 = ...
-                            (angle2 > theta21+tol) && ...
-                            (angle2 < theta22-tol);
-                    else
-                        on_arc2 = ...
-                            (angle2 >= theta21-tol) && ...
-                            (angle2 <= theta22+tol);
-                    end
-
+                    on_arc2 = (angle2 >= theta21) && (angle2 <= theta22);
                 else
-
-                    % Arc 2 crosses 0/360 degrees
-                    if interiorFlag
-                        on_arc2 = ...
-                            (angle2 > theta21+tol) || ...
-                            (angle2 < theta22-tol);
-                    else
-                        on_arc2 = ...
-                            (angle2 >= theta21-tol) || ...
-                            (angle2 <= theta22+tol);
-                    end
-
+                    on_arc2 = (angle2 >= theta21) || (angle2 <= theta22);
                 end
 
-                if ~on_arc2
-                    continue;
+                if on_arc1 && on_arc2
+                    xi(end+1,1) = px;
+                    yi(end+1,1) = py;
                 end
-
-                % ---------------------------------------------------------
-                % Add intersection point
-                % ---------------------------------------------------------
-                if isempty(xi)
-
-                    xi = px;
-                    yi = py;
-
-                else
-
-                    duplicate = false;
-
-                    for j = 1:length(xi)
-
-                        if hypot(px-xi(j),py-yi(j)) <= tol
-                            duplicate = true;
-                            break;
-                        end
-
-                    end
-
-                    if ~duplicate
-                        xi(end+1,1) = px;
-                        yi(end+1,1) = py;
-                    end
-
-                end
-
             end
-
         end
 
         %% point distance from edge objects

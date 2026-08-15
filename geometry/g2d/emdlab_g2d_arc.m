@@ -26,8 +26,6 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
         L1 (1,1) double;
         L2 (1,1) double;
 
-        tag (1,:) char;
-
     end
 
     methods
@@ -373,53 +371,49 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
             text(pc(1)+vec(1)/2,pc(2)+vec(2)/2,label);
         end
 
-      function y = getAngles(obj)
-    % Angle of tangent lines at p1 and p2 w.r.t. x-axis, in [0, 2*pi)
-    % y(1): tangent angle at p1
-    % y(2): tangent angle at p2
+        function y = getAngles(obj)
+            % Angle of tangent lines at p1 and p2 w.r.t. x-axis, in [0, 2*pi)
+            % y(1): tangent angle at p1
+            % y(2): tangent angle at p2
 
-    y = zeros(1,2);
+            y = zeros(1,2);
 
-    % radius angles from center to endpoints
+            % radius angles from center to endpoints
 
-    % tangent angles
-    if obj.direction
-        % CCW arc
-        u = obj.getu1; 
-        u = [-u(2),u(1)];
-        y(1) = atan2(u(2),u(1));
-        u = obj.getu2; 
-        u = [u(2),-u(1)];
-        y(2) = atan2(u(2),u(1));
-    else
-        % CW arc
-        u = obj.getu1; 
-        u = [u(2),-u(1)];
-        y(1) = atan2(u(2),u(1));
-        u = obj.getu2; 
-        u = [-u(2),u(1)];
-        y(2) = atan2(u(2),u(1));
-    end
-
-    mod(y, 2*pi);
-
-end
-
-
-function y = isTag1(obj, pTag)
-            if strcmpi(obj.p1.tag, pTag)
-                y = true;
+            % tangent angles
+            if obj.direction
+                % CCW arc
+                u = obj.getu1;
+                u = emdlab_g2d_rotatePoints(u, 0.01*obj.getAngle);
+                u = [-u(2),u(1)];
+                y(1) = atan2(u(2),u(1));
+                u = obj.getu2;
+                u = emdlab_g2d_rotatePoints(u, -0.01*obj.getAngle);
+                u = [u(2),-u(1)];
+                y(2) = atan2(u(2),u(1));
             else
-                y = false;
+                % CW arc
+                u = obj.getu1;
+                u = emdlab_g2d_rotatePoints(u, -0.01*obj.getAngle);
+                u = [u(2),-u(1)];
+                y(1) = atan2(u(2),u(1));
+                u = obj.getu2;
+                u = emdlab_g2d_rotatePoints(u, 0.01*obj.getAngle);
+                u = [-u(2),u(1)];
+                y(2) = atan2(u(2),u(1));
             end
+
+            y = mod(y, 2*pi);
+
         end
 
-        function y = isTag2(obj, pTag)
-            if strcmpi(obj.p2.tag, pTag)
-                y = true;
-            else
-                y = false;
-            end
+
+        function y = isID1(obj, pointID)
+            y = obj.p1.id == pointID;
+        end
+
+        function y = isID2(obj, pointID)
+            y = obj.p2.id == pointID;
         end
 
         function y = getPtr1(obj)
@@ -430,14 +424,66 @@ function y = isTag1(obj, pTag)
         end
 
         function y = getTheta1Theta2(obj)
-        
+
             tmp = obj.p1 - obj.p0;
             y(1) = tmp.getAngle;
             tmp = obj.p2 - obj.p0;
             y(2) = tmp.getAngle;
             y = rad2deg(y);
-        
+
         end
+
+        function y = isPointOnEdge(obj, p, tol)
+            % Check whether point p lies on the arc interior within
+            % tolerance tol, excluding the two endpoints.
+            %
+            % Inputs:
+            %   p   : emdlab_g2d_point
+            %   tol : distance tolerance
+            %
+            % Output:
+            %   y   : logical true/false
+
+            if nargin < 3
+                tol = 1e-9;
+            end
+
+            R = obj.getRadius;
+
+            % --- radius check: |dist(centre, p) - R| <= tol
+            q = [p.x - obj.p0.x, p.y - obj.p0.y];
+            r = norm(q);
+            if abs(r - R) > tol || R <= tol
+                y = false;   % not on the circle, or degenerate arc
+                return;
+            end
+
+            % angular tolerance at this radius
+            angTol = tol / R;
+
+            % angle of the point relative to the start point, walked
+            % in the direction of travel (CCW or CW)
+            theta1 = atan2(obj.p1.y - obj.p0.y, obj.p1.x - obj.p0.x);
+            thetaP = atan2(q(2), q(1));
+
+            if obj.direction
+                delta = mod(thetaP - theta1, 2*pi);      % CCW sweep
+            else
+                delta = mod(theta1 - thetaP, 2*pi);      % CW sweep
+            end
+
+            total = obj.getAngle;
+
+            % --- exclude the endpoints
+            if delta <= angTol || delta >= total - angTol
+                y = false;
+                return;
+            end
+
+            % --- point angularly inside the arc
+            y = (delta <= total + angTol);
+        end
+
     end
 
 end

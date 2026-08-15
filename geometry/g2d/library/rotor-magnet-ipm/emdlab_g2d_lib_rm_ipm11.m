@@ -46,7 +46,7 @@ x3 = x2 + dm/cos(beta);
 e1 = g.addSegmentByCoordinates(x2,y2,x3,y3);
 
 tmp = g.addSegmentByCoordinates(x3,y3,x4,y4);
-tmp = g.splitEdge(tmp,1-gamma);
+tmp = g.splitEdgeByRatios(tmp,1-gamma);
 e2 = tmp(1);
 e3 = tmp(2);
 

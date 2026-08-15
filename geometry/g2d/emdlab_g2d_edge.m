@@ -12,11 +12,17 @@ classdef emdlab_g2d_edge  < handle & matlab.mixin.Copyable & emdlab_g2d_constant
         % pointer to edge object type
         ptr (1,1);
 
-        % the object tag
-        tag (1,:) char = '';
+        % the object id
+        id (1,1) double = 0;
 
-        % tag of loops that used this edge for their constrcution
-        tags (1,:) string;
+        % id of loops that used this edge for their constrcution
+        ids (1,:) double;
+
+        % id of start and end points
+        pid (1,:) double;
+
+        % flag for hanging edges
+        isHanging = false;
 
     end
 

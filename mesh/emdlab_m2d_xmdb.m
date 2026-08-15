@@ -117,7 +117,8 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
                         'FaceAlpha', 0.7, ...
                         'HitTest','on','PickableParts','visible');
                 end
-                plt.UserData = mzName;
+                plt.UserData.title = mzName;
+                plt.UserData.color = 'c';
             end
 
             index = obj.edges(:, 3) ~= obj.edges(:, 4);
@@ -193,7 +194,8 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
                         'FaceAlpha', 0.5, ...
                         'HitTest','on','PickableParts','visible');
                 end
-                plt.UserData = mzName;
+                plt.UserData.title = mzName;
+                plt.UserData.color = 'c';
             end
 
             index = obj.edges(:, 3) ~= obj.edges(:, 4);
@@ -286,25 +288,80 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
                 if isa(mzptr, 'emdlab_m2d_tmz') || isa(mzptr, 'emdlab_m2d_qmz')
                     plt = patch('Faces', mzptr.cl, 'Vertices', mzptr.nodes, 'FaceColor', ...
                         mzptr.color, 'EdgeColor', 'none', ...
-                        'FaceAlpha', 1, 'Parent', ax);
+                        'FaceAlpha', 1, 'Parent', ax, 'HitTest','on','PickableParts','visible');
                 end
                 plt.UserData.color = mzptr.color;
+                plt.UserData.title = mzNames{i};
             end
 
             index = obj.edges(:, 3) ~= obj.edges(:, 4);
             patch('Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 0.1, 'parent', ax, 'FaceAlpha', 0.95);
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 0.1, 'parent', ax, 'FaceAlpha', 0.95, ...
+                'HitTest','off','PickableParts','none');
 
             zoom(ax,'on');
             axis(ax, 'off');
             axis(ax, 'equal');
             set(ax, 'clipping', 'off');
 
+%             set(gcf,'WindowButtonMotionFcn',@hoverFcn);
+
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;
             elseif nargout > 1, error('Too many output argument.');
             end
 
+            function hoverFcn(src,~)
+                h = hittest(src);
+                for i = 1:numel(ax.Children)
+                    if isequal(h,ax.Children(i))
+                        if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                            e.Button = 1;
+                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
+                            updateXLabel;
+                            return;
+                        end
+                    end
+                end
+                for i = 1:numel(ax.Children)
+                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
+                        if ischar(ax.Children(i).FaceColor)
+                            if strcmpi(ax.Children(i).FaceColor, 'c')
+                                set(ax.Children(i), 'FaceColor', 'c');
+                                drawnow;
+                            end
+                        else
+                            if any(ax.Children(i).FaceColor ~= [0,1,1])
+                                set(ax.Children(i), 'FaceColor', 'c');
+                                drawnow;
+                            end
+                        end
+                    end
+                end
+                title(ax,'');
+                updateXLabel;
+
+                function updateXLabel()
+                    % Get cursor position in axes units
+                    cp = ax.CurrentPoint;
+                    x = cp(1,1);
+                    y = cp(1,2);
+
+                    % Check if cursor is inside axes limits
+                    xl = ax.XLim;
+                    yl = ax.YLim;
+
+                    if x < xl(1) || x > xl(2) || y < yl(1) || y > yl(2)
+                        return
+                    end
+
+                    % Update xlabel
+                    xlabel(ax, sprintf('X = %.2f ,  Y = %.2f ,  R = %.2f ,  D = %.2f',...
+                        x, y, norm([x,y]), 2*norm([x,y])), 'Interpreter','none');
+                end
+
+            end
+            
         end
 
         function varargout = showfb(obj, varargin)

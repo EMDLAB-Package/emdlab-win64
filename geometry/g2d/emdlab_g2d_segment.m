@@ -18,9 +18,6 @@ classdef emdlab_g2d_segment < handle
         L2 (1,1) double {mustBeNonnegative} = 1;
         isSetL1L2 (1,1) logical = false;
 
-        % object tag
-        tag (1,:) char;
-
     end
 
     methods
@@ -138,45 +135,84 @@ classdef emdlab_g2d_segment < handle
         end
 
         function y = getAngles(obj)
-    % y(1): Angle of vector P0 -> P1
-    % y(2): Angle of vector P1 -> P0
-    
-    y = zeros(1, 2);
-    
-    % Vector 1: P0 to P1
-    dy1 = obj.p1.y - obj.p0.y;
-    dx1 = obj.p1.x - obj.p0.x;
-    y(1) = atan2(dy1, dx1);
-    
-    % Vector 2: P1 to P0 (This is mathematically just the angle of vector 1 + pi)
-    % You don't need to recalculate atan2 here if you are confident in y(1)
-    y(2) = atan2(-dy1, -dx1);
+            % y(1): Angle of vector P0 -> P1
+            % y(2): Angle of vector P1 -> P0
 
-    mod(y, 2*pi);
+            y = zeros(1, 2);
+
+            % Vector 1: P0 to P1
+            dy1 = obj.p1.y - obj.p0.y;
+            dx1 = obj.p1.x - obj.p0.x;
+            y(1) = atan2(dy1, dx1);
+
+            % Vector 2: P1 to P0 (This is mathematically just the angle of vector 1 + pi)
+            % You don't need to recalculate atan2 here if you are confident in y(1)
+            y(2) = atan2(-dy1, -dx1);
+
+            y = mod(y, 2*pi);
 
         end
 
-        function y = isTag1(obj, pTag)
-            if strcmpi(obj.p0.tag, pTag)
-                y = true;
-            else
-                y = false;
-            end
+        function y = isID1(obj, pointID)
+            y = obj.p0.id == pointID;
         end
 
-        function y = isTag2(obj, pTag)
-            if strcmpi(obj.p1.tag, pTag)
-                y = true;
-            else
-                y = false;
-            end
+        function y = isID2(obj, pointID)
+            y = obj.p1.id == pointID;
         end
-        
+
         function y = getPtr1(obj)
             y = obj.p0;
         end
+
         function y = getPtr2(obj)
             y = obj.p1;
+        end
+
+        function y = isPointOnEdge(obj, p, tol)
+            % Check whether point p lies on the segment interior
+            % within tolerance tol, excluding endpoints.
+            %
+            % Inputs:
+            %   p   : emdlab_g2d_point
+            %   tol : distance tolerance
+            %
+            % Output:
+            %   y   : logical true/false
+
+            if nargin < 3
+                tol = 1e-9;
+            end
+
+            a = [obj.p0.x, obj.p0.y];
+            b = [obj.p1.x, obj.p1.y];
+            q = [p.x, p.y];
+
+            ab = b - a;
+            aq = q - a;
+
+            L2_ = dot(ab, ab);
+            if L2_ <= tol^2
+                % Degenerate segment
+                y = false;
+                return;
+            end
+
+            % Projection parameter on the infinite line
+            t = dot(aq, ab) / L2_;
+
+            % Exclude endpoints with tolerance measured along the segment
+            L = sqrt(L2_);
+            if t <= tol / L || t >= 1 - tol / L
+                y = false;
+                return;
+            end
+
+            % Perpendicular distance from point to the line
+            qproj = a + t * ab;
+            d = norm(q - qproj);
+
+            y = (d <= tol);
         end
 
     end

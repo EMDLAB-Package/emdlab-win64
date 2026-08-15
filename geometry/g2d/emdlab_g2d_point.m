@@ -9,11 +9,14 @@ classdef emdlab_g2d_point  < handle & matlab.mixin.Copyable & emdlab_g2d_constan
         x (1,1) double = 0;
         y (1,1) double = 0;
 
-        % the object tag
-        tag (1,:) char = '';
+        % the object id
+        id (1,1) double = 0;
 
-        % tag of edges that used this point for their constrcution
-        tags (1,:) string;
+        % id of edges that used this point for their constrcution
+        ids (1,:) double;
+
+        % used ids -> paints used as center of arcs or inner spline points or any free used point
+        uids (1,:) double;
 
         % mesh size: mesh size at this point, imporant in Gmsh
         meshSize (1,1) double = 1;

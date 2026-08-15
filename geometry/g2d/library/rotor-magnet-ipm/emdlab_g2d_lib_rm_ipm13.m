@@ -86,7 +86,7 @@ for i = 1:Nfb
     s1Index = g.addSegmentByCoordinates(x1,y1,x2,y2);
     s2Index = g.addSegmentByCoordinates(x2,y2,x3,y3);
 
-    s2Index = g.splitEdge(s2Index,[0.1,0.8]);
+    s2Index = g.splitEdgeByRatios(s2Index,[0.1,0.8]);
 
     sm1Index = g.extendSegmentBySegment(s2Index(1),pi/2,gv_dm(i));
     sm2Index = g.extendSegmentBySegment(s2Index(2),pi/2,gv_dm(i));
@@ -99,7 +99,7 @@ for i = 1:Nfb
 
     s3Index = g.addSegmentByCoordinates(x3,y3,x4,y4);
 
-    s3Index = g.splitEdge(s3Index,[0.2,0.6]);
+    s3Index = g.splitEdgeByRatios(s3Index,[0.2,0.6]);
 
     sm3Index = g.extendSegmentBySegment(s3Index(1),pi/2,gv_dm(i));
     sm4Index = g.extendSegmentBySegment(s3Index(2),pi/2,gv_dm(i));
