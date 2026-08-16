@@ -554,23 +554,23 @@ classdef emdlab_g2d_db < handle
 
             % number of points
             Np = length(pointIDs);
-            pts = repmat(emdlab_g2d_point, 1, Np);
+            spline_pts = repmat(emdlab_g2d_point, 1, Np);
 
             for i = 1:Np
-                pts(i) = obj.points(obj.pid2pi(pointIDs(i)));
+                spline_pts(i) = obj.points(obj.pid2pi(pointIDs(i)));
             end
 
             % get an instance of edge class
             edgeHandle = emdlab_g2d_edge;
 
             % set pointer class to segment
-            edgeHandle.ptr = emdlab_g2d_spline(pts);
+            edgeHandle.ptr = emdlab_g2d_spline(spline_pts);
             obj.edges(end+1) = edgeHandle;
 
             % assign edge id
             obj.EIDH = obj.EIDH + 1;
             edgeHandle.id = obj.EIDH;
-            edgeHandle.pid = [pts(1).id, pts(end).id];
+            edgeHandle.pid = [spline_pts(1).id, spline_pts(end).id];
             obj.eid2ei(obj.EIDH) = obj.Nedges;
 
             if nargout == 1
@@ -1095,6 +1095,55 @@ classdef emdlab_g2d_db < handle
 
         function y = getEdgeLength(obj, eIndex)
             y = obj.edges(eIndex).ptr.getLength;
+        end
+
+        function varargout = addParallelSegments(obj, varargin)
+
+            switch numel(varargin)
+                case 2
+                    p0ptr = obj.points(obj.pid2pi(varargin{1}));
+                    p1ptr = obj.points(obj.pid2pi(varargin{2}));
+                    x0 = p0ptr.x;
+                    y0 = p0ptr.y;
+                    w = p1ptr.x - x0;
+                    h = p1ptr.y - y0;
+
+                case 3
+                    p0ptr = obj.points(obj.pid2pi(varargin{1}));
+                    x0 = p0ptr.x;
+                    y0 = p0ptr.y;
+                    w = varargin{2};
+                    h = varargin{3};
+
+                case 5
+                    x1 = varargin{1};
+                    y1 = varargin{2};
+                    x2 = varargin{3};
+                    y2 = varargin{4};
+                    w = varargin{5}/2;
+
+                otherwise
+                    error('Wrong number of input arguments.');
+            end
+
+            u = [x2-x1, y2-y1];
+            u = u/norm(u);
+            v = [-u(2),u(1)];
+
+            p1ID = obj.addPoint(x1-v(1)*w,y1-v(2)*w);
+            p2ID = obj.addPoint(x2-v(1)*w,y2-v(2)*w);
+            p3ID = obj.addPoint(x1+v(1)*w,y1+v(2)*w);
+            p4ID = obj.addPoint(x2+v(1)*w,y2+v(2)*w);
+
+            e1ID = obj.addSegment(p1ID, p2ID);
+            e2ID = obj.addSegment(p3ID, p4ID);
+
+            if nargout == 1
+                varargout{1} = [e1ID, e2ID];
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
         end
 
         function varargout = addRectangle(obj, varargin)
@@ -2063,7 +2112,7 @@ classdef emdlab_g2d_db < handle
                 l_tmp{2*i} = obj.getEdgeLoop(obj.edges(idx(i)).id, false, false);
                 if isequal(l_tmp{2*i-1}, l_tmp{2*i}) && ~isempty(l_tmp{2*i})
                     sli(end+1) = idx(i);
-                    rmlist = [rmlist, l_tmp{2*i-1}];
+                    rmlist = [rmlist, obj.eid2ei(l_tmp{2*i-1})];
                 end                
             end
 
@@ -2100,14 +2149,23 @@ classdef emdlab_g2d_db < handle
             tmp = unique(cl(:,1));
             tmp( tmp == 0) = [];
 
-            l_tmpi = zeros(1,2*length(tmp));
-            l_tmp = cell(1,2*length(tmp));
+            l_tmpi = [];
+            l_tmp = {};
 
             for i = 1:length(tmp)
-                l_tmpi(2*i-1) = obj.getEdgeLoop(tmp(i), true);
-                l_tmpi(2*i) = obj.getEdgeLoop(tmp(i), false);
-                l_tmp{2*i-1} = obj.loops(l_tmpi(2*i-1)).edgesIndexList .* (2 * obj.loops(l_tmpi(2*i-1)).directions - 1);
-                l_tmp{2*i} = obj.loops(l_tmpi(2*i)).edgesIndexList .* (2 * obj.loops(l_tmpi(2*i)).directions - 1);
+                tmp_out = obj.getEdgeLoop(tmp(i), true);
+                if ~isempty(tmp_out)
+                    l_tmpi(end+1) = tmp_out;
+                    l_tmp{end+1} = obj.loops(l_tmpi(end)).edgesIndexList .* (2 * obj.loops(l_tmpi(end)).directions - 1);
+                end
+
+                tmp_out =  obj.getEdgeLoop(tmp(i), false);
+
+                if ~isempty(tmp_out)
+                    l_tmpi(end+1) = tmp_out;
+                   l_tmp{end+1} = obj.loops(l_tmpi(end)).edgesIndexList .* (2 * obj.loops(l_tmpi(end)).directions - 1);
+                end
+                
             end
 
             nmax = 0;
@@ -2436,17 +2494,14 @@ classdef emdlab_g2d_db < handle
         function varargout = showSketch(obj, showTagsFlag, showWFMFlag)
             % WFM: wireframe mesh
 
-            if nargin<2
-                showTagsFlag = true;
-                showWFMFlag = false;
-            elseif nargin<3
-                showWFMFlag = false;
-            end
+            if nargin<2, showTagsFlag = true; end
+            if nargin<3, showWFMFlag = false; end
 
             f = figure('NumberTitle', 'on', 'name', ...
                 'EMDLAB Geometry Visualization', 'color', [0.9,0.9,0.9],'Position',[0,0,1000,600], ...
                 'Visible','off');
             movegui(f,'center');
+            drawnow;
             f.Visible = 'on';
             hold all;
 
@@ -2512,9 +2567,9 @@ classdef emdlab_g2d_db < handle
 
             set(gca, 'clipping', 'off');
 
-            axis off equal
-            zoom on
-            grid on
+            axis off equal;
+            zoom on;
+            grid on;
             drawnow;
 
             if nargout == 1
