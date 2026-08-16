@@ -1196,7 +1196,9 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function varargout = addClosedPolyline(obj, x, y)
+        function varargout = addPolyline(obj, x, y, closeFlag)
+
+            if nargin <4, closeFlag = false; end
 
             Nx = length(x);
             Ny = length(y);
@@ -1210,7 +1212,12 @@ classdef emdlab_g2d_db < handle
                 p_indices(i) = obj.addPoint(x(i),y(i));
             end
 
-            p_indices(end+1) = p_indices(1);
+            if closeFlag
+                p_indices(end+1) = p_indices(1);
+            else
+                Nx = Nx - 1;
+            end
+
             e_indices = zeros(1,Nx);
             for i = 1:Nx
                 e_indices(i) = obj.addSegment(p_indices(i),p_indices(i+1));
@@ -1218,6 +1225,33 @@ classdef emdlab_g2d_db < handle
 
             if nargout == 1
                 varargout{1} = e_indices;
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
+        function varargout = addAnnularSector(obj, Ri, Ro, Theta_1, Theta_2, xc, yc)
+
+            % set default center
+            if nargin < 6
+                xc = 0;
+                yc = 0;
+            end
+
+            oIndex = obj.addPoint(xc, yc);
+            p1ID = obj.addPoint(xc + Ri * cos(Theta_1), yc + Ri * sin(Theta_1));
+            p2ID = obj.addPoint(xc + Ro * cos(Theta_1), yc + Ro * sin(Theta_1));
+            p3ID = obj.addPoint(xc + Ro * cos(Theta_2), yc + Ro * sin(Theta_2));
+            p4ID = obj.addPoint(xc + Ri * cos(Theta_2), yc + Ri * sin(Theta_2));
+
+            e1ID = obj.addSegment(p1ID, p2ID);
+            e2ID = obj.addArc(oIndex, p2ID, p3ID, 1);
+            e3ID = obj.addSegment(p3ID, p4ID);
+            e4ID = obj.addArc(oIndex, p4ID, p1ID, 0);
+
+            if nargout == 1
+                varargout{1} = [e1ID, e2ID, e3ID, e4ID];
             elseif nargout > 1
                 error('The number of output arguments is too high.');
             end
@@ -2020,12 +2054,17 @@ classdef emdlab_g2d_db < handle
             l_tmp = cell(1,2*length(idx));
             sli = [];
 
+            rmlist = [];
             for i = 1:length(idx)
+                if ismember(idx(i), rmlist)
+                    continue
+                end
                 l_tmp{2*i-1} = obj.getEdgeLoop(obj.edges(idx(i)).id, true, false);
                 l_tmp{2*i} = obj.getEdgeLoop(obj.edges(idx(i)).id, false, false);
                 if isequal(l_tmp{2*i-1}, l_tmp{2*i}) && ~isempty(l_tmp{2*i})
                     sli(end+1) = idx(i);
-                end
+                    rmlist = [rmlist, l_tmp{2*i-1}];
+                end                
             end
 
             nmax = 0;
@@ -2038,6 +2077,8 @@ classdef emdlab_g2d_db < handle
             for i = 1:numel(l_tmp)
                 cl(i,1:length(l_tmp{i})) = l_tmp{i};
             end
+
+            cl(cl(:,1) == 0, :) = [];
             
             cl = emdlab_mex_makeRowsCanonical(cl);
 %             cl = canonicalizeConnectivity(cl);
@@ -2134,7 +2175,7 @@ classdef emdlab_g2d_db < handle
 
             slidx = [];
             for i = 1:length(bidx)
-                if all(ismember(abs(l_tmp{bidx(i)}), sli))
+                if any(ismember(sli,abs(l_tmp{bidx(i)})))
                     slidx(end+1) = bidx(i);
                 end
             end
@@ -2921,9 +2962,13 @@ classdef emdlab_g2d_db < handle
         end
 
         % setting a max mesh length for specefied edges
-        function setEdgeMeshMaxLength(obj, edgeIndex, mLength)
+        function setEdgesMeshMaxLength(obj, mLength, varargin)
 
-            for ei = edgeIndex
+            eIDs = cell2mat(varargin);
+
+            for eID = eIDs
+
+                ei = obj.eid2ei(eID);
 
                 % get loop handle
                 eptr = obj.edges(ei).ptr;
@@ -2942,9 +2987,13 @@ classdef emdlab_g2d_db < handle
         end
 
         % setting a mesh L1 L2 length for specefied edges
-        function setEdgeMeshL1L2Length(obj, edgeIndex, L1, L2)
+        function setEdgesMeshL1L2Length(obj, L1, L2, varargin)
 
-            for ei = edgeIndex
+            eIDs = cell2mat(varargin);
+
+            for eID = eIDs
+
+                ei = obj.eid2ei(eID);
 
                 % get loop handle
                 eptr = obj.edges(ei).ptr;
@@ -4313,7 +4362,7 @@ classdef emdlab_g2d_db < handle
             d = sqrt(dx^2 + dy^2);
 
             % Check for no intersection
-            if d > r1 + r2 || d < abs(r1 - r2) || (d==0 && abs(r1-r2)<1e-12)
+            if d > r1 + r2 || d < abs(r1 - r2) || (d==0 && abs(r1-r2)<1e-5)
                 return; % no intersection or identical circles
             end
 

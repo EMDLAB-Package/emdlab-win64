@@ -431,6 +431,10 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
             y(2) = tmp.getAngle;
             y = rad2deg(y);
 
+            if ~obj.direction
+                y = fliplr(y);
+            end
+
         end
 
         function y = isPointOnEdge(obj, p, tol)

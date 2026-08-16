@@ -412,16 +412,19 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
 
             for i = 1:numel(mzNames)
                 mzptr = obj.mzs.(mzNames{i});
-                patch('Faces', mzptr.cl, ...
+                plt = patch('Faces', mzptr.cl, ...
                     'Vertices', mzptr.nodes, 'FaceColor', ...
                     mzptr.color, 'linewidth', 0.05 ,'EdgeColor', [0, 0, 0], ...
                     'FaceAlpha', 1, 'Parent', ax);
+                plt.UserData.title = mzNames{i};
             end
 
             zoom on;
             axis(ax, 'off');
             axis(ax, 'equal');
             set(ax, 'clipping', 'off');
+
+            emdlab_flib_setupPatchHover(f);
 
             if nargout == 1, varargout{1} = f;
             elseif nargout == 2, varargout{1} = f; varargout{2} = ax;

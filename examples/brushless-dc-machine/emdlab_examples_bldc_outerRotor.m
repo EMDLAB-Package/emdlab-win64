@@ -84,4 +84,3 @@ s.solve;
 s.gui;
 s.plotBrBtOnCircle(0, 0, gv_OSD/2+gv_g/2, 1000);
 
-
