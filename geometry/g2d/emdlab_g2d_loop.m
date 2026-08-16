@@ -109,7 +109,7 @@ classdef emdlab_g2d_loop < handle
             cl = [cl, circshift(cl,-1)];
 
         end
-
+      
     end
 
 end

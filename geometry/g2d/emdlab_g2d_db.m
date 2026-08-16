@@ -36,6 +36,11 @@ classdef emdlab_g2d_db < handle
         lid2li (1,:) double;
         fid2fi (1,:) double;
 
+        % coordinates for fast check and return
+        pts (:,2) double;
+        segs (:,2) double;
+        arcs (:,2) double;
+
         % python path
         pyPath = "";
 
@@ -129,21 +134,19 @@ classdef emdlab_g2d_db < handle
             end
 
             % check for existance of already defined point in the same location
-            for i = 1:numel(obj.points)
+            flg = find(vecnorm(obj.pts - [x,y],2,2) < obj.gtol);
 
-                if norm(obj.points(i).getVector() - [x,y]) < obj.gtol
+            if flg
 
-                    if nargout == 1
-                        varargout{1} = obj.points(i).id;
-                    elseif nargout == 2
-                        varargout{1} = obj.points(i).id;
-                        varargout{2} = obj.points(i);
-                    elseif nargout > 2
-                        error('The number of output arguments is too high.');
-                    end
-                    return;
-
+                if nargout == 1
+                    varargout{1} = obj.points(flg).id;
+                elseif nargout == 2
+                    varargout{1} = obj.points(flg).id;
+                    varargout{2} = obj.points(flg);
+                elseif nargout > 2
+                    error('The number of output arguments is too high.');
                 end
+                return;
 
             end
 
@@ -154,6 +157,9 @@ classdef emdlab_g2d_db < handle
             obj.PIDH = obj.PIDH + 1;
             obj.points(end).id = obj.PIDH;
             obj.pid2pi(obj.PIDH) = obj.Npoints;
+
+            % add point to database
+            obj.pts(end+1,:) = [x,y];
 
             if nargout == 1
                 varargout{1} = obj.PIDH;
@@ -168,15 +174,26 @@ classdef emdlab_g2d_db < handle
 
         function removePoints(obj, varargin)
 
-            % remove connected edges to this point firt
-            for i = 1:numel(varargin)
-                for j = 1:numel(varargin{i})
-                    pointID = varargin{i}(j);
-                    obj.removeEdges(pIndex.ids(i));
-                end
+            pIDs = cell2mat(varargin);
+            Np = length(pIDs);
+            pIndices = zeros(1,Np);
+
+            for i = 1:Np
+                pIndices(i) = obj.pid2pi(pIDs(i));
             end
 
-            obj.points(pIndex) = [];
+            % remove all edges that are constructed using these points
+            elist = cell(1,2*Np);
+            for i = 1:Np
+                elist{2*i-1} = obj.points(pIndices(i)).ids;
+                elist{2*i} = obj.points(pIndices(i)).uids;
+            end
+            elist = cell2mat(elist);
+            obj.removeEdges(elist);
+
+            obj.points(pIndices) = [];
+            obj.pts(pIndices,:) = [];
+            obj.updateIDMappers;
 
         end
 
@@ -479,6 +496,25 @@ classdef emdlab_g2d_db < handle
         % adding a new segment to data base
         % this function returns edge id and edge handle
         function varargout = addSegment(obj, p0ID, p1ID)
+
+            % check for existance of already defined point in the same location
+            for i = 1:obj.Nedges
+
+                if obj.edges(i).isSegment && all(ismember([p0ID, p1ID], obj.edges(i).pid))
+
+                    if nargout == 1
+                        varargout{1} = obj.edges(i).id;
+                    elseif nargout == 2
+                        varargout{1} = obj.edges(i).id;
+                        varargout{2} = obj.edges(i);
+                    elseif nargout > 2
+                        error('The number of output arguments is too high.');
+                    end
+                    return;
+
+                end
+
+            end
 
             % get point indices
             p0Index = obj.pid2pi(p0ID);
@@ -1061,7 +1097,33 @@ classdef emdlab_g2d_db < handle
             y = obj.edges(eIndex).ptr.getLength;
         end
 
-        function varargout = addRectangle(obj, x0, y0, w, h)
+        function varargout = addRectangle(obj, varargin)
+
+            switch numel(varargin)
+                case 2
+                    p0ptr = obj.points(obj.pid2pi(varargin{1}));
+                    p1ptr = obj.points(obj.pid2pi(varargin{2}));
+                    x0 = p0ptr.x;
+                    y0 = p0ptr.y;
+                    w = p1ptr.x - x0;
+                    h = p1ptr.y - y0;
+
+                case 3
+                    p0ptr = obj.points(obj.pid2pi(varargin{1}));
+                    x0 = p0ptr.x;
+                    y0 = p0ptr.y;
+                    w = varargin{2};
+                    h = varargin{3};
+
+                case 4
+                    x0 = varargin{1};
+                    y0 = varargin{2};
+                    w = varargin{3};
+                    h = varargin{4};
+
+                otherwise
+                    error('Wrong number of input arguments.');
+            end
 
             p1ID = obj.addPoint(x0,y0);
             p2ID = obj.addPoint(x0+w,y0);
@@ -1081,7 +1143,23 @@ classdef emdlab_g2d_db < handle
 
         end
 
-        function varargout = addCircle(obj, x0, y0, r)
+        function varargout = addCircle(obj, varargin)
+
+            switch numel(varargin)
+                case 2
+                    p0ptr = obj.points(obj.pid2pi(varargin{1}));
+                    x0 = p0ptr.x;
+                    y0 = p0ptr.y;
+                    r = varargin{2};
+
+                case 3
+                    x0 = varargin{1};
+                    y0 = varargin{2};
+                    r = varargin{3};
+
+                otherwise
+                    error('Wrong number of input arguments.');
+            end
 
             p1Index = obj.addPoint(x0,y0);
             p2Index = obj.addPoint(x0+r,y0);
@@ -1257,15 +1335,23 @@ classdef emdlab_g2d_db < handle
 
                 if eptr.pid(1) == pptr.id, return; end
                 if eptr.pid(2) == pptr.id, return; end
+                if ~sptr.isPointOnEdge(pptr); return; end
 
-                p2 = sptr.p1;
-                sptr.p1 = pptr;
-                newEdgeID = obj.addSegment(pointID, p2.id);
-                pptr.ids(end+1) = eptr.id;
-                pptr.ids(end+1) = obj.edges(newEdgeID).id;
-                pptr.ids = unique(pptr.ids);
-                p2.ids = setdiff(p2.ids, eptr.id);
-                eptr.pid(2) = pptr.id;
+%                 p2 = sptr.p1;
+%                 sptr.p1 = pptr;
+%                 newEdgeID = obj.addSegment(pointID, p2.id);
+%                 pptr.ids(end+1) = eptr.id;
+%                 pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
+%                 pptr.ids = unique(pptr.ids);
+%                 p2.ids = setdiff(p2.ids, eptr.id);
+%                 eptr.pid(2) = pptr.id;
+
+                pid1 = sptr.p0.id;
+                pid2 = sptr.p1.id;
+
+                obj.removeEdges(edgeID);
+                newEdgeID(1) = obj.addSegment(pid1, pointID);
+                newEdgeID(2) = obj.addSegment(pointID, pid2);
 
             else
                 error('Wrong number of input arguments.');
@@ -1298,15 +1384,24 @@ classdef emdlab_g2d_db < handle
 
                 if eptr.pid(1) == pptr.id, return; end
                 if eptr.pid(2) == pptr.id, return; end
+                if ~aptr.isPointOnEdge(pptr); return; end
 
-                p2 = aptr.p2;
-                aptr.p2 = pptr;
-                newEdgeID = obj.addArc(aptr.p0.id, pptr.id, p2.id, aptr.direction);
-                pptr.ids(end+1) = eptr.id;
-                pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
-                pptr.ids = unique(pptr.ids);
-                p2.ids = setdiff(p2.ids, eptr.id);
-                eptr.pid(2) = pptr.id;
+%                 p2 = aptr.p2;
+%                 aptr.p2 = pptr;
+%                 newEdgeID = obj.addArc(aptr.p0.id, pptr.id, p2.id, aptr.direction);
+%                 pptr.ids(end+1) = eptr.id;
+%                 pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
+%                 pptr.ids = unique(pptr.ids);
+%                 p2.ids = setdiff(p2.ids, eptr.id);
+%                 eptr.pid(2) = pptr.id;
+
+                pid0 = aptr.p0.id;
+                pid1 = aptr.p1.id;
+                pid2 = aptr.p2.id;
+
+                obj.removeEdges(edgeID);
+                newEdgeID(1) = obj.addArc(pid0, pid1, pointID, aptr.direction);
+                newEdgeID(2) = obj.addArc(pid0, pointID, pid2, aptr.direction);
 
             else
                 error('Wrong number of input arguments.');
@@ -1348,39 +1443,25 @@ classdef emdlab_g2d_db < handle
 
         function removeEdges(obj, varargin)
 
-            %             % first remove all connected loops
-            %             for lTag = obj.edges(eIndex).ids
-            %
-            %             end
-
             % id and number of edges that will be removed
             eIDs = cell2mat(varargin);
             Ne = length(eIDs);
 
             eIndices = zeros(1,Ne);
-            pIndices = zeros(2,Ne);
 
-            for i = 1:Ne    
+            for i = 1:Ne
 
                 eIndices(i) = obj.eid2ei(eIDs(i));
                 p1 = obj.edges(eIndices(i)).ptr.getPtr1;
                 p2 = obj.edges(eIndices(i)).ptr.getPtr2;
                 p1.ids = setdiff(p1.ids, eIDs(i));
+                p1.uids = setdiff(p1.uids, eIDs(i));
                 p2.ids = setdiff(p2.ids, eIDs(i));
-                
-                if isempty(p1.ids) && isempty(p1.uids)
-                    pIndices(1,i) = obj.pid2pi(p1.id);
-                end
-                if isempty(p2.ids) && isempty(p2.uids)
-                    pIndices(2,i) = obj.pid2pi(p2.id);
-                end
+                p2.uids = setdiff(p2.uids, eIDs(i));
 
             end
 
             obj.edges(eIndices) = [];
-            pIndices = unique(pIndices(:));
-            if pIndices(1) == 0, pIndices(1) = []; end
-            obj.points(pIndices) = [];
             obj.updateIDMappers;
 
         end
@@ -1445,6 +1526,7 @@ classdef emdlab_g2d_db < handle
         function buildSketch(obj)
 
             obj.intersectAllEdges;
+            % remove hanging edges
             while true
 
                 elist = [];
@@ -1462,6 +1544,17 @@ classdef emdlab_g2d_db < handle
                 obj.removeEdges(elist);
 
             end
+
+            % remove unused points
+            plist = [];
+
+            for i = 1:obj.Npoints
+                if isempty(obj.points(i).ids) && isempty(obj.points(i).uids)
+                    plist(end+1) = obj.points(i).id;
+                end
+            end
+
+            obj.removePoints(plist);
 
         end
 
@@ -1682,6 +1775,12 @@ classdef emdlab_g2d_db < handle
                     break;
                 end
 
+                if ismember(eidx(idx), elist)
+                    loopIndex = [];
+                    loopPointer = [];
+                    return;
+                end
+
                 elist(end+1) = eidx(idx);
                 if flags(idx) == 1
                     p = obj.edges(eidx(idx)).ptr.getPtr2;
@@ -1775,13 +1874,13 @@ classdef emdlab_g2d_db < handle
             obj.removeEdges(hedges);
         end
 
-        function copyRotateEdges(obj, eTagIndex, Ncopy, rotAngle)
+        function copyRotateEdges(obj, eIDs, Ncopy, rotAngle)
 
             if nargin<4, rotAngle = 2*pi/Ncopy; end
 
-            for i = 1:numel(eTagIndex)
+            for i = 1:numel(eIDs)
 
-                eptr = obj.edges(obj.getEdgeIndexByID(['e', num2str(eTagIndex(i))]));
+                eptr = obj.edges(obj.eid2ei(eIDs(i)));
                 if eptr.isSegment
                     for j = 2:Ncopy
                         [p0x,p0y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p0.x,eptr.ptr.p0.y,(j-1)*rotAngle);
@@ -1793,7 +1892,7 @@ classdef emdlab_g2d_db < handle
                         [p0x,p0y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p0.x,eptr.ptr.p0.y,(j-1)*rotAngle);
                         [p1x,p1y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p1.x,eptr.ptr.p1.y,(j-1)*rotAngle);
                         [p2x,p2y] = emdlab_g2d_rotatePointsXY(eptr.ptr.p2.x,eptr.ptr.p2.y,(j-1)*rotAngle);
-                        obj.addArcByCoordinates(0,0,p1x,p1y,p2x,p2y,eptr.ptr.direction);
+                        obj.addArcByCoordinates(p0x,p0y,p1x,p1y,p2x,p2y,eptr.ptr.direction);
                     end
                 end
 
@@ -1801,6 +1900,13 @@ classdef emdlab_g2d_db < handle
 
 
 
+        end
+
+        function printLoopEdgeIDs(obj, loopIndex)
+            for i = obj.loops(loopIndex).edgesIndexList
+                fprintf('%d, ',obj.edges(i).id);
+            end
+            fprintf('\n');
         end
 
         %% face methods
@@ -1899,7 +2005,10 @@ classdef emdlab_g2d_db < handle
         function buildFaces(obj)
 
             obj.buildSketch;
-            obj.faces(:) = [];
+
+            if obj.Nedges == 0
+                return;
+            end
 
             idx = 1:obj.Nedges;
             flg = false(1,obj.Nedges);
@@ -1914,7 +2023,7 @@ classdef emdlab_g2d_db < handle
             for i = 1:length(idx)
                 l_tmp{2*i-1} = obj.getEdgeLoop(obj.edges(idx(i)).id, true, false);
                 l_tmp{2*i} = obj.getEdgeLoop(obj.edges(idx(i)).id, false, false);
-                if isequal(l_tmp{2*i-1}, l_tmp{2*i})
+                if isequal(l_tmp{2*i-1}, l_tmp{2*i}) && ~isempty(l_tmp{2*i})
                     sli(end+1) = idx(i);
                 end
             end
@@ -1924,21 +2033,22 @@ classdef emdlab_g2d_db < handle
                 nmax = max(nmax, length(l_tmp{i}));
             end
 
-            %             ecl = zeros(obj.Nedges, 2);
-            %             for i = 1:obj.Nedges
-            %                 ecl(i,:) = [obj.getPointIndexByTag(obj.edges(i).ptr.getPtr1.id),...
-            %                     obj.getPointIndexByTag(obj.edges(i).ptr.getPtr2.id)];
-            %             end
-
             cl = zeros(numel(l_tmp),nmax);
 
             for i = 1:numel(l_tmp)
                 cl(i,1:length(l_tmp{i})) = l_tmp{i};
             end
-
-            emdlab_mex_m3d_makeFacetsCanonical(cl);
+            
+            cl = emdlab_mex_makeRowsCanonical(cl);
+%             cl = canonicalizeConnectivity(cl);
             for i = 1:size(cl,1)
                 idx = find(cl(i,:) == 0, 1) - 1;
+                if idx == 0
+                    continue;
+                end
+                if isempty(idx)
+                    idx = size(cl,2);
+                end
                 if cl(i,2) > cl(i,idx)
                     cl(i,2:idx) = fliplr(cl(i,2:idx));
                 end
@@ -1947,97 +2057,185 @@ classdef emdlab_g2d_db < handle
             cl = unique(cl,'rows');
 
             tmp = unique(cl(:,1));
+            tmp( tmp == 0) = [];
 
             l_tmpi = zeros(1,2*length(tmp));
             l_tmp = cell(1,2*length(tmp));
 
             for i = 1:length(tmp)
-                l_tmpi(2*i-1) = obj.getEdgeLoop(obj.edges(tmp(i)).id, true);
-                l_tmpi(2*i) = obj.getEdgeLoop(obj.edges(tmp(i)).id, false);
-                l_tmp{2*i-1} = obj.loops(l_tmpi(2*i-1)).edgesIndexList;
-                l_tmp{2*i} = obj.loops(l_tmpi(2*i)).edgesIndexList;
+                l_tmpi(2*i-1) = obj.getEdgeLoop(tmp(i), true);
+                l_tmpi(2*i) = obj.getEdgeLoop(tmp(i), false);
+                l_tmp{2*i-1} = obj.loops(l_tmpi(2*i-1)).edgesIndexList .* (2 * obj.loops(l_tmpi(2*i-1)).directions - 1);
+                l_tmp{2*i} = obj.loops(l_tmpi(2*i)).edgesIndexList .* (2 * obj.loops(l_tmpi(2*i)).directions - 1);
             end
 
-            % sort loops vs number of their edges
-            tmp = zeros(1,length(l_tmpi));
-            for i = 1:length(l_tmpi)
-                tmp(i) = length(l_tmp{i});
+            nmax = 0;
+            for i = 1:numel(l_tmp)
+                nmax = max(nmax, length(l_tmp{i}));
             end
-            [~,idx] = sort(tmp);
 
+            cl = zeros(numel(l_tmp),nmax);
+
+            for i = 1:numel(l_tmp)
+                cl(i,1:length(l_tmp{i})) = l_tmp{i};
+            end
+
+            cl = emdlab_mex_makeRowsCanonical(cl);  
+%             cl = canonicalizeConnectivity(cl);
+            [~,idx,~] = unique(cl,'rows');
+
+
+% 
+%             % sort loops vs number of their edges
+%             tmp = zeros(1,length(l_tmpi));
+%             for i = 1:length(l_tmpi)
+%                 tmp(i) = length(l_tmp{i});
+%             end
+%             [~,idx] = sort(tmp);
+% 
+%             l_tmpi = l_tmpi(idx);
+%             l_tmp = l_tmp(idx);
+% 
+%             % find unique loops
+%             tmp = [];
+%             for i = 1:length(l_tmpi)
+%                 for j = i+1:length(l_tmpi)
+%                     if isequal(l_tmp{i},l_tmp{j})
+%                         tmp(end+1) = i;
+%                         break;
+%                     end
+%                 end
+%             end
+
+%             idx = setdiff(1:length(l_tmpi),tmp);
             l_tmpi = l_tmpi(idx);
             l_tmp = l_tmp(idx);
 
-            % find unique loops
-            tmp = [];
-            for i = 1:length(l_tmpi)
-                for j = i+1:length(l_tmpi)
-                    if isequal(l_tmp{i},l_tmp{j})
-                        tmp(end+1) = i;
+            % find boundary loops
+            elements = zeros(length(idx),nmax);
+            for i = 1:length(idx)
+                elements(i,1:length(l_tmp{i})) = l_tmp{i};
+            end
+
+            beidx = emdlab_mex_findSignedPairs(elements, max(max(elements)));
+            beidx = find(bitor(beidx == 1, beidx == 2));
+
+            % inner face loops
+            bidx = [];
+            for i = 1:length(idx)
+                if all(ismember(abs(l_tmp{i}), beidx))
+                    bidx(end+1) = i;
+                    continue
+                end
+            end
+
+            % define special loops
+            idx = setdiff(1:length(idx), bidx);
+
+            slidx = [];
+            for i = 1:length(bidx)
+                if all(ismember(abs(l_tmp{bidx(i)}), sli))
+                    slidx(end+1) = bidx(i);
+                end
+            end
+
+            bidx = setdiff(bidx, slidx);
+
+            iloops = {};
+            for j = 1:length(idx)
+                iloops{j} = l_tmpi(idx(j));
+            end
+
+            for i = 1:length(slidx)
+                pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+                for j = 1:length(idx)
+                    pts2 = obj.loops(l_tmpi(idx(j))).getMeshNodesMinimal;
+                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                        iloops{j}(end+1) = l_tmpi(slidx(i));
                         break;
                     end
                 end
             end
 
-            idx = setdiff(1:length(l_tmpi),tmp);
-            l_tmpi = l_tmpi(idx);
-            l_tmp = l_tmp(idx);
-
-            %             for i = 1:length(idx)
-            %                 for j = i:length(idx)
-            %                 end
-            %             end
-
-            fidx = 0;
-            for i = 1:length(idx)
-                fidx = fidx + 1;
-                obj.addFace(['f', num2str(fidx)], l_tmpi(i));
+            for i = 1:length(bidx)
+                pts1 = obj.loops(l_tmpi(bidx(i))).getMeshNodesMinimal;
+                for j = 1:length(idx)
+                    pts2 = obj.loops(l_tmpi(idx(j))).getMeshNodesMinimal;
+                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                        iloops{j}(end+1) = l_tmpi(bidx(i));
+                        break;
+                    end
+                end
             end
 
-            %             properties = cellfun(@(s) s.edges, l_tmp);
-            %
-            % % 2. Find the unique indices
-            % % 'ia' contains the indices of the first occurrences of the unique values
-            % [~, ia, ~] = unique(properties, 'stable');
-            %
-            % % 3. Index back into the original cell array
-            % uniqueCellOfStructs = cellOfStructs(ia);
+            sloops = {};
+            for i = 1:length(slidx)
+                sloops{i} = l_tmpi(slidx(i));
+            end
 
-            %             idx = 0;
-            %             fidx = 0;
-            %             while true
-            %
-            %                 idx = idx + 1;
-            %
-            %                 if idx > size(cl,1)
-            %                     break;
-            %                 end
-            %
-            %                 flg = cl(idx,:) == 0;
-            %                 if all(flg)
-            %                     continue;
-            %                 else
-            %                     eTag = obj.edges(cl(idx,find(flg == false, 1))).id;
-            %                     eTagIndex = str2double(eTag(2:end));
-            %                 end
-            %
-            %                 [li, llptr] = obj.getEdgeLoop(eTagIndex,true);
-            %                 fidx = fidx + 1;
-            %                 obj.addFace(['f', num2str(fidx)], li);
-            %
-            %                 [li, rlptr] = obj.getEdgeLoop(eTagIndex,false);
-            %                 fidx = fidx + 1;
-            %                 obj.addFace(['f', num2str(fidx)], li);
-            %
-            %                 elist = [llptr.edgesIndexList,rlptr.edgesIndexList];
-            %
-            %                 for j = idx+1:size(cl,1)
-            %                     tmp = setdiff(cl(j,:), elist);
-            %                     cl(j,:) = 0;
-            %                     cl(j,1:length(tmp)) = tmp;
-            %                 end
-            %
-            %             end
+            for i = 1:length(bidx)
+                pts1 = obj.loops(l_tmpi(bidx(i))).getMeshNodesMinimal;
+                for j = 1:length(slidx)
+                    pts2 = obj.loops(l_tmpi(slidx(j))).getMeshNodesMinimal;
+                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                        sloops{j}(end+1) = l_tmpi(bidx(i));
+                    end
+                end
+            end
+ 
+            for i = 1:length(slidx)
+                pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+                for j = setdiff(1:length(slidx),i)
+                    pts2 = obj.loops(l_tmpi(slidx(j))).getMeshNodesMinimal;
+                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                        sloops{j}(end+1) = l_tmpi(slidx(i));
+                    end
+                end
+            end
+
+            bloops = {};
+            for i = 1:length(bidx)
+                bloops{i} = l_tmpi(bidx(i));
+            end
+
+            allLoops = [iloops, sloops,bloops];
+
+            if numel(sloops)
+            for i = 1:numel(allLoops)
+                if length(allLoops{i}) == 1
+                    continue
+                end
+                childs = [];
+                for j = 2:length(allLoops{i})
+                    for k = setdiff(1:numel(allLoops),i)
+                        if allLoops{k}(1) == allLoops{i}(j)
+                            idx = k;
+                            break;
+                        end
+                    end
+                    childs = [childs, allLoops{idx}(2:end)];
+                end
+                allLoops{i} = [allLoops{i}(1), setdiff(allLoops{i}(2:end),childs)];
+            end
+            end
+
+            fidx = 0;
+            for i = 1:(numel(iloops)+numel(sloops))
+                fidx = fidx + 1;
+                obj.addFace(['f', num2str(fidx)], allLoops{i});
+            end
+
+%             % add faces
+%             fidx = 0;
+%             for i = 1:numel(iloops)
+%                 fidx = fidx + 1;
+%                 obj.addFace(['f', num2str(fidx)], iloops{i});
+%             end
+% 
+%             for i = 1:numel(sloops)
+%                 fidx = fidx + 1;
+%                 obj.addFace(['f', num2str(fidx)], sloops{i});
+%             end
 
         end
 
@@ -2922,26 +3120,21 @@ classdef emdlab_g2d_db < handle
             end
 
             % add loops
-            for i = 1:numel(obj.loops)
+            for i = 1:obj.Nloops
 
-                edgesIndexList = zeros(1,obj.loops(i).Nedges);
-                for j = 1:obj.loops(i).Nedges
-                    edgesIndexList(j) = obj.getEdgeIndexByID(obj.loops(i).edges{j}.id);
-                end
-
-                fprintf(fid, 'Curve Loop(%d) = {%s};\n', i, join(string(edgesIndexList), ', '));
+                fprintf(fid, 'Curve Loop(%d) = {%s};\n', i, join(string(obj.loops(i).edgesIndexList), ', '));
 
             end
 
             % add faces
-            for i = 1:numel(obj.faces)
+            for i = 1:obj.Nfaces
 
-                tmp_str = strings(1,length(obj.faces(i).loops));
+                loopIndexList = zeros(1,obj.faces(i).Nloops);
                 for j = 1:length(obj.faces(i).loops)
-                    tmp_str(j) = string(obj.getLoopIndexByTag(obj.faces(i).loops(j).id));
+                    loopIndexList(j) = obj.lid2li(obj.faces(i).loops(j).id);
                 end
 
-                fprintf(fid, 'Plane Surface(%d) = {%s};\n', i, strjoin(tmp_str,','));
+                fprintf(fid, 'Plane Surface(%d) = {%s};\n', i, strjoin(string(loopIndexList),','));
                 fprintf(fid, 'Physical Surface(%d) = {%d};\n', i, i);
 
             end
@@ -2990,8 +3183,8 @@ classdef emdlab_g2d_db < handle
                 index = (p21(:,1).*p31(:,2) - p21(:,2).*p31(:,1)) < 0;
                 cl(index,:) = cl(index,[1,3,2]);
 
-                m.addMeshZone(obj.faces(i).id, emdlab_m2d_tmz(cl, xpoints));
-                m.mzs.(obj.faces(i).id).color = obj.faces(i).color;
+                m.addMeshZone(obj.faces(i).name, emdlab_m2d_tmz(cl, xpoints));
+                m.mzs.(obj.faces(i).name).color = obj.faces(i).color;
 
             end
 

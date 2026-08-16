@@ -292,6 +292,7 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
                 end
                 plt.UserData.color = mzptr.color;
                 plt.UserData.title = mzNames{i};
+                plt.UserData.wasActive = false;
             end
 
             index = obj.edges(:, 3) ~= obj.edges(:, 4);
@@ -304,6 +305,7 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
             axis(ax, 'equal');
             set(ax, 'clipping', 'off');
 
+            emdlab_flib_setupPatchHover(f);
 %             set(gcf,'WindowButtonMotionFcn',@hoverFcn);
 
             if nargout == 1, varargout{1} = f;
@@ -317,25 +319,17 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
                     if isequal(h,ax.Children(i))
                         if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
                             e.Button = 1;
-                            emdlab_flib_selectPatchCallbackGM(ax.Children(i),e);
+                            ax.Children(i).UserData.wasActive = true;
+                            emdlab_flib_selectPatchCallbackGM1(ax.Children(i),e);
                             updateXLabel;
                             return;
                         end
                     end
                 end
                 for i = 1:numel(ax.Children)
-                    if isa(ax.Children(i), 'matlab.graphics.primitive.Patch')
-                        if ischar(ax.Children(i).FaceColor)
-                            if strcmpi(ax.Children(i).FaceColor, 'c')
-                                set(ax.Children(i), 'FaceColor', 'c');
-                                drawnow;
-                            end
-                        else
-                            if any(ax.Children(i).FaceColor ~= [0,1,1])
-                                set(ax.Children(i), 'FaceColor', 'c');
-                                drawnow;
-                            end
-                        end
+                    if ~isempty(ax.Children(i).UserData)
+                        set(ax.Children(i), 'FaceColor', ax.Children(i).UserData.color);
+                        drawnow;
                     end
                 end
                 title(ax,'');

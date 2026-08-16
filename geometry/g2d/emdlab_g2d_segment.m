@@ -203,7 +203,7 @@ classdef emdlab_g2d_segment < handle
 
             % Exclude endpoints with tolerance measured along the segment
             L = sqrt(L2_);
-            if t <= tol / L || t >= 1 - tol / L
+            if t < tol / L || t > 1 - tol / L
                 y = false;
                 return;
             end
