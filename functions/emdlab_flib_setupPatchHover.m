@@ -1,7 +1,12 @@
-function emdlab_flib_setupPatchHover(fig)
+function emdlab_flib_setupPatchHover(parent)
 
-    patches = findobj(fig, 'Type', 'patch');
+    % Find the figure containing the supplied object
+    fig = ancestor(parent, 'figure');
 
+    % Find patches inside the supplied parent
+    patches = findobj(parent, 'Type', 'patch');
+
+    % Store original colors
     for k = 1:numel(patches)
         patches(k).UserData.originalFaceColor = patches(k).FaceColor;
     end
@@ -9,13 +14,14 @@ function emdlab_flib_setupPatchHover(fig)
     previousPatch = gobjects(1);
 
     % Store original title for each axes
-    axesList = findobj(fig, 'Type', 'axes');
+    axesList = findobj(parent, 'Type', 'axes');
     originalTitles = cell(size(axesList));
 
     for k = 1:numel(axesList)
         originalTitles{k} = axesList(k).Title.String;
     end
 
+    % Mouse motion callback must belong to the figure
     fig.WindowButtonMotionFcn = @hoverFcn;
 
 
@@ -40,11 +46,15 @@ function emdlab_flib_setupPatchHover(fig)
 
                 previousPatch = currentPatch;
 
-                % Show patch title on axes
-                ax = currentPatch.Parent;
+                % Show patch title
+                ax = ancestor(currentPatch, 'axes');
 
-                title(ax, currentPatch.UserData.title, ...
-                    'Interpreter', 'none');
+                if isgraphics(ax)
+
+                    title(ax, currentPatch.UserData.title, ...
+                        'Interpreter', 'none');
+
+                end
 
             end
 
@@ -53,7 +63,7 @@ function emdlab_flib_setupPatchHover(fig)
             % Restore previous patch
             if isgraphics(previousPatch)
 
-                ax = previousPatch.Parent;
+                ax = ancestor(previousPatch, 'axes');
 
                 previousPatch.FaceColor = ...
                     previousPatch.UserData.originalFaceColor;
@@ -67,8 +77,10 @@ function emdlab_flib_setupPatchHover(fig)
                 end
 
                 previousPatch = gobjects(1);
+
             end
 
         end
     end
+
 end
