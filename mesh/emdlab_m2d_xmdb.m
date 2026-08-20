@@ -387,7 +387,7 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
 
             index = obj.edges(:, 3) ~= obj.edges(:, 4);
             patch('Faces', obj.edges(index, [1, 2]), 'Vertices', obj.nodes, ...
-                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 0.5, 'parent', ax);
+                'FaceColor', 'none', 'EdgeColor', 'k', 'LineWidth', 1, 'parent', ax);
 
             zoom on;
             axis(ax, 'off');

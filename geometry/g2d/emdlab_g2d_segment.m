@@ -169,6 +169,14 @@ classdef emdlab_g2d_segment < handle
             y = obj.p1;
         end
 
+        function setPtr1(obj, pptr)
+            obj.p0 = pptr;
+        end
+
+        function setPtr2(obj, pptr)
+            obj.p1 = pptr;
+        end
+
         function y = isPointOnEdge(obj, p, tol)
             % Check whether point p lies on the segment interior
             % within tolerance tol, excluding endpoints.
@@ -213,6 +221,30 @@ classdef emdlab_g2d_segment < handle
             d = norm(q - qproj);
 
             y = (d <= tol);
+        end
+
+        function y = getIndent(obj, shift)
+
+            u = obj.getUnitVector;
+            v = [-u(2),u(1)];
+            xy0 = obj.p0.getVector;
+            xy1 = obj.p1.getVector;
+
+            xy0 = xy0 + shift * v;
+            xy1 = xy1 + shift * v;
+
+            p0ptr = emdlab_g2d_point(xy0(1),xy0(2));
+            p1ptr = emdlab_g2d_point(xy1(1),xy1(2));
+            y = emdlab_g2d_segment(p0ptr,p1ptr);
+
+        end
+
+        function xy = getPointProjection(obj, x, y)
+
+            tmp = [x,y] - obj.p0.getVector;
+            u = obj.getUnitVector;
+            xy = obj.p0.getVector + (u*tmp') * u;
+
         end
 
     end

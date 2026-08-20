@@ -426,8 +426,17 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
         function y = getPtr1(obj)
             y = obj.p1;
         end
+        
         function y = getPtr2(obj)
             y = obj.p2;
+        end
+
+        function setPtr1(obj, pptr)
+            obj.p1 = pptr;
+        end
+
+        function setPtr2(obj, pptr)
+            obj.p2 = pptr;
         end
 
         function y = getTheta1Theta2(obj)
@@ -493,6 +502,26 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
 
             % --- point angularly inside the arc
             y = (delta <= total + angTol);
+        end
+
+        function y = getIndent(obj, shift)
+
+            p0xy = obj.p0.getVector;
+            u1 = obj.getu1;
+            u2 = obj.getu2;
+
+            p1xy = p0xy + (obj.getRadius - shift) * u1;
+            p2xy = p0xy + (obj.getRadius - shift) * u2;
+
+            y = emdlab_g2d_arc(emdlab_g2d_point(p0xy),emdlab_g2d_point(p1xy),emdlab_g2d_point(p2xy), obj.direction);
+
+        end
+
+        function xy = getPointProjection(obj, x, y)
+
+            tmp = [x,y] - obj.p0.getVector;
+            xy = obj.p0.getVector + obj.getRadius * tmp / norm(tmp);
+
         end
 
     end
