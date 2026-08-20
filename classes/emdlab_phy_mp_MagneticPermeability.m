@@ -1,16 +1,16 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% emdlab -> physics -> material property -> thermal conductivity
+% emdlab -> physics -> material property -> magnetic permeability
 
-classdef emdlab_phy_mp_ThermalConductivity
+classdef emdlab_phy_mp_MagneticPermeability
 
     properties(SetAccess = ?emdlab_phy_material)
 
-        % value of material property -> thermal conductivity
+        % value of material property -> magnetic permeability
         value;
 
         % this unit multiplier maps the value in original unit to SI unit
         unitUser (1,1) string; 
-        unitSI (1,1) string = "W/(m.K)";
+        unitSI (1,1) string = "H/m";
         unitMultiplier (1,1) double;
 
         % temperature dependent vs non-dependent
@@ -27,7 +27,7 @@ classdef emdlab_phy_mp_ThermalConductivity
 
     methods
 
-        function obj = emdlab_phy_mp_ThermalConductivity()
+        function obj = emdlab_phy_mp_MagneticPermeability()
 
             obj.value = 1;
             obj.isTemperatureDependent = false;
@@ -39,14 +39,14 @@ classdef emdlab_phy_mp_ThermalConductivity
         function obj = setValue(obj, xValue, xUnit)
 
             % set default unit
-            if nargin < 2, xUnit = 'W/(m.K)'; end
+            if nargin < 2, xUnit = 'H/m'; end
 
             obj.unitUser = erase(xUnit, ' ');
             xUnit = lower(obj.unitUser);
             % set unit multiplier
             switch xUnit
 
-                case {'w/mk', 'w/(mk)', 'w/(m.k)', 'w/mc', 'w/(mc)', 'w/(m.c)'}
+                case {'h/m', 'w/(mk)', 'w/(m.k)', 'w/mc', 'w/(mc)', 'w/(m.c)'}
                     obj.unitMultiplier = 1;
 
                 otherwise

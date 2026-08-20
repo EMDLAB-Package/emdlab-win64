@@ -55,7 +55,7 @@ classdef emdlab_g2d_segment < handle
 
             elseif obj.isSetMaxLength
 
-                Nn = max(ceil(getRadialLength(obj.p1 - obj.p0) / obj.maxLength), 2);
+                Nn = max(round(getRadialLength(obj.p1 - obj.p0) / obj.maxLength), 3);
                 nodes = zeros(Nn,2);
                 nodes(:,1) = linspace(obj.p0.x, obj.p1.x, Nn);
                 nodes(:,2) = linspace(obj.p0.y, obj.p1.y, Nn);

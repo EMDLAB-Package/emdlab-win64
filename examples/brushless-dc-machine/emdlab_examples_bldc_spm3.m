@@ -86,5 +86,3 @@ s.solve();
 
 % visualize solution
 s.plotBmagF;
-
-m.showg

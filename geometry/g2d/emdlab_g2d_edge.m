@@ -18,7 +18,7 @@ classdef emdlab_g2d_edge  < handle & matlab.mixin.Copyable & emdlab_g2d_constant
         % id of loops that used this edge for their constrcution
         ids (1,:) double;
 
-        % id of start and end points
+        % id of start and end points [start, end, rest]
         pid (1,:) double;
 
         % flag for hanging edges

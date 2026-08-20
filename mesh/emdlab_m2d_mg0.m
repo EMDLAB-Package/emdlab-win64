@@ -8,7 +8,7 @@ emdlab_g2d_validateFV(f,v);
 
 % set default number of max iterations
 if nargin < 5
-    maxIteration = 50;
+    maxIteration = 100;
 end
 
 % length of boundary edges

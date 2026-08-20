@@ -380,27 +380,34 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
 
             % radius angles from center to endpoints
 
+            l_tmp = 1e-2/obj.getRadius;
             % tangent angles
             if obj.direction
                 % CCW arc
-                u = obj.getu1;
-                u = emdlab_g2d_rotatePoints(u, 0.01*obj.getAngle);
-                u = [-u(2),u(1)];
+                
+                u = emdlab_g2d_rotatePoints(obj.p1.getVector, l_tmp,obj.p0.x,obj.p0.y);
+                u = u - obj.p1.getVector;
+%                 u = [-u(2),u(1)];
                 y(1) = atan2(u(2),u(1));
-                u = obj.getu2;
-                u = emdlab_g2d_rotatePoints(u, -0.01*obj.getAngle);
-                u = [u(2),-u(1)];
+
+                u = emdlab_g2d_rotatePoints(obj.p2.getVector, -l_tmp,obj.p0.x,obj.p0.y);
+                u = u - obj.p2.getVector;
+%                 u = [u(2),-u(1)];
                 y(2) = atan2(u(2),u(1));
+
             else
                 % CW arc
-                u = obj.getu1;
-                u = emdlab_g2d_rotatePoints(u, -0.01*obj.getAngle);
-                u = [u(2),-u(1)];
+
+                u = emdlab_g2d_rotatePoints(obj.p1.getVector, -l_tmp,obj.p0.x,obj.p0.y);
+                u = u - obj.p1.getVector;
+%                 u = [u(2),-u(1)];
                 y(1) = atan2(u(2),u(1));
-                u = obj.getu2;
-                u = emdlab_g2d_rotatePoints(u, 0.01*obj.getAngle);
-                u = [-u(2),u(1)];
+                
+                u = emdlab_g2d_rotatePoints(obj.p2.getVector, l_tmp,obj.p0.x,obj.p0.y);
+                u = u - obj.p2.getVector;
+%                 u = [-u(2),u(1)];
                 y(2) = atan2(u(2),u(1));
+
             end
 
             y = mod(y, 2*pi);
@@ -449,7 +456,7 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
             %   y   : logical true/false
 
             if nargin < 3
-                tol = 1e-9;
+                tol = 1e-5;
             end
 
             R = obj.getRadius;

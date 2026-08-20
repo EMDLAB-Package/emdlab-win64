@@ -1,13 +1,13 @@
 % linear machine models
 
-function m = emdlab_g2d_lib_lm1(g, p, q, Nwl, shp, ws, wt, ds, dymc, Lemc, mcta, dar, dyrc, gap, np, Ley)
+function varargout = emdlab_g2d_lib_lm1(g, p, q, Nwl, shp, ws, wt, ds, dymc, Lemc, mcta, dar, dyrc, gap, xL, Ley)
 
 % defult arguments for debug
 if nargin == 0
     g = emdlab_g2d_db;
     q = 2;
     p = 4;
-    Nwl = 2;
+    Nwl = 1;
     shp = 1;
     ws = 10;
     wt = 8;
@@ -15,10 +15,10 @@ if nargin == 0
     dymc = 18;
     dar = 4;
     dyrc = 8;
-    gap = 10;
-    np = 2;
+    gap = 10;    
     Lemc = 30;
     mcta = 15;
+    xL = 1.5;
     Ley = 30;
 end
 
@@ -46,7 +46,7 @@ if Nwl == 1
 
     x0 = Ns*tau_s/2;
     x_tmp = x_tmp - x0;
-    
+
     x_tmp(end) = x_tmp(end) - L2;
     x_tmp(end-1) = x_tmp(end-1) + L2;
     x_tmp(1) = x_tmp(1) - Lemc;
@@ -57,23 +57,23 @@ if Nwl == 1
     for i = 1:Ns
         idx1 = 2 + (i-1)*4;
         eidx_new1 = g.addSegmentByCoordinates(x_tmp(idx1),y_tmp(idx1),x_tmp(idx1+3),y_tmp(idx1+3));
-        g.addFace('ca_' + string(i), g.addLoop(g.getEdgeLeftLoop(eidx_new1)));
+        g.addFace('ca_' + string(i), g.getEdgeLeftLoop(eidx_new1));
         g.setFaceColor('ca_' + string(i),0,255,255);
     end
 
-    x1 = np*Ns*tau_s/2;
+    x1 = xL*(Ns*tau_s+2*max(Lemc,L2))/2;
     y1 = gap/2+ds+dymc+Ley;
     ei = g.addSegmentByCoordinates(x0+Lemc,gap/2,x1,gap/2);
     g.addSegmentByCoordinates(x1,gap/2,x1,y1);
     g.addSegmentByCoordinates(x1,y1,-x1,y1);
-    g.addSegmentByCoordinates(-x1,y1,-x1,gap/2);
+    g.addSegmentByCoordinates(-x1,gap/2,-x1,y1);
     g.addSegmentByCoordinates(-x1,gap/2,-x0-Lemc,gap/2);
-    g.addFace('moving_air', g.addLoop(g.getEdgeLeftLoop(ei)))
+    g.addFace('moving_air', g.getEdgeLeftLoop(ei))
     g.setFaceColor('moving_air', 0, 255, 255)
 
 elseif Nwl == 2
 
-     % number of slots in moving core
+    % number of slots in moving core
     Ns = 3*q*p + 3*q - shp;
 
     x_tmp = [wt/2;wt/2;wt/2;wt/2+ws;wt/2+ws;wt/2+ws];
@@ -92,7 +92,7 @@ elseif Nwl == 2
 
     x0 = Ns*tau_s/2;
     x_tmp = x_tmp - x0;
-    
+
     x_tmp(end) = x_tmp(end) - L2;
     x_tmp(end-1) = x_tmp(end-1) + L2;
     x_tmp(1) = x_tmp(1) - Lemc;
@@ -110,18 +110,18 @@ elseif Nwl == 2
         g.setFaceColor('ca_2_' + string(i),0,255,255);
     end
 
-    x1 = np*Ns*tau_s/2;
+    x1 = xL*(Ns*tau_s+2*max(Lemc,L2))/2;
     y1 = gap/2+ds+dymc+Ley;
     ei = g.addSegmentByCoordinates(x0+Lemc,gap/2,x1,gap/2);
     g.addSegmentByCoordinates(x1,gap/2,x1,y1);
     g.addSegmentByCoordinates(x1,y1,-x1,y1);
-    g.addSegmentByCoordinates(-x1,y1,-x1,gap/2);
+    g.addSegmentByCoordinates(-x1,gap/2,-x1,y1);
     g.addSegmentByCoordinates(-x1,gap/2,-x0-Lemc,gap/2);
     g.addFace('moving_air', g.getEdgeLeftLoop(ei))
     g.setFaceColor('moving_air', 0, 255, 255)
 
 else
-    error('Number of winding layers must be 1 or 2.');    
+    error('Number of winding layers must be 1 or 2.');
 end
 
 % add rail parts
@@ -155,6 +155,9 @@ close all;
 if nargin ==0, g.showSketch; end
 if nargin ==0, g.showFaces; end
 
-g.setMeshMaxLength(ds/3);
-m = g.generateMesh('mg0');
+if nargout == 1
+    g.setMeshMaxLength(ds/3);
+    varargout{1} = g.generateMesh('mg0');
+end
+
 end

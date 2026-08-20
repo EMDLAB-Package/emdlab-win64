@@ -27,6 +27,14 @@ classdef emdlab_ui_console < handle
             end
         end
 
+        function dispMessageLine(obj, txt, timeHolder)
+            if obj.printFlag
+                disp(txt);
+                toc(timeHolder);
+                disp('-------------------------------------------------------');
+            end
+        end
+
         function fprintf(obj, varargin)
             if obj.printFlag
                 fprintf(varargin{:});
