@@ -1799,7 +1799,9 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             saggita = max(pMax - pMin)/1000;
 
             for i = 1:obj.Nedges
-                if ~obj.edges(i).isSegment
+                if obj.edges(i).isSegment
+                    obj.edges(i).ptr.setNnodes(3);
+                elseif obj.edges(i).isArc
                     nnodes = ceil(obj.edges(i).ptr.getAngle/(2*acos(1-saggita/obj.edges(i).ptr.getRadius)));
                     obj.edges(i).ptr.setNnodes(max(nnodes,2));
                 end
@@ -2509,8 +2511,8 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             %             end
 
             iloops = {};
-            for j = 1:length(idx)
-                iloops{j} = l_tmpi(idx(j));
+            for i = 1:length(idx)
+                iloops{i} = l_tmpi(idx(i));
             end
 
             bloops = {};
@@ -2585,9 +2587,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 end
             end
 
-
-
-            allLoops = [iloops, sloops,bloops];
+            allLoops = [iloops, sloops, bloops];
 
             for i = 1:numel(allLoops)
                 if length(allLoops{i}) == 1
