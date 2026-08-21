@@ -241,38 +241,47 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
-        function [x,y] = getPointCoordinates(obj, pointID)
-            pIndex = obj.pid2pi(pointID);
-            x = obj.points(pIndex).x;
-            y = obj.points(pIndex).y;
+        function [x,y] = getPointCoordinates(obj, pID)
+            pIDX = obj.pid2pi(pID);
+            x = obj.points(pIDX).x;
+            y = obj.points(pIDX).y;
         end
 
-        function setPointXCoordinate(obj, pointID, newX)
-            obj.points(obj.pid2pi(pointID)).x = newX;
+        function setPointXCoordinate(obj, pID, newX)
+            obj.points(obj.pid2pi(pID)).x = newX;
+            obj.pts(obj.pid2pi(pID),1) = newX;
         end
 
-        function setPointYCoordinate(obj, pointID, newY)
-            obj.points(obj.pid2pi(pointID)).y = newY;
+        function setPointYCoordinate(obj, pID, newY)
+            obj.points(obj.pid2pi(pID)).y = newY;
+            obj.pts(obj.pid2pi(pID),2) = newY;
         end
 
-        function setPointCoordinates(obj, pointID, newX, newY)
-            pIndex = obj.pid2pi(pointID);
+        function setPointCoordinates(obj, pID, newX, newY)
+            pIndex = obj.pid2pi(pID);
             obj.points(pIndex).x = newX;
             obj.points(pIndex).y = newY;
+            obj.pts(obj.pid2pi(pID),:) = [newX, newY];
         end
 
         function alignPointsAlongYAxis(obj, varargin)
 
+            % x coordinate of the first point
+            xp1 = obj.points(obj.pid2pi(varargin{1})).x;
             for i = 2:numel(varargin)
-                obj.points(obj.pid2pi(varargin{i})).x = obj.points(obj.pid2pi(varargin{1})).x;
+                obj.points(obj.pid2pi(varargin{i})).x = xp1;
+                obj.pts(obj.pid2pi(varargin{i}),1) = xp1;
             end
 
         end
 
         function alignPointsAlongXAxis(obj, varargin)
 
+            % y coordinate of the first point
+            yp1 = obj.points(obj.pid2pi(varargin{1})).y;
             for i = 2:numel(varargin)
-                obj.points(obj.pid2pi(varargin{i})).y = obj.points(obj.pid2pi(varargin{1})).y;
+                obj.points(obj.pid2pi(varargin{i})).y = yp1;
+                obj.pts(obj.pid2pi(varargin{i}),2) = yp1;
             end
 
         end
@@ -283,6 +292,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             for i = 2:numel(varargin)
                 r_i = obj.points(obj.pid2pi(varargin{i})).getDistanceFromOrigin;
                 obj.points(obj.pid2pi(varargin{i})).setCoordinates(r_i*u_ref(1), r_i*u_ref(2));
+                obj.pts(obj.pid2pi(varargin{i}),:) = [r_i*u_ref(1), r_i*u_ref(2)];
             end
 
         end
@@ -291,8 +301,9 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
             r_ref = obj.points(obj.pid2pi(varargin{1})).getDistanceFromOrigin;
             for i = 2:numel(varargin)
-                u_i = obj.points(obj.pid2pi(varargin{i})).getUnitVector;
-                obj.points(obj.pid2pi(varargin{i})).setCoordinates(r_ref*u_i(1), r_ref*u_i(2));
+                u_i = r_ref * obj.points(obj.pid2pi(varargin{i})).getUnitVector;
+                obj.points(obj.pid2pi(varargin{i})).setCoordinates(u_i(1), u_i(2));
+                obj.pts(obj.pid2pi(varargin{i}),:) = u_i;
             end
 
         end
@@ -1782,16 +1793,18 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         end
 
         function updateMMS(obj)
-            l_tmp = zeros(1,obj.Nedges);
+
+            pMin = min(obj.pts);
+            pMax = max(obj.pts);
+            saggita = max(pMax - pMin)/1000;
+
             for i = 1:obj.Nedges
                 if ~obj.edges(i).isSegment
-                    l_tmp(i) = obj.edges(i).ptr.getLength();
-                else
-                    l_tmp(i) = inf;
+                    nnodes = ceil(obj.edges(i).ptr.getAngle/(2*acos(1-saggita/obj.edges(i).ptr.getRadius)));
+                    obj.edges(i).ptr.setNnodes(max(nnodes,2));
                 end
             end
 
-            obj.setMeshMaxLength(min(l_tmp)/10);
         end
 
         function applyFillet(obj, fr, pIDs)
@@ -2868,6 +2881,57 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
+        function varargout = showDXF(obj)
+            
+            obj.updateMMS;
+
+            figHandle = figure('NumberTitle', 'on', 'name', ...
+                'EMDLAB Geometry Visualization', 'color', [0.07 0.07 0.08],'Position',[0,0,1000,600], ...
+                'Visible','off');
+            movegui(figHandle,'center');
+            drawnow;
+            figHandle.Visible = 'on';
+
+            figure(figHandle.Number);
+            ax = gca;
+            cla(ax);
+            hold all;
+
+            % plot edges: Ne = the number of edges
+            Ne = numel(obj.edges);
+            v = cell(Ne,1);
+            cl = cell(Ne,1);
+            c = zeros(Ne,2);
+            for i = 1:Ne
+                v{i} = obj.edges(i).ptr.getMeshNodes;
+                cl{i} = (1:size(v{i},1)-1)';
+                cl{i} = [cl{i},cl{i}+1];
+                c(i,:) = obj.edges(i).ptr.getCenter;
+            end
+            Index = 0;
+            for i = 2:Ne
+                Index = Index + size(v{i-1},1);
+                cl{i} = cl{i} + Index;
+            end
+
+            v = cell2mat(v);
+            cl = cell2mat(cl);
+
+            patch('faces', cl, 'vertices', v, 'edgecolor', 'w', 'linewidth',1);
+
+            set(gca, 'clipping', 'off');
+
+            axis off equal;
+            zoom on;
+            grid on;
+            drawnow;
+
+            if nargout == 1
+                varargout{1} = figHandle;
+            end
+
+        end
+
         function varargout = showEdgeDirections(obj)
 
             f = figure('NumberTitle','on','WindowState','maximized',...
@@ -3001,8 +3065,8 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         function showFaces(obj, varargin)
 
-            m = obj.generateMesh('mm');
             obj.showSketch(0,0);
+            m = obj.generateMesh('mm');           
             ax = gca;
             for i = 1:numel(ax.Children)
                 set(ax.Children(i), 'HitTest','off','PickableParts','none');
