@@ -39,9 +39,10 @@ classdef emdlab_g2d_segment < handle
         %% wireframe mesh functions
         function  nodes = getMeshNodesMinimal(obj)
 
-            nodes = zeros(obj.Nnodes,2);
-            nodes(:,1) = [obj.p0.x; obj.p1.x];
-            nodes(:,2) = [obj.p0.y; obj.p1.y];
+%             nodes = zeros(obj.Nnodes,2);
+%             nodes(:,1) = [obj.p0.x; obj.p1.x];
+%             nodes(:,2) = [obj.p0.y; obj.p1.y];
+            nodes = obj.getMeshNodes;
 
         end
 
