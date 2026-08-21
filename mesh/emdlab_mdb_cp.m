@@ -131,11 +131,47 @@ classdef emdlab_mdb_cp < handle & emdlab_ui_console
                 originPoint = [0,0,0];
             end
             rcsName = obj.checkRelativeCSNonExistence(rcsName);
-            tmp = emdlab_m3d_cs; 
+            tmp = emdlab_m3d_cs;
             obj.cs.(rcsName) = tmp.setCoordinateSystem(xAxis, yPoint, originPoint);
         end
-        
-        function setMeshZoneColor(obj, mzName, R, G, B)
+
+        function setMeshZoneColor(obj, mzName, varargin)
+
+            switch numel(varargin)
+                case 1
+                    if isnumeric(varargin{1})
+                        R = varargin{1}(1);
+                        G = varargin{1}(2);
+                        B = varargin{1}(3);
+                    elseif isstring(varargin{1}) || ischar(varargin{1})
+                        switch char(varargin{1})
+                            case 'iron'
+                                R = 200; G = 200; B = 200;
+                            case 'copper'
+                                R = 255; G = 137; B = 39;
+                            case 'air'
+                                R = 0; G = 255; B = 255;
+                            case 'magnet'
+                                R = 160; G = 78; B = 146;
+                            case 'red'
+                                R = 242; G = 98; B = 105;
+                            case 'green'
+                                R = 160; G = 78; B = 146;
+                            case 'blue'
+                                R = 0; G = 125; B = 0;
+                            otherwise
+                                error('unsupported color type.');
+                        end
+                    else
+                        error('Wrong input arguments.');
+                    end
+                case 3
+                    R = varargin{1};
+                    G = varargin{2};
+                    B = varargin{3};
+                otherwise
+                    error('Wrong input arguments.');
+            end
 
             if ischar(mzName)
                 mzName = obj.checkMeshZoneExistence(mzName);
@@ -167,9 +203,9 @@ classdef emdlab_mdb_cp < handle & emdlab_ui_console
 
             if nargin == 2
 
-%                 if ~isa(varargin{1}, 'emdlab_m2d_tmz')
-%                     error('Mesh zone class must be <emdlab_m2d_tmz>.');
-%                 end
+                %                 if ~isa(varargin{1}, 'emdlab_m2d_tmz')
+                %                     error('Mesh zone class must be <emdlab_m2d_tmz>.');
+                %                 end
 
                 mzName = obj.getDefaultMeshZoneName;
                 mzptr = varargin{1};
@@ -177,9 +213,9 @@ classdef emdlab_mdb_cp < handle & emdlab_ui_console
             elseif nargin == 3
                 mzName = obj.checkMeshZoneNonExistence(varargin{1});
 
-%                 if ~isa(varargin{2}, 'emdlab_m2d_tmz')
-%                     error('Mesh zone class must be <emdlab_m2d_tmz>.');
-%                 end
+                %                 if ~isa(varargin{2}, 'emdlab_m2d_tmz')
+                %                     error('Mesh zone class must be <emdlab_m2d_tmz>.');
+                %                 end
 
                 mzptr = varargin{2};
             else
