@@ -248,6 +248,30 @@ classdef emdlab_g2d_segment < handle
 
         end
 
+        function flg = isequal(obj, newObj)
+            if isa(newObj, 'emdlab_g2d_segment')
+                if ((obj.p0.id == newObj.p0.id) && (obj.p1.id == newObj.p1.id)) || ...
+                        ((obj.p0.id == newObj.p1.id) && (obj.p1.id == newObj.p0.id))
+                    flg = true;
+                    return;
+                end                
+            end
+            flg = false;
+        end
+
+        function flg = hasIntersection(obj, newObj)
+%             if isa(newObj, 'emdlab_g2d_segment')
+%                 if ((obj.p0.id == newObj.p0.id) && (obj.p1.id == newObj.p1.id)) || ...
+%                         ((obj.p0.id == newObj.p1.id) && (obj.p1.id == newObj.p0.id))
+%                     flg = true;
+%                     return;
+%                 end    
+%             elseif isa(newObj, 'emdlab_g2d_arc')
+%                 
+%             end
+            flg = true;
+        end
+
     end
 
 end

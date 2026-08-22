@@ -510,24 +510,24 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         % this function returns edge id and edge handle
         function varargout = addSegment(obj, p0ID, p1ID)
 
-            % check for existance of already defined point in the same location
-            for i = 1:obj.Nedges
-
-                if obj.edges(i).isSegment && all(ismember([p0ID, p1ID], obj.edges(i).pid))
-
-                    if nargout == 1
-                        varargout{1} = obj.edges(i).id;
-                    elseif nargout == 2
-                        varargout{1} = obj.edges(i).id;
-                        varargout{2} = obj.edges(i);
-                    elseif nargout > 2
-                        error('The number of output arguments is too high.');
-                    end
-                    return;
-
-                end
-
-            end
+%             % check for existance of already defined point in the same location
+%             for i = 1:obj.Nedges
+% 
+%                 if obj.edges(i).isSegment && all(ismember([p0ID, p1ID], obj.edges(i).pid))
+% 
+%                     if nargout == 1
+%                         varargout{1} = obj.edges(i).id;
+%                     elseif nargout == 2
+%                         varargout{1} = obj.edges(i).id;
+%                         varargout{2} = obj.edges(i);
+%                     elseif nargout > 2
+%                         error('The number of output arguments is too high.');
+%                     end
+%                     return;
+% 
+%                 end
+% 
+%             end
 
             % get point indices
             p0Index = obj.pid2pi(p0ID);
@@ -1316,6 +1316,18 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
+        function varargout = addRectangle(obj, x0, y0, W, H)
+
+            if nargout == 0
+                obj.addRectangleP0XYWH(x0, y0, W, H);
+            elseif nargout == 1
+                varargout{1} = obj.addRectangleP0XYWH(x0, y0, W, H);
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
         function varargout = addRectangleP0P1H(obj, x0, y0, W, H)
 
             % add points 0 & 1
@@ -1539,6 +1551,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             % edge & segment pointers
             eptr = obj.edges(obj.eid2ei(edgeID));
             sptr = eptr.ptr;
+            newEdgeID = [];
 
             if nargin == 2
 
@@ -1560,21 +1573,21 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 if eptr.pid(2) == pptr.id, return; end
                 if ~sptr.isPointOnEdge(pptr); return; end
 
-                %                 p2 = sptr.p1;
-                %                 sptr.p1 = pptr;
-                %                 newEdgeID = obj.addSegment(pointID, p2.id);
-                %                 pptr.ids(end+1) = eptr.id;
-                %                 pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
-                %                 pptr.ids = unique(pptr.ids);
-                %                 p2.ids = setdiff(p2.ids, eptr.id);
-                %                 eptr.pid(2) = pptr.id;
+                                p2 = sptr.p1;
+                                sptr.p1 = pptr;
+                                newEdgeID = obj.addSegment(pointID, p2.id);
+                                pptr.ids(end+1) = eptr.id;
+                                pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
+                                pptr.ids = unique(pptr.ids);
+                                p2.ids = setdiff(p2.ids, eptr.id);
+                                eptr.pid(2) = pptr.id;
 
-                pid1 = sptr.p0.id;
-                pid2 = sptr.p1.id;
-
-                obj.removeEdges(edgeID);
-                newEdgeID(1) = obj.addSegment(pid1, pointID);
-                newEdgeID(2) = obj.addSegment(pointID, pid2);
+%                 pid1 = sptr.p0.id;
+%                 pid2 = sptr.p1.id;
+% 
+%                 obj.removeEdges(edgeID);
+%                 newEdgeID(1) = obj.addSegment(pid1, pointID);
+%                 newEdgeID(2) = obj.addSegment(pointID, pid2);
 
             else
                 error('Wrong number of input arguments.');
@@ -1587,6 +1600,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             % edge & arc pointers
             eptr = obj.edges(obj.eid2ei(edgeID));
             aptr = eptr.ptr;
+            newEdgeID = [];
 
             if nargin == 2
 
@@ -1609,22 +1623,22 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 if eptr.pid(2) == pptr.id, return; end
                 if ~aptr.isPointOnEdge(pptr); return; end
 
-                %                 p2 = aptr.p2;
-                %                 aptr.p2 = pptr;
-                %                 newEdgeID = obj.addArc(aptr.p0.id, pptr.id, p2.id, aptr.direction);
-                %                 pptr.ids(end+1) = eptr.id;
-                %                 pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
-                %                 pptr.ids = unique(pptr.ids);
-                %                 p2.ids = setdiff(p2.ids, eptr.id);
-                %                 eptr.pid(2) = pptr.id;
+                                p2 = aptr.p2;
+                                aptr.p2 = pptr;
+                                newEdgeID = obj.addArc(aptr.p0.id, pptr.id, p2.id, aptr.direction);
+                                pptr.ids(end+1) = eptr.id;
+                                pptr.ids(end+1) = obj.edges(obj.eid2ei(newEdgeID)).id;
+                                pptr.ids = unique(pptr.ids);
+                                p2.ids = setdiff(p2.ids, eptr.id);
+                                eptr.pid(2) = pptr.id;
 
-                pid0 = aptr.p0.id;
-                pid1 = aptr.p1.id;
-                pid2 = aptr.p2.id;
-
-                obj.removeEdges(edgeID);
-                newEdgeID(1) = obj.addArc(pid0, pid1, pointID, aptr.direction);
-                newEdgeID(2) = obj.addArc(pid0, pointID, pid2, aptr.direction);
+%                 pid0 = aptr.p0.id;
+%                 pid1 = aptr.p1.id;
+%                 pid2 = aptr.p2.id;
+% 
+%                 obj.removeEdges(edgeID);
+%                 newEdgeID(1) = obj.addArc(pid0, pid1, pointID, aptr.direction);
+%                 newEdgeID(2) = obj.addArc(pid0, pointID, pid2, aptr.direction);
 
             else
                 error('Wrong number of input arguments.');
@@ -1727,24 +1741,53 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         function intersectAllEdges(obj)
 
             nfe = 0;
+            iflg = logical(sparse(obj.Nedges,obj.Nedges));
             while true
 
                 existFlag = true;
+                ne = obj.Nedges;
 
-                for i = 1:obj.Nedges
-                    for j = i+1:obj.Nedges
-                        nfe = nfe + 1;
-                        if obj.intersectEdges(obj.edges(i).id,obj.edges(j).id)
-                            existFlag = false;
+                for i = 1:ne
+                    for j = i+1:ne                        
+                        if ~iflg(i,j)
+                            nfe = nfe + 1;
+                            if obj.edges(i).ptr.hasIntersection(obj.edges(j).ptr)
+                                if obj.intersectEdges(obj.edges(i).id, obj.edges(j).id)
+                                    existFlag = false;
+                                else
+                                    iflg(i,j) = true;
+                                end
+                            end
                         end
                     end
                 end
+
+                iflg(obj.Nedges,obj.Nedges) = false;
 
                 if existFlag
                     break;
                 end
 
             end
+
+            obj.uniqueEdges;
+
+        end
+
+        function uniqueEdges(obj)
+
+            ids = zeros(1,obj.Nedges);
+            for i = 1:obj.Nedges
+                for j = 1+i:obj.Nedges
+                    if obj.edges(i).ptr.isequal(obj.edges(j).ptr)
+                        ids(i) = obj.edges(i).id;
+                        break;
+                    end
+                end
+            end
+
+            ids(ids ==0) = [];
+            obj.removeEdges(ids);
 
         end
 
@@ -1803,7 +1846,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                     obj.edges(i).ptr.setNnodes(3);
                 elseif obj.edges(i).isArc
                     nnodes = ceil(obj.edges(i).ptr.getAngle/(2*acos(1-saggita/obj.edges(i).ptr.getRadius)));
-                    obj.edges(i).ptr.setNnodes(max(nnodes,2));
+                    obj.edges(i).ptr.setNnodes(max(nnodes,3));
                 end
             end
 
@@ -2567,19 +2610,9 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 end
             end
 
-            %             for i = 1:length(bidx)
-            %                 pts1 = obj.loops(l_tmpi(bidx(i))).getMeshNodesMinimal;
-            %                 for j = 1:length(slidx)
-            %                     pts2 = obj.loops(l_tmpi(slidx(j))).getMeshNodesMinimal;
-            %                     if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
-            %                         sloops{j}(end+1) = l_tmpi(bidx(i));
-            %                     end
-            %                 end
-            %             end
-
             for i = 1:length(slidx)
                 pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
-                for j = setdiff(1:length(bidx),i)
+                for j = 1:length(bidx)
                     pts2 = obj.loops(l_tmpi(bidx(j))).getMeshNodesMinimal;
                     if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
                         bloops{j}(end+1) = l_tmpi(slidx(i));
@@ -2628,29 +2661,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             obj.dispMessageLine('Face generation completed.', timeHolder);
 
         end
-
-        function constructFaces(obj)
-
-            obj.intersectAllEdges;
-            obj.updateAllHangingEdges;
-
-            l_tmp = {};
-            for i = 1:obj.Nedges
-                [~,~,l1] = obj.getEdgeLeftLoop(obj.edges(i).id);
-                [~,~,l2] = obj.getEdgeRightLoop(obj.edges(i).id);
-
-                if all(~cellfun(@(x) isequal(x, l1), l_tmp))
-                    l_tmp{end+1} = l1;
-                end
-
-                if all(~cellfun(@(x) isequal(x, l2), l_tmp))
-                    l_tmp{end+1} = l2;
-                end
-
-            end
-
-        end
-
+        
         %% mesh generation methods
         % generate triangular mesh for geometry
         function m = generateMesh(obj, meshGenerator)
