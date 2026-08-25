@@ -548,6 +548,55 @@ classdef emdlab_g2d_arc < handle & emdlab_g2d_constants
             flg = true;
         end
 
+        function y = getBBOX(obj)
+
+    % Center and radius
+    c = obj.p0.getVector;
+    R = obj.getRadius;
+
+    % Start and end angles
+    theta1 = atan2(obj.p1.y - obj.p0.y, ...
+                   obj.p1.x - obj.p0.x);
+
+    theta2 = atan2(obj.p2.y - obj.p0.y, ...
+                   obj.p2.x - obj.p0.x);
+
+    % Normalize
+    theta1 = mod(theta1, 2*pi);
+    theta2 = mod(theta2, 2*pi);
+
+    % Candidate angles
+    theta = [theta1, theta2];
+
+    % Circle extrema
+    thetaExt = [0, pi/2, pi, 3*pi/2];
+
+    % Check which extrema belong to the arc
+    for i = 1:4
+
+        if obj.direction
+            % CCW
+            d = mod(thetaExt(i) - theta1, 2*pi);
+        else
+            % CW
+            d = mod(theta1 - thetaExt(i), 2*pi);
+        end
+
+        if d <= obj.getAngle
+            theta(end+1) = thetaExt(i);
+        end
+
+    end
+
+    % Coordinates of all candidate points
+    x = c(1) + R*cos(theta);
+    ycoord = c(2) + R*sin(theta);
+
+    % [xmin ymin xmax ymax]
+    y = [min(x), min(ycoord), max(x), max(ycoord)];
+
+end
+
     end
 
 end

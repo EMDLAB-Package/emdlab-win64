@@ -260,16 +260,29 @@ classdef emdlab_g2d_segment < handle
         end
 
         function flg = hasIntersection(obj, newObj)
-%             if isa(newObj, 'emdlab_g2d_segment')
-%                 if ((obj.p0.id == newObj.p0.id) && (obj.p1.id == newObj.p1.id)) || ...
-%                         ((obj.p0.id == newObj.p1.id) && (obj.p1.id == newObj.p0.id))
-%                     flg = true;
-%                     return;
-%                 end    
-%             elseif isa(newObj, 'emdlab_g2d_arc')
-%                 
-%             end
+            if isa(newObj, 'emdlab_g2d_segment')
+                tmp_p1 = obj.p0.getVector;
+                tmp_p2 = obj.p1.getVector;
+                tmp_p3 = newObj.p0.getVector;
+                tmp_p4 = newObj.p1.getVector;
+
+                if max(tmp_p1(1), tmp_p2(1)) < min(tmp_p3(1), tmp_p4(1)) || ...
+                        max(tmp_p3(1), tmp_p4(1)) < min(tmp_p1(1), tmp_p2(1)) || ...
+                        max(tmp_p1(2), tmp_p2(2)) < min(tmp_p3(2), tmp_p4(2)) || ...
+                        max(tmp_p3(2), tmp_p4(2)) < min(tmp_p1(2), tmp_p2(2))
+
+                    % Bounding boxes do not overlap
+                    flg = false;
+                    return;
+                end
+
+            end
             flg = true;
+        end
+
+        % get bounding box of segment
+        function y = getBBOX(obj)
+            y = [min(obj.p0.x,obj.p1.x),min(obj.p0.y,obj.p1.y),max(obj.p0.x,obj.p1.x),max(obj.p0.y,obj.p1.y)];
         end
 
     end

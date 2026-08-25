@@ -20,6 +20,8 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         % geometrical tolerance
         gtol (1,1) double = 1e-5;
 
+        sagittaNumber = 1000;
+
     end
 
     properties (SetAccess = protected)
@@ -57,7 +59,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         %% constructor and destructor
         function obj = emdlab_g2d_db()
 
-            obj.printFlag = false;
+            obj.printFlag = true;
 
             % set python path
             p = pyenv;
@@ -579,10 +581,27 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
+        function addSegmentP0P1(obj, p0ID, p1ID)
+
+            % add segment
+            obj.addSegment(p0ID, p1ID);
+
+        end
+
         function addSegmentP0P1XY(obj, p0ID, x, y)
 
             % add point 1
             p1ID = obj.addPoint(x, y);
+
+            % add segment
+            obj.addSegment(p0ID, p1ID);
+
+        end
+
+        function addSegmentP0XYP1(obj, x, y, p1ID)
+
+            % add point 0
+            p0ID = obj.addPoint(x, y);
 
             % add segment
             obj.addSegment(p0ID, p1ID);
@@ -1219,6 +1238,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
+        % add rectangle
         function varargout = addRectangleP0P1(obj, point0ID, point1ID)
 
             p1ID = point0ID;
@@ -1344,39 +1364,6 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
-        function varargout = addCircle(obj, varargin)
-
-            switch numel(varargin)
-                case 2
-                    p0ptr = obj.points(obj.pid2pi(varargin{1}));
-                    x0 = p0ptr.x;
-                    y0 = p0ptr.y;
-                    r = varargin{2};
-
-                case 3
-                    x0 = varargin{1};
-                    y0 = varargin{2};
-                    r = varargin{3};
-
-                otherwise
-                    error('Wrong number of input arguments.');
-            end
-
-            p1Index = obj.addPoint(x0,y0);
-            p2Index = obj.addPoint(x0+r,y0);
-            p3Index = obj.addPoint(x0-r,y0);
-
-            e1Index = obj.addArc(p1Index, p2Index, p3Index, 1);
-            e2Index = obj.addArc(p1Index, p3Index, p2Index, 1);
-
-            if nargout == 1
-                varargout{1} = [e1Index, e2Index];
-            elseif nargout > 1
-                error('The number of output arguments is too high.');
-            end
-
-        end
-
         function varargout = addCenterRectangle(obj, x0, y0, w, h)
 
             p1Index = obj.addPoint(x0-w/2,y0-h/2);
@@ -1391,6 +1378,41 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
             if nargout == 1
                 varargout{1} = [e1Index, e2Index, e3Index, e4Index];
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
+        % add circle
+        function varargout = addCircleP0R(obj, p0ID, r)
+
+            p0ptr = obj.points(obj.pid2pi(p0ID));
+            p1Index = obj.addPoint(p0ptr.x + r, p0ptr.y);
+            p2Index = obj.addPoint(p0ptr.x -r , p0ptr.y);
+
+            e1Index = obj.addArc(p0ID, p1Index, p2Index, 1);
+            e2Index = obj.addArc(p0ID, p2Index, p1Index, 1);
+
+            if nargout == 1
+                varargout{1} = [e1Index, e2Index];
+            elseif nargout > 1
+                error('The number of output arguments is too high.');
+            end
+
+        end
+
+        function varargout = addCircle(obj, x0, y0, r)
+           
+            p1Index = obj.addPoint(x0, y0);
+            p2Index = obj.addPoint(x0 + r, y0);
+            p3Index = obj.addPoint(x0 -r , y0);
+
+            e1Index = obj.addArc(p1Index, p2Index, p3Index, 1);
+            e2Index = obj.addArc(p1Index, p3Index, p2Index, 1);
+
+            if nargout == 1
+                varargout{1} = [e1Index, e2Index];
             elseif nargout > 1
                 error('The number of output arguments is too high.');
             end
@@ -1742,22 +1764,33 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
             nfe = 0;
             iflg = logical(sparse(obj.Nedges,obj.Nedges));
+            nfor = 0;
             while true
+                nfor = nfor + 1;
 
                 existFlag = true;
-                ne = obj.Nedges;
+                ne = obj.Nedges;      
+                bbox = obj.updateBBOX;
 
                 for i = 1:ne
-                    for j = i+1:ne                        
-                        if ~iflg(i,j)
-                            nfe = nfe + 1;
-                            if obj.edges(i).ptr.hasIntersection(obj.edges(j).ptr)
+                    for j = i+1:ne
+                        if ~iflg(i,j) 
+                            bbox_flg = (bbox(i,1) > bbox(j,3)) || ...
+                                (bbox(i,2) > bbox(j,4)) || ...
+                                (bbox(j,1) > bbox(i,3)) || ...
+                                (bbox(j,2) > bbox(i,4));
+
+                            if bbox_flg
+                                iflg(i,j) = true;
+                            else
+                                nfe = nfe + 1;
                                 if obj.intersectEdges(obj.edges(i).id, obj.edges(j).id)
                                     existFlag = false;
                                 else
                                     iflg(i,j) = true;
                                 end
                             end
+
                         end
                     end
                 end
@@ -1767,6 +1800,8 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 if existFlag
                     break;
                 end
+
+                obj.fprintf('Intersection #%3d performed. NFE = %d\n', nfor, nfe);
 
             end
 
@@ -1839,7 +1874,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
             pMin = min(obj.pts);
             pMax = max(obj.pts);
-            saggita = max(pMax - pMin)/1000;
+            saggita = max(pMax - pMin)/obj.sagittaNumber;
 
             for i = 1:obj.Nedges
                 if obj.edges(i).isSegment
@@ -1918,6 +1953,13 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
             end
 
+        end
+
+        function bbox = updateBBOX(obj)
+            bbox = zeros(obj.Nedges,4);
+            for i = 1:obj.Nedges
+                bbox(i,:) = obj.edges(i).ptr.getBBOX;
+            end
         end
 
         %% loop methods
@@ -2568,11 +2610,18 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 sloops{i} = l_tmpi(slidx(i));
             end
 
+            tidx = [idx, bidx, slidx];
+            for i = 1:length(tidx)
+                tmp_pts = obj.loops(l_tmpi(tidx(i))).getMeshNodesMinimal;
+                obj.loops(l_tmpi(tidx(i))).xp = tmp_pts(:,1);
+                obj.loops(l_tmpi(tidx(i))).yp = tmp_pts(:,2);
+            end
+
             for i = 1:length(slidx)
-                pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+                li_ptr = obj.loops(l_tmpi(slidx(i)));
                 for j = 1:length(idx)
-                    pts2 = obj.loops(l_tmpi(idx(j))).getMeshNodesMinimal;
-                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                    lj_ptr = obj.loops(l_tmpi(idx(j)));
+                    if all(inpolygon(li_ptr.xp(1),li_ptr.yp(1), lj_ptr.xp,lj_ptr.yp))
                         iloops{j}(end+1) = l_tmpi(slidx(i));
                         break;
                     end
@@ -2580,10 +2629,10 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             end
 
             for i = 1:length(bidx)
-                pts1 = obj.loops(l_tmpi(bidx(i))).getMeshNodesMinimal;
+                li_ptr = obj.loops(l_tmpi(bidx(i)));
                 for j = 1:length(idx)
-                    pts2 = obj.loops(l_tmpi(idx(j))).getMeshNodesMinimal;
-                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                    lj_ptr = obj.loops(l_tmpi(idx(j)));
+                    if all(inpolygon(li_ptr.xp,li_ptr.yp, lj_ptr.xp,lj_ptr.yp))
                         iloops{j}(end+1) = l_tmpi(bidx(i));
                         break;
                     end
@@ -2591,34 +2640,86 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             end
 
             for i = 1:length(bidx)
-                pts1 = obj.loops(l_tmpi(bidx(i))).getMeshNodesMinimal;
+                li_ptr = obj.loops(l_tmpi(bidx(i)));
                 for j = 1:length(slidx)
-                    pts2 = obj.loops(l_tmpi(slidx(j))).getMeshNodesMinimal;
-                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                    lj_ptr = obj.loops(l_tmpi(slidx(j)));
+                    if all(inpolygon(li_ptr.xp(1),li_ptr.yp(1), lj_ptr.xp,lj_ptr.yp))
                         sloops{j}(end+1) = l_tmpi(bidx(i));
                     end
                 end
             end
 
             for i = 1:length(slidx)
-                pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+                li_ptr = obj.loops(l_tmpi(slidx(i)));
                 for j = setdiff(1:length(slidx),i)
-                    pts2 = obj.loops(l_tmpi(slidx(j))).getMeshNodesMinimal;
-                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                    lj_ptr = obj.loops(l_tmpi(slidx(j)));
+                    if all(inpolygon(li_ptr.xp(1),li_ptr.yp(1), lj_ptr.xp,lj_ptr.yp))
                         sloops{j}(end+1) = l_tmpi(slidx(i));
                     end
                 end
             end
 
             for i = 1:length(slidx)
-                pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+                li_ptr = obj.loops(l_tmpi(slidx(i)));
                 for j = 1:length(bidx)
-                    pts2 = obj.loops(l_tmpi(bidx(j))).getMeshNodesMinimal;
-                    if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+                    lj_ptr = obj.loops(l_tmpi(bidx(j)));
+                    if all(inpolygon(li_ptr.xp(1),li_ptr.yp(1), lj_ptr.xp,lj_ptr.yp))
                         bloops{j}(end+1) = l_tmpi(slidx(i));
                     end
                 end
             end
+
+%             for i = 1:length(slidx)
+%                 pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+%                 for j = 1:length(idx)
+%                     pts2 = obj.loops(l_tmpi(idx(j))).getMeshNodesMinimal;
+%                     if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+%                         iloops{j}(end+1) = l_tmpi(slidx(i));
+%                         break;
+%                     end
+%                 end
+%             end
+% 
+%             for i = 1:length(bidx)
+%                 pts1 = obj.loops(l_tmpi(bidx(i))).getMeshNodesMinimal;
+%                 for j = 1:length(idx)
+%                     pts2 = obj.loops(l_tmpi(idx(j))).getMeshNodesMinimal;
+%                     if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+%                         iloops{j}(end+1) = l_tmpi(bidx(i));
+%                         break;
+%                     end
+%                 end
+%             end
+% 
+%             for i = 1:length(bidx)
+%                 pts1 = obj.loops(l_tmpi(bidx(i))).getMeshNodesMinimal;
+%                 for j = 1:length(slidx)
+%                     pts2 = obj.loops(l_tmpi(slidx(j))).getMeshNodesMinimal;
+%                     if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+%                         sloops{j}(end+1) = l_tmpi(bidx(i));
+%                     end
+%                 end
+%             end
+% 
+%             for i = 1:length(slidx)
+%                 pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+%                 for j = setdiff(1:length(slidx),i)
+%                     pts2 = obj.loops(l_tmpi(slidx(j))).getMeshNodesMinimal;
+%                     if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+%                         sloops{j}(end+1) = l_tmpi(slidx(i));
+%                     end
+%                 end
+%             end
+% 
+%             for i = 1:length(slidx)
+%                 pts1 = obj.loops(l_tmpi(slidx(i))).getMeshNodesMinimal;
+%                 for j = 1:length(bidx)
+%                     pts2 = obj.loops(l_tmpi(bidx(j))).getMeshNodesMinimal;
+%                     if all(inpolygon(pts1(:,1),pts1(:,2), pts2(:,1),pts2(:,2)))
+%                         bloops{j}(end+1) = l_tmpi(slidx(i));
+%                     end
+%                 end
+%             end
 
             allLoops = [iloops, sloops, bloops];
 
@@ -3076,6 +3177,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         function showFaces(obj, varargin)
 
+            obj.sagittaNumber = 10000;
             obj.showSketch(0,0);
             m = obj.generateMesh('mm');           
             ax = gca;
@@ -3085,6 +3187,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             m.showg(gca);
             ax = gca;
             ax.Children = flipud(ax.Children);
+            obj.sagittaNumber = 1000;
 
         end
         %% adding primitive loops

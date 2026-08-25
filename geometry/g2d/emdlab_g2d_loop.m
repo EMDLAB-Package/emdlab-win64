@@ -21,6 +21,10 @@ classdef emdlab_g2d_loop < handle
         % edge list
         edgesIndexList (1,:) double;
 
+        pgon;
+        xp;
+        yp;
+
     end
 
     properties (Dependent = true)

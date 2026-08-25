@@ -14,7 +14,7 @@ if nargin == 0
     alpha_v = 130;
     g_v = 1.1;
     wtrib = 1;
-    wrrib = 0;
+    wrrib = 1;
     d0 = 6;
     d1 = 5;
     d2 = 3;
