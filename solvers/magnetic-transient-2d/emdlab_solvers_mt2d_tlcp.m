@@ -2,7 +2,7 @@
 % magnetic-transient two-dimensional tlcp
 % triangular lagrangian elements common properties
 
-classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
+classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable & emdlab_ui_console
 
     properties (SetAccess = protected)
 
@@ -118,8 +118,48 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             obj.depth = value;
         end
 
+        function y = getDepth(obj)
+            y = obj.depth * obj.units.getQuantityScaler('length');
+        end
+
+        % solver settings
+        function setSolverMaxIteration(obj, maxIteration)
+
+            if maxIteration < 0 || rem(maxIteration, 1)
+                error('maxIteration must be a positive integer.');
+            end
+
+            obj.solverSettings.maxIteration = maxIteration;
+
+        end
+
+        function setSolverRelativeError(obj, relativeError)
+
+            if relativeError < 0
+                error('relativeError must be a real positive number.');
+            end
+
+            obj.solverSettings.relativeError = relativeError;
+
+        end
+
+        function setSolverRelativeEnergyResidual(obj, relativeEnergyResidual)
+
+            if relativeEnergyResidual < 0
+                error('relativeEnergyResidual must be a real positive number.');
+            end
+
+            obj.solverSettings.relativeEnergyResidual = relativeEnergyResidual;
+
+        end
+
         function setSolverIndex(obj, value)
             obj.solverIndex = value;
+        end
+
+        function setMonitor(obj, value)
+            % value = true or false
+            obj.monitorResiduals = value;
         end
 
         function y = get.NcoilArms(obj)
@@ -189,7 +229,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
             end
             tmp = unique(cell2mat(tmp));
-            obj.m.nodes(tmp,:) = emdlab_g2d_rotatePoints(obj.m.nodes(tmp,:),varargin{:});           
+            obj.m.nodes(tmp,:) = emdlab_g2d_rotatePoints(obj.m.nodes(tmp,:),varargin{:});
 
         end
 
@@ -264,7 +304,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             end
 
             for i = 1:Nmzs
-                
+
                 mzName(i) = obj.m.checkMeshZoneExistence(mzName(i));
 
                 if obj.m.mzs.(mzName(i)).props.isCoilArm
@@ -328,7 +368,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             end
 
             for i = 1:Nmzs
-                
+
                 mzName(i) = obj.m.checkMeshZoneExistence(mzName(i));
 
                 if obj.m.mzs.(mzName(i)).props.isCoilArm
@@ -362,53 +402,53 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
         end
 
         % this function add a mesh zone to a coil and make it as a coil arm
-%         function addMeshZone2Coil(obj, coilName, mzName, turns, direction, kfill)
-% 
-%             % default arguments
-%             if nargin < 4, turns = 1; end
-%             if nargin < 5, direction = 1; end
-%             if nargin < 6, kfill = 1; end
-% 
-%             coilName = obj.checkCoilExistence(coilName);
-%             mzName = obj.m.checkMeshZoneExistence(mzName);
-% 
-%             if obj.m.mzs.(mzName).props.isCoilArm
-%                 error('Specified mesh zone is already defined as a coil arm.');
-%             end
-% 
-%             % get coil pointer
-%             cptr = obj.coils.(coilName);
-% 
-%             if strcmpi(cptr.eddyType, 'solid')
-%                 if turns ~= 1
-%                     error('The number of turns for solid coil arm must be one.');
-%                 end
-%                 if kfill ~= 1
-%                     error('The coil arm fill factor for solid coil arm must be one.');
-%                 end
-%             end
-% 
-%             if ~ismember(direction, [-1,1])
-%                 error('The coil arm reference direction must be <1> or <-1>.');
-%             end
-% 
-%             if kfill > 1
-%                 error('The coil fill factor must be lower than or equal to one.');
-%             end
-% 
-%             cptr.addCoilArm(mzName, direction);
-%             obj.m.mzs.(mzName).props.turns = turns;
-%             obj.m.mzs.(mzName).props.direction = direction;
-%             obj.m.mzs.(mzName).props.kfill = kfill;
-%             obj.m.mzs.(mzName).props.isCoilArm = true;
-%             obj.coilArms(end+1) = mzName;
-%             obj.m.mzs.(mzName).props.cai = obj.NcoilArms;
-% 
-%             if strcmpi(cptr.eddyType, 'solid')
-%                 obj.m.mzs.(mzName).props.isEddyZone = true;
-%             end
-% 
-%         end
+        %         function addMeshZone2Coil(obj, coilName, mzName, turns, direction, kfill)
+        %
+        %             % default arguments
+        %             if nargin < 4, turns = 1; end
+        %             if nargin < 5, direction = 1; end
+        %             if nargin < 6, kfill = 1; end
+        %
+        %             coilName = obj.checkCoilExistence(coilName);
+        %             mzName = obj.m.checkMeshZoneExistence(mzName);
+        %
+        %             if obj.m.mzs.(mzName).props.isCoilArm
+        %                 error('Specified mesh zone is already defined as a coil arm.');
+        %             end
+        %
+        %             % get coil pointer
+        %             cptr = obj.coils.(coilName);
+        %
+        %             if strcmpi(cptr.eddyType, 'solid')
+        %                 if turns ~= 1
+        %                     error('The number of turns for solid coil arm must be one.');
+        %                 end
+        %                 if kfill ~= 1
+        %                     error('The coil arm fill factor for solid coil arm must be one.');
+        %                 end
+        %             end
+        %
+        %             if ~ismember(direction, [-1,1])
+        %                 error('The coil arm reference direction must be <1> or <-1>.');
+        %             end
+        %
+        %             if kfill > 1
+        %                 error('The coil fill factor must be lower than or equal to one.');
+        %             end
+        %
+        %             cptr.addCoilArm(mzName, direction);
+        %             obj.m.mzs.(mzName).props.turns = turns;
+        %             obj.m.mzs.(mzName).props.direction = direction;
+        %             obj.m.mzs.(mzName).props.kfill = kfill;
+        %             obj.m.mzs.(mzName).props.isCoilArm = true;
+        %             obj.coilArms(end+1) = mzName;
+        %             obj.m.mzs.(mzName).props.cai = obj.NcoilArms;
+        %
+        %             if strcmpi(cptr.eddyType, 'solid')
+        %                 obj.m.mzs.(mzName).props.isEddyZone = true;
+        %             end
+        %
+        %         end
 
         % check if all defined coils have coil arms
         function checkCoils(obj)
@@ -434,21 +474,21 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
                     % pointer to coil arm
                     mzptr = obj.m.mzs.(cptr.coilArms(j));
-                    
+
                     % calculate DC resistance of coil arms
                     mzptr.props.Rdc = obj.getDepth * mzptr.props.turns^2 /(obj.m.mts.(mzptr.material).ElectricConductivity.value * ...
                         mzptr.getArea * mzptr.props.kfill * obj.units.k_length^2);
                     cptr.Rdc = cptr.Rdc + mzptr.props.Rdc;
-                    
+
                 end
- 
+
             end
 
         end
 
-        function computeCoilsRdc (obj)
+        function computeCoilsRdc(obj)
             obj.checkCoils;
-             % coils with zeros number of coil arms
+            % coils with zeros number of coil arms
             coilNames = fieldnames(obj.coils);
             for i = 1:obj.Ncoils
                 disp("#" + string(i) + ": " + coilNames{i} + " -> Rdc = " + num2str(obj.coils.(coilNames{i}).Rdc));
@@ -535,8 +575,8 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
         end
 
-         % cage definition
-         function starConnectionName = checkStarConnectionExistence(obj, starConnectionName)
+        % cage definition
+        function starConnectionName = checkStarConnectionExistence(obj, starConnectionName)
 
             if ~isfield(obj.starConnections, starConnectionName)
                 throw(MException('', ['Star connection with name [', starConnectionName, '] does not exist.']));
@@ -563,7 +603,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             else
                 coilNames = string([varargin{:}]);
             end
-            
+
             % loop over coil names
             cIndicies = zeros(1,numel(coilNames));
             for i = 1:numel(coilNames)
@@ -597,7 +637,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
         % activate eddy effect calculation for specfied mesh zones
         function activateEddyEffect(obj, varargin)
-        
+
             % loop over inputs
             for i = 1:numel(varargin)
                 if ischar(varargin{i})
@@ -760,8 +800,8 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
         function setEvenPeriodicBC(obj, varargin)
             obj.bcs.setEvenPeriodic(varargin{:});
         end
-        
-        %% Visualaizing Functions
+
+        %% Visualaization Functions
         function varargout = showCoil(obj, coilName)
 
             coilName = obj.checkCoilExistence(coilName);
@@ -972,7 +1012,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             xlabel('Time')
             ylabel('Coil flux linkage');
             set(gca, 'xlim', [0,obj.simTime(end)]);
-            
+
         end
 
         function plotCoilInducedVoltages(obj)
@@ -995,7 +1035,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             xlabel('Time')
             ylabel('Coil induced voltage');
             set(gca, 'xlim', [0,obj.simTime(end)]);
-            
+
         end
 
         function plotWindingsVoltage(obj)
@@ -1192,10 +1232,10 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             eIndices = eIndices | (ismember(obj.m.edges(:, 4),zi) & (~ismember(obj.m.edges(:, 3),zi)));
             eIndices = eIndices & (~ obj.m.bedges);
             eIndices = find(eIndices);
-            
+
             torque = 0;
             for eIndex = eIndices'
-    
+
                 p1Index = obj.m.edges(eIndex,1);
                 p2Index = obj.m.edges(eIndex,2);
 
@@ -1227,7 +1267,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
                 Bx2 = obj.results.BxnSmooth(index2, elIndex);
                 By2 = obj.results.BynSmooth(index2, elIndex);
-                
+
                 Txx = (0.5/mu0) * (Bx1^2 - By1^2);
                 Txy_yx = (1/mu0) * (Bx1 * By1);
                 Tyy = (0.5/mu0) * (By1^2 - Bx1^2);
@@ -1251,22 +1291,22 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
                 torque = torque + a + b/2 + c/3;
 
-%                 Bx = obj.results.Bxg(elIndex);
-%                 By = obj.results.Byg(elIndex);
-% 
-%                 mu0 = 4*pi*1e-7;
-%                 Txx = (0.5/mu0) * (Bx^2 - By^2);
-%                 Txy_yx = (1/mu0) * (Bx * By);
-%                 Tyy = (0.5/mu0) * (By^2 - Bx^2);
-% 
-%                 Fx = (Txx * n(1) + Txy_yx * n(2)) * el;
-%                 Fy = (Txy_yx * n(1) + Tyy * n(2)) * el;
-% 
-%                 a = r1(1) * Fy - r1(2) * Fx;
-%                 r = r2 - r1;
-%                 b = r(1) * Fy - r(2) * Fx;
-% 
-%                 torque = torque + a + b/2;
+                %                 Bx = obj.results.Bxg(elIndex);
+                %                 By = obj.results.Byg(elIndex);
+                %
+                %                 mu0 = 4*pi*1e-7;
+                %                 Txx = (0.5/mu0) * (Bx^2 - By^2);
+                %                 Txy_yx = (1/mu0) * (Bx * By);
+                %                 Tyy = (0.5/mu0) * (By^2 - Bx^2);
+                %
+                %                 Fx = (Txx * n(1) + Txy_yx * n(2)) * el;
+                %                 Fy = (Txy_yx * n(1) + Tyy * n(2)) * el;
+                %
+                %                 a = r1(1) * Fy - r1(2) * Fx;
+                %                 r = r2 - r1;
+                %                 b = r(1) * Fy - r(2) * Fx;
+                %
+                %                 torque = torque + a + b/2;
 
             end
 
@@ -1450,11 +1490,11 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             end
 
         end
-        
+
         function varargout = plotFQvecOnCenterOfElements(obj, FQname)
 
             f = figure;
-            ax = axes(f);            
+            ax = axes(f);
             ax.NextPlot = 'add';
 
             switch FQname
@@ -1468,7 +1508,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
                     f.Name = 'Magnetization vectors on center of mesh elements';
                     FQx = obj.edata.MagnetizationX';
                     FQy = obj.edata.MagnetizationY';
-                    
+
                 case 'H'
                     obj.evalHn;
                     f.Name = 'Magnetic field intensity on center of mesh elements';
@@ -1478,7 +1518,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
                 otherwise
                     error('Wrong field quantity.');
             end
-            
+
             % get center of elements
             c = obj.m.getCenterOfElements;
             color = zeros(obj.m.Ne, 3);
@@ -1522,9 +1562,9 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
             obj.plotFQvecOnCenterOfElements('H');
         end
 
-%         function plotMvecOnCenterOfElements(obj)
-%             obj.plotFQvecOnCenterOfElements('M');
-%         end
+        %         function plotMvecOnCenterOfElements(obj)
+        %             obj.plotFQvecOnCenterOfElements('M');
+        %         end
 
         %% post-proccessing: interpolation functions
         % get triangle index of points
@@ -1558,7 +1598,7 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
             % interpolate the value of A on points
             Az = emdlab_m2d_tl3_interpA(obj.m.cl, obj.m.nodes, obj.results.A(obj.m.cl'), obj.m.JIT, ti, x, y);
-           
+
             Az(index) = NaN;
 
             if iscolumn(Az), Az = Az'; end
@@ -1785,15 +1825,6 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable
 
         function Az = getMeshZoneAz(obj, mzName)
             Az = obj.results.A(obj.m.mzs.(mzName).l2g);
-        end
-
-    end
-
-    %% Getters
-    methods
-
-        function y = getDepth(obj)
-            y = obj.depth * obj.units.getQuantityScaler('length');
         end
 
     end

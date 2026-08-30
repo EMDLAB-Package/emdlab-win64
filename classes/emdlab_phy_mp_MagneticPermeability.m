@@ -7,6 +7,10 @@ classdef emdlab_phy_mp_MagneticPermeability
 
         % value of material property -> magnetic permeability
         value;
+        vB2;
+        dvdB2;
+        weB;
+        wcH;
 
         % this unit multiplier maps the value in original unit to SI unit
         unitUser (1,1) string; 
@@ -16,6 +20,9 @@ classdef emdlab_phy_mp_MagneticPermeability
         % temperature dependent vs non-dependent
         % if it is temperature dependent it should be defined as a function handle
         isTemperatureDependent (1,1) logical;
+
+        % linear vs non-linear
+        isLinear (1,1) logical;
 
         % isotropic vs non-isotropic
         isIsotropic (1,1) logical;
@@ -36,6 +43,9 @@ classdef emdlab_phy_mp_MagneticPermeability
 
         end
 
+        function setValueByHBData(obj, HData, BData)
+        end
+
         function obj = setValue(obj, xValue, xUnit)
 
             % set default unit
@@ -54,11 +64,12 @@ classdef emdlab_phy_mp_MagneticPermeability
 
             end
 
-            % set thermal conductivity
+            % set magnetic permeability
             if isnumeric(xValue) && isscalar(xValue)
 
                 obj.value = xValue;
                 obj.isTemperatureDependent = false;
+                obj.isLinear = true;
                 obj.isIsotropic = true;
                 obj.isHomogeneous = true;
 
@@ -66,6 +77,7 @@ classdef emdlab_phy_mp_MagneticPermeability
 
                 obj.value = xValue(:); % xValue must be a [3x1] vector
                 obj.isTemperatureDependent = false;
+                obj.isLinear = true;
                 obj.isIsotropic = false;
                 obj.isHomogeneous = true;
 

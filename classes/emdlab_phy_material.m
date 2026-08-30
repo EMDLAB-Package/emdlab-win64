@@ -15,6 +15,9 @@ classdef emdlab_phy_material < handle
         ElectricPermitivity (1,1) emdlab_phy_materialProperty;
 
         % [H/m]
+        MagneticPermeabilityNew (1,1) emdlab_phy_mp_MagneticPermeability;
+
+        % [H/m]
         MagneticPermeability (1,1) emdlab_phy_materialProperty;
 
         % [S/m]
@@ -38,6 +41,13 @@ classdef emdlab_phy_material < handle
             if nargin < 3, unit = 'W/mK'; end
             if nargin > 3, error('Too many input arguments'); end
             obj.ThermalConductivity = obj.ThermalConductivity.setValue(value, unit);
+        end
+
+        function setMagneticPermeability(obj, value, unit)
+            if nargin < 2, error('Not enough input arguments'); end
+            if nargin < 3, unit = 'H/m'; end
+            if nargin > 3, error('Too many input arguments'); end
+            obj.MagneticPermeabilityNew = obj.MagneticPermeabilityNew.setValue(value, unit);
         end
 
         function setMassDensity(obj, value)

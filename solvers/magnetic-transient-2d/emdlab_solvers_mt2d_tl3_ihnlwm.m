@@ -8,7 +8,7 @@
 % nonlinear
 % with motion: remesh technology with fixed number of nodes
 
-classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & matlab.mixin.Copyable & emdlab_ui_console
+classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & matlab.mixin.Copyable
 
     properties
         % this flag is used to detect any motion in problem, when we have motion
@@ -18,10 +18,9 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
     methods
 
-        % initialization
         function obj = emdlab_solvers_mt2d_tl3_ihnlwm(m)
 
-            % mesh pointer
+            % generate global mesh & set mesh pointer
             m.ggmesh(true);
             obj.m = m;
 
@@ -30,54 +29,13 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
             obj.solverSettings.maxIteration = 100;
             obj.solverSettings.relativeEnergyResidual = 1e-3;
 
-            % set default properties of mesh zones
-            mzNames = fieldnames(obj.m.mzs);
-
-            for i = 1:numel(mzNames)
-                obj.setdp(mzNames{i});
+            % set default properties of mesh zones           
+            for mzName = obj.m.getMeshZoneNames
+                obj.setdp(mzName);
             end
 
         end
 
-        % solver settings
-        function setSolverMaxIteration(obj, maxIteration)
-
-            if maxIteration < 0 || rem(maxIteration, 1)
-                error('maxIteration must be a positive integer.');
-            end
-
-            obj.solverSettings.maxIteration = maxIteration;
-
-        end
-
-        function setSolverRelativeError(obj, relativeError)
-
-            if relativeError < 0
-                error('relativeError must be a real positive number.');
-            end
-
-            obj.solverSettings.relativeError = relativeError;
-
-        end
-
-        function setSolverRelativeEnergyResidual(obj, relativeEnergyResidual)
-
-            if relativeEnergyResidual < 0
-                error('relativeEnergyResidual must be a real positive number.');
-            end
-
-            obj.solverSettings.relativeEnergyResidual = relativeEnergyResidual;
-
-        end
-
-        function setMonitor(obj, value)
-
-            % value = true or false
-            obj.monitorResiduals = value;
-
-        end
-
-        % assign elements data
         function assignEdata(obj, initialRelativePermeability)
 
             % check states
@@ -683,8 +641,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
         end
 
-        % solver core
-        function obj = solveForOneTimeStep(obj, DeltaTime)
+        function solveForOneTimeStep(obj, DeltaTime)
 
             % prerequisties
             obj.solveForInitialConditions;

@@ -1239,17 +1239,15 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         end
 
         % add rectangle
-        function varargout = addRectangleP0P1(obj, point0ID, point1ID)
+        function varargout = addRectangleP0P1(obj, p0ID, p1ID)
 
-            p1ID = point0ID;
-            p2ID = obj.addPoint(obj.points(obj.pid2pi(point1ID)).x,obj.points(obj.pid2pi(point0ID)).y);
-            p3ID = point1ID;
-            p4ID = obj.addPoint(obj.points(obj.pid2pi(point0ID)).x,obj.points(obj.pid2pi(point1ID)).y);
+            p2ID = obj.addPoint(obj.points(obj.pid2pi(p1ID)).x,obj.points(obj.pid2pi(p0ID)).y);
+            p3ID = obj.addPoint(obj.points(obj.pid2pi(p0ID)).x,obj.points(obj.pid2pi(p1ID)).y);
 
-            e1ID = obj.addSegment(p1ID, p2ID);
-            e2ID = obj.addSegment(p2ID, p3ID);
-            e3ID = obj.addSegment(p3ID, p4ID);
-            e4ID = obj.addSegment(p4ID, p1ID);
+            e1ID = obj.addSegment(p0ID, p2ID);
+            e2ID = obj.addSegment(p2ID, p1ID);
+            e3ID = obj.addSegment(p1ID, p3ID);
+            e4ID = obj.addSegment(p3ID, p0ID);
 
             if nargout == 1
                 varargout{1} = [e1ID, e2ID, e3ID, e4ID];
@@ -1305,15 +1303,15 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
-        function varargout = addRectangleP0WH(obj, point0ID, W, H)
+        function varargout = addRectangleP0WH(obj, p0ID, W, H)
 
             % add points 1
-            point1ID = obj.addPoint(obj.points(obj.pid2pi(point0ID)).x + W, obj.points(obj.pid2pi(point0ID)).x + H);
+            p1ID = obj.addPoint(obj.points(obj.pid2pi(p0ID)).x + W, obj.points(obj.pid2pi(p0ID)).y + H);
 
             if nargout == 0
-                obj.addRectangleP0P1(point0ID, point1ID);
+                obj.addRectangleP0P1(p0ID, p1ID);
             elseif nargout == 1
-                varargout{1} = obj.addRectangleP0P1(point0ID, point1ID);
+                varargout{1} = obj.addRectangleP0P1(p0ID, p1ID);
             elseif nargout > 1
                 error('The number of output arguments is too high.');
             end
@@ -2994,7 +2992,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         end
 
         function varargout = showDXF(obj)
-            
+                        
             obj.updateMMS;
 
             figHandle = figure('NumberTitle', 'on', 'name', ...
@@ -3864,11 +3862,11 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 % detect 'matlab line to import matlab variables
                 if strcmpi(str(2:end),'matlab')
 
-                    fprintf(fid2, 'call defineGlobalVariable(oProject, "x_pts", "%s")\n', obj.getPointsXCoordinatesForMaxwell(1:length(obj.points)));
+                    fprintf(fid2, 'call defineGlobalVariable(oProject, "x_pts", "%s")\n', obj.getPointsXCoordinatesForMaxwell(1:obj.Npoints));
                     fprintf(fid2, 'call makeGBHidden(oProject, "x_pts")\n');
-                    fprintf(fid2, 'call defineGlobalVariable(oProject, "y_pts", "%s")\n', obj.getPointsYCoordinatesForMaxwell(1:length(obj.points)));
+                    fprintf(fid2, 'call defineGlobalVariable(oProject, "y_pts", "%s")\n', obj.getPointsYCoordinatesForMaxwell(1:obj.Npoints));
                     fprintf(fid2, 'call makeGBHidden(oProject, "y_pts")\n');
-                    fprintf(fid2, 'call defineGlobalVariable(oProject, "e_angles", "%s")\n', obj.getEdgesAnglesForMaxwell(1:length(obj.edges)));
+                    fprintf(fid2, 'call defineGlobalVariable(oProject, "e_angles", "%s")\n', obj.getEdgesAnglesForMaxwell(1:obj.Nedges));
                     fprintf(fid2, 'call makeGBHidden(oProject, "e_angles")\n');
 
                     % addfaces
@@ -3882,13 +3880,15 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
                             lIndex = lIndex + 1;
                             lName = faceName + "_loop_" + string(lIndex) + "_";
+                            
                             eNames = strings(1,numel(l.edges));
 
                             % add edges
                             for j = 1:numel(l.edges)
 
                                 eptr = l.edges{j};
-                                eNames(j) = lName + eptr.id;
+                                eIndex = l.edgesIndexList(j);
+                                eNames(j) = lName + eIndex;
 
                                 if isa(eptr, 'emdlab_g2d_segment')
 
@@ -3898,7 +3898,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                                 elseif isa(eptr, 'emdlab_g2d_arc')
 
                                     fprintf(fid2, 'call drawArcCPA(oEditor, %d, %d, %d, "%s")\n', obj.getPointIndexByID(eptr.p0.id), ...
-                                        obj.getPointIndexByID(eptr.p1.id), obj.getEdgeIndexByID(eptr.id), eNames(j));
+                                        obj.getPointIndexByID(eptr.p1.id), eIndex, eNames(j));
 
                                 elseif isa(eptr, 'emdlab_g2d_spline')
 

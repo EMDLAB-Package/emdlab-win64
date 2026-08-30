@@ -12,113 +12,71 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
 
     methods
 
-        % initialization
         function obj = emdlab_solvers_mt2d_tl3_ihnlwtm(m)
-            
-            % mesh pointer
+
+            % generate global mesh & set mesh pointer
             m.ggmesh;
             obj.m = m;
-            
+
             % default settings for solver
             obj.solverSettings.relativeError = 1e-8;
             obj.solverSettings.maxIteration = 100;
             obj.solverSettings.relativeEnergyResidual = 1e-3;
-            
+
             % set default properties of mesh zones
-            mzNames = fieldnames(obj.m.mzs);
-            
-            for i = 1:numel(mzNames)
-                obj.setdp(mzNames{i});
+            for mzName = obj.m.getMeshZoneNames
+                obj.setdp(mzName);
             end
-            
-        end
-        
-        % solver settings
-        function setSolverMaxIteration(obj, maxIteration)
-            
-            if maxIteration < 0 || rem(maxIteration, 1)
-                error('maxIteration must be a positive integer.');
-            end
-            
-            obj.solverSettings.maxIteration = maxIteration;
-            
-        end
-        
-        function setSolverRelativeError(obj, relativeError)
-            
-            if relativeError < 0
-                error('relativeError must be a real positive number.');
-            end
-            
-            obj.solverSettings.relativeError = relativeError;
-            
+
         end
 
-        function setSolverRelativeEnergyResidual(obj, relativeEnergyResidual)
-            
-            if relativeEnergyResidual < 0
-                error('relativeEnergyResidual must be a real positive number.');
-            end
-            
-            obj.solverSettings.relativeEnergyResidual = relativeEnergyResidual;
-            
-        end
-        
-        function setMonitor(obj, value)
-            
-            % value = true or false
-            obj.monitorResiduals = value;
-            
-        end
-        
-        % assign elements data
         function assignEdata(obj, InitNur)
-            
-           % check states
+            % assign elements data
+            % assigning material and force data to each triangle element
+
+            % check states
             if obj.isElementDataAssigned, return; end
-            
+
             % preparing mesh data
             obj.m.evalKeMeFe_TL3;
-            tic, disp('-------------------------------------------------------');
-            
-            % assigning material and force data to each triangle
-            
+            timeHolder = tic;
+
             % allocation of memory
             obj.edata.MagneticReluctivity = zeros(1, obj.m.Ne);
             obj.edata.ElectricConductivity = zeros(1, obj.m.Ne);
             obj.edata.InternalCurrentDensity = zeros(1, obj.m.Ne);
             obj.edata.MagnetizationX = zeros(1, obj.m.Ne);
             obj.edata.MagnetizationY = zeros(1, obj.m.Ne);
-            
+
             % getting mesh zones
             mzsName = fieldnames(obj.m.mzs);
-            
+
             obj.edata.areAllLinear = true;
             % loop over mesh zones
             for i = 1:obj.m.Nmzs
-                
+
                 mzptr = obj.m.mzs.(mzsName{i});
-                
+
                 if ~obj.m.mts.(mzptr.material).MagneticPermeability.isIsotropic
-                    
+
                     throw(MException('', 'Some materials are non-isotropic, please select the correct solver.'));
-                    
+
                 elseif obj.m.mts.(mzptr.material).MagneticPermeability.isLinear
-                    
+
                     % assigning Magnetic Permeability
                     obj.edata.MagneticReluctivity(obj.m.ezi(:, mzptr.zi)) = 1/obj.m.mts.(mzptr.material).MagneticPermeability.value;
-                    
+
                 else
-                    
+
                     obj.edata.areAllLinear = false;
                     if nargin == 2
                         obj.edata.MagneticReluctivity(obj.m.ezi(:, mzptr.zi)) = InitNur * obj.pcts.nu0;
                     else
                         obj.edata.MagneticReluctivity(obj.m.ezi(:, mzptr.zi)) = 0.001 * obj.pcts.nu0;
                     end
-                    
+
                 end
-                
+
                 % assigning Electric Conductivity for activated zones for eddy currents
                 if mzptr.props.isEddyZone
                     obj.edata.ElectricConductivity(obj.m.ezi(:, mzptr.zi)) = obj.m.mts.(mzptr.material).ElectricConductivity.value;
@@ -126,28 +84,28 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
 
                 % assigning Magnetization
                 if mzptr.props.isMagnetized
-                    
+
                     M = mzptr.props.magnetization.getM(mzptr.getCenterOfElements);
                     obj.edata.MagnetizationX(obj.m.ezi(:, mzptr.zi)) = M(:, 1)';
                     obj.edata.MagnetizationY(obj.m.ezi(:, mzptr.zi)) = M(:, 2)';
-                    
+
                 end
-                
+
             end
-           
+
             % evaluation of P and Q matrices of coils
             coilNames = fieldnames(obj.coils);
 
             for i = 1:obj.Ncoils
                 % get coil pointer
-                cptr = obj.coils.(coilNames{i});                
+                cptr = obj.coils.(coilNames{i});
 
-                % initialize coil Pstranded, Psolid, Qvec, and R matrices for each coil arm                
+                % initialize coil Pstranded, Psolid, Qvec, and R matrices for each coil arm
                 cptr.Qvec = sparse(1,obj.m.Nn);
                 for j = 1:cptr.NcoilArms
                     % pointer to coil arm
                     mzptr = obj.m.mzs.(cptr.coilArms(j));
- 
+
                     % coil arm turns density
                     k = mzptr.props.turns/mzptr.getArea;
 
@@ -167,26 +125,24 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     val(:,obj.m.ezi(:,mzptr.zi)) = (obj.m.mts.(mzptr.material).ElectricConductivity.value * obj.units.k_length^2/obj.getDepth) * ...
                         obj.m.mtcs.Fe(:,obj.m.ezi(:,mzptr.zi));
                     mzptr.props.Psolid = sparse(obj.m.cl', ones(3,obj.m.Ne), val);
-                                       
+
                 end
 
-                
             end
-            
-            disp('Initialization of material and force data compeleted.')
-            toc, disp('-------------------------------------------------------');
+
+            obj.dispMessageLine('Initialization of material and force data compeleted.', timeHolder);
 
             % Construction coils related matrices
-            tic, disp('-------------------------------------------------------');
+            timeHolder = tic;
 
             % check windings
             obj.checkCoils;
 
             % allocating memory for coil related matrices
-            obj.mtcs.K21 = zeros(obj.NcoilArms,obj.m.Nn); 
-            obj.mtcs.K31 = zeros(obj.Ncoils,obj.m.Nn); 
-            obj.mtcs.K12 = zeros(obj.m.Nn,obj.NcoilArms); 
-            obj.mtcs.K22 = zeros(obj.NcoilArms,obj.NcoilArms);  
+            obj.mtcs.K21 = zeros(obj.NcoilArms,obj.m.Nn);
+            obj.mtcs.K31 = zeros(obj.Ncoils,obj.m.Nn);
+            obj.mtcs.K12 = zeros(obj.m.Nn,obj.NcoilArms);
+            obj.mtcs.K22 = zeros(obj.NcoilArms,obj.NcoilArms);
             obj.mtcs.K32 = zeros(obj.Ncoils,obj.NcoilArms);
             obj.mtcs.K13 = zeros(obj.m.Nn,obj.Ncoils);
             obj.mtcs.K23 = zeros(obj.NcoilArms,obj.Ncoils);
@@ -259,25 +215,23 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
 
             end
 
-            disp('Coils related matrices are constructed.')
-            toc, disp('-------------------------------------------------------');
-            
+            obj.dispMessageLine('Coils related matrices are constructed.', timeHolder);
+
             % Construction of [K], [M] and [Fm]
-            tic, disp('-------------------------------------------------------');
-            
+            timeHolder = tic;
+
             % Assembeling [Fm]
             % assembling the load vector due to magnets
             obj.mtcs.Fm = (obj.edata.MagnetizationX .* obj.m.mtcs.FeMx + obj.edata.MagnetizationY .* obj.m.mtcs.FeMy) * (obj.units.k_length * obj.units.k_magnetisation);
-            obj.mtcs.Fm = sparse(obj.m.cl', ones(3 * obj.m.Ne, 1), obj.mtcs.Fm);            
-            
+            obj.mtcs.Fm = sparse(obj.m.cl', ones(3 * obj.m.Ne, 1), obj.mtcs.Fm);
+
             % Assembeling [K]
             [Iindex, Jindex] = emdlab_flib_getij(3,1);
             Iindex = obj.m.cl(:, Iindex)';
             Jindex = obj.m.cl(:, Jindex)';
             obj.mtcs.K11 = sparse(Iindex, Jindex, obj.edata.MagneticReluctivity .* obj.m.mtcs.Ke);
             obj.mtcs.M11 = sparse(Iindex, Jindex, obj.edata.ElectricConductivity .* obj.m.mtcs.Me * obj.units.k_length^2);
-            disp('Construction of [K], [M], and [Fm] compeleted.');
-            toc, disp('-------------------------------------------------------');
+            obj.dispMessageLine('Construction of [K], [M], and [Fm] compeleted.', timeHolder);
 
             % initialize results with zero A
             obj.results.A = zeros(obj.m.Nn, 1);
@@ -286,7 +240,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
 
             % change states
             obj.isElementDataAssigned = true;
-            
+
         end
 
         function solveForInitialConditions(obj)
@@ -296,10 +250,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
 
             % prerequisties
             obj.assignEdata;
-            
+
             % updating boundary conditions
             obj.bcs.updateAll;
-            
+
             % Assembeling [F]
             F1 = obj.mtcs.Fm;
             F2 = zeros(obj.NcoilArms,1);
@@ -309,7 +263,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             coilNames = fieldnames(obj.coils);
             K21 = obj.mtcs.K21;
             K31 = obj.mtcs.K31;
-            K33 = obj.mtcs.K33;            
+            K33 = obj.mtcs.K33;
 
             % adjust coil related matrices
             for i = 1:obj.Ncoils
@@ -341,14 +295,14 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             if ~any(F), return; end
 
             tic, disp('-------------------------------------------------------');
-            
+
             % imposing boundary conditions on [K] and [F]
             % dbcs
             if obj.bcs.Nd
                 F(obj.bcs.iD) = obj.bcs.vD;
                 K(obj.bcs.iD, :) = sparse(1:obj.bcs.Ndbcs, obj.bcs.iD, ones(1, obj.bcs.Ndbcs), obj.bcs.Ndbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils);
             end
-            
+
             % opbcs
             if obj.bcs.Nop
                 F(obj.bcs.mOP) = F(obj.bcs.mOP) - F(obj.bcs.sOP);
@@ -357,7 +311,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 K(obj.bcs.sOP, :) = sparse([1:obj.bcs.Nopbcs, 1:obj.bcs.Nopbcs], ...
                     [obj.bcs.mOP; obj.bcs.sOP], ones(1, 2 * obj.bcs.Nopbcs), obj.bcs.Nopbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils);
             end
-            
+
             % epbcs
             if obj.bcs.Nep
                 F(obj.bcs.mEP) = F(obj.bcs.mEP) + F(obj.bcs.sEP);
@@ -366,13 +320,13 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 K(obj.bcs.sEP, :) = sparse([1:obj.bcs.Nepbcs, 1:obj.bcs.Nepbcs], ...
                     [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils);
             end
-            
+
             disp('All boundary condition imposed.');
             toc, disp('-------------------------------------------------------');
-            
+
             % solving [K][U] = [F]
             tic, disp('-------------------------------------------------------');
-            
+
             solVector = full(K\F);
             obj.results.A = solVector(1:obj.m.Nn);
             obj.results.VICoilArms = solVector(obj.m.Nn+1:obj.m.Nn+obj.NcoilArms);
@@ -396,10 +350,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 obj.evalHn;
                 return
             end
-            
+
             % loop for nonlinear solver
             tic, disp('-------------------------------------------------------');
-            
+
             % initials values
             RelEResidual = inf;
             RelError = inf;
@@ -410,7 +364,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             [Iindex, Jindex] = getij(3,1);
             Iindex = obj.m.cl(:, Iindex)';
             Jindex = obj.m.cl(:, Jindex)';
-            
+
             % preparing error monitoring
             if obj.monitorResiduals
 
@@ -430,29 +384,29 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 cAxis.Title.FontSize = 12;
                 cAxis.YTick = log10(obj.solverSettings.relativeError)-1:1;
                 cAxis.XLim(1) = 0;
-                cAxis.XMinorGrid = 'on'; 
+                cAxis.XMinorGrid = 'on';
                 cAxis.YMinorGrid = 'off';
 
             end
-            
+
             % solver history
             obj.solverHistory.relativeError = [];
             obj.solverHistory.totalEnergy = [];
-            obj.solverHistory.totalConergy = [];     
+            obj.solverHistory.totalConergy = [];
 
             % memory allocation for dnudB2
             dnudB2 = zeros(1, xNgt);
 
             % inintial value of alphaNR
             alphaNR = 0.7;
-            
+
             % loop for non-linearity
             fprintf('Iter|Error   |Residual|time\n');
-            while ((RelError > obj.solverSettings.relativeError) || (RelEResidual>obj.solverSettings.relativeEnergyResidual)) && (Iterations < obj.solverSettings.maxIteration) 
-                
+            while ((RelError > obj.solverSettings.relativeError) || (RelEResidual>obj.solverSettings.relativeEnergyResidual)) && (Iterations < obj.solverSettings.maxIteration)
+
                 % starting loop time
                 loopTime = tic;
-                
+
                 % evaluation of B2 for each elements
                 obj.evalBe;
                 [obj.solverHistory.totalEnergy(end + 1),obj.solverHistory.totalConergy(end + 1)] = obj.evalTotalEnergyCoenergy;
@@ -474,31 +428,31 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     end
 
                 end
-                
+
                 % construction of stiffness matrix [K]
                 K11 = sparse(Iindex, Jindex, obj.edata.MagneticReluctivity .* obj.m.mtcs.Ke);
 
                 K = [K11, obj.mtcs.K12, obj.mtcs.K13
-                K21, obj.mtcs.K22, obj.mtcs.K23
-                K31, obj.mtcs.K32, K33];
-                
+                    K21, obj.mtcs.K22, obj.mtcs.K23
+                    K31, obj.mtcs.K32, K33];
+
                 % construction of [K] and [F] in NR algorithm
-                FF = -K * solVector + F;                
-                
+                FF = -K * solVector + F;
+
                 % evaluation and adding of jacobian matrix
                 K11 = K11 + sparse(Iindex, Jindex, emdlab_m2d_tl3_evalG(obj.m.cl, obj.m.mtcs.Ke, obj.m.JIT, obj.results.A, dnudB2) / obj.units.k_length^2);
-                
+
                 K = [K11, obj.mtcs.K12, obj.mtcs.K13
-                K21, obj.mtcs.K22, obj.mtcs.K23
-                K31, obj.mtcs.K32, K33];
-                
+                    K21, obj.mtcs.K22, obj.mtcs.K23
+                    K31, obj.mtcs.K32, K33];
+
                 % imposing boundary conditions on incrimentals
                 % dbcs
                 if obj.bcs.Nd
                     FF(obj.bcs.iD) = obj.bcs.vD;
-                K(obj.bcs.iD, :) = sparse(1:obj.bcs.Ndbcs, obj.bcs.iD, ones(1, obj.bcs.Ndbcs), obj.bcs.Ndbcs, xNgp);
+                    K(obj.bcs.iD, :) = sparse(1:obj.bcs.Ndbcs, obj.bcs.iD, ones(1, obj.bcs.Ndbcs), obj.bcs.Ndbcs, xNgp);
                 end
-                
+
                 % opbcs
                 if obj.bcs.Nop
                     FF(obj.bcs.mOP) = FF(obj.bcs.mOP) - FF(obj.bcs.sOP);
@@ -507,7 +461,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     K(obj.bcs.sOP, :) = sparse([1:obj.bcs.Nopbcs, 1:obj.bcs.Nopbcs], ...
                         [obj.bcs.mOP; obj.bcs.sOP], ones(1, 2 * obj.bcs.Nopbcs), obj.bcs.Nopbcs, xNgp);
                 end
-                
+
                 % epbcs
                 if obj.bcs.Nep
                     FF(obj.bcs.mEP) = FF(obj.bcs.mEP) + FF(obj.bcs.sEP);
@@ -516,7 +470,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     K(obj.bcs.sEP, :) = sparse([1:obj.bcs.Nepbcs, 1:obj.bcs.Nepbcs], ...
                         [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, xNgp);
                 end
-                
+
                 % solving [K][U] = [F]
                 dU = full(K\FF);
                 solVector = solVector + alphaNR*dU;
@@ -531,24 +485,24 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     % calculate and store coil flux linkage
                     cptr.fluxLinkage(end) = cptr.Qvec * obj.results.A;
                 end
-                
+
                 % check for convergency
                 Residual = norm(dU, 2);
                 RelError = Residual / norm(solVector, 2);
-                
+
                 % monitoring of error
                 if obj.monitorResiduals
                     addpoints(er, Iterations+1, log10(RelError));
                     cAxis.XLim(2) = Iterations+2;
                     drawnow;
                 end
-                
+
                 % solver history
                 obj.solverHistory.relativeError(end + 1) = RelError;
-                
+
                 % printing Residual and RelError
                 fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
-                
+
                 % go to next iteration
                 Iterations = Iterations + 1;
 
@@ -562,7 +516,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 end
 
             end
-            
+
             if obj.monitorResiduals
                 cAxis.YLim(2) = ceil(log10(obj.solverHistory.relativeError(1)));
             end
@@ -570,7 +524,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             obj.solverHistory.iterations = Iterations;
             disp(['Number of total iterations = ', num2str(Iterations - 1)]);
             toc, disp('-------------------------------------------------------');
-            
+
             % update field quantities
             obj.evalBe;
             obj.evalHe;
@@ -581,8 +535,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             obj.isSolvedForInitialConditions = true;
 
         end
-        
-        % solver core
+
         function obj = solveForOneTimeStep(obj, DeltaTime)
 
             obj.solveForInitialConditions;
@@ -590,10 +543,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
 
             % prerequisties
             obj.assignEdata;
-            
+
             % updating boundary conditions
             obj.bcs.updateAll;
-            
+
             % Assembeling [F]
             F1 = obj.mtcs.Fm + obj.mtcs.M11 * obj.results.A / DeltaTime;
             F2 = zeros(obj.NcoilArms,1);
@@ -635,7 +588,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                         mzptr = obj.m.mzs.(cptr.coilArms(j));
 
                         K21(mzptr.props.cai,:) = K21(mzptr.props.cai,:)/DeltaTime;
-                        
+
                         F2(mzptr.props.cai) =  K21(mzptr.props.cai,:) * obj.results.A;
 
                     end
@@ -663,14 +616,14 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             F = [F1;F2;F3;F4];
 
             tic, disp('-------------------------------------------------------');
-            
+
             % imposing boundary conditions on [K] and [F]
             % dbcs
             if obj.bcs.Nd
                 F(obj.bcs.iD) = obj.bcs.vD;
                 K(obj.bcs.iD, :) = sparse(1:obj.bcs.Ndbcs, obj.bcs.iD, ones(1, obj.bcs.Ndbcs), obj.bcs.Ndbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils+obj.NstarConnections);
             end
-            
+
             % opbcs
             if obj.bcs.Nop
                 F(obj.bcs.mOP) = F(obj.bcs.mOP) - F(obj.bcs.sOP);
@@ -679,7 +632,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 K(obj.bcs.sOP, :) = sparse([1:obj.bcs.Nopbcs, 1:obj.bcs.Nopbcs], ...
                     [obj.bcs.mOP; obj.bcs.sOP], ones(1, 2 * obj.bcs.Nopbcs), obj.bcs.Nopbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils+obj.NstarConnections);
             end
-            
+
             % epbcs
             if obj.bcs.Nep
                 F(obj.bcs.mEP) = F(obj.bcs.mEP) + F(obj.bcs.sEP);
@@ -688,13 +641,13 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 K(obj.bcs.sEP, :) = sparse([1:obj.bcs.Nepbcs, 1:obj.bcs.Nepbcs], ...
                     [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, obj.m.Nn+obj.NcoilArms+obj.Ncoils+obj.NstarConnections);
             end
-            
+
             disp('All boundary condition imposed.');
             toc, disp('-------------------------------------------------------');
-            
+
             % solving [K][U] = [F]
             tic, disp('-------------------------------------------------------');
-                                   
+
             solVector = full(K \ F);
             obj.results.A = solVector(1:obj.m.Nn);
             obj.results.VICoilArms = solVector(obj.m.Nn+1:obj.m.Nn+obj.NcoilArms);
@@ -717,10 +670,10 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 obj.evalHn;
                 return
             end
-            
+
             % loop for nonlinear solver
             tic, disp('-------------------------------------------------------');
-            
+
             % initials values
             RelError = inf;
             Iterations = 0;
@@ -730,7 +683,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             [Iindex, Jindex] = emdlab_flib_getij(3,1);
             Iindex = obj.m.cl(:, Iindex)';
             Jindex = obj.m.cl(:, Jindex)';
-            
+
             % preparing error monitoring
             if obj.monitorResiduals
 
@@ -749,34 +702,34 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 cAxis.Title.FontSize = 12;
                 cAxis.YTick = log10(obj.solverSettings.relativeError)-1:1;
                 cAxis.XLim(1) = 0;
-                cAxis.XMinorGrid = 'on'; 
+                cAxis.XMinorGrid = 'on';
                 cAxis.YMinorGrid = 'off';
 
             end
-            
+
             % solver history
             obj.solverHistory.relativeError = [];
             obj.solverHistory.totalEnergy = [];
-            obj.solverHistory.totalConergy = [];     
+            obj.solverHistory.totalConergy = [];
 
             % memory allocation for dnudB2
             dnudB2 = zeros(1, xNgt);
 
             % inintial value of alphaNR
             alphaNR = 0.7;
-            
+
             % loop for non-linearity
             fprintf('Iter|Error   |Residual|time\n');
             while (RelError > obj.solverSettings.relativeError) && (Iterations < obj.solverSettings.maxIteration)
-                
+
                 % starting loop time
                 loopTime = tic;
-                
+
                 % evaluation of B2 for each elements
                 obj.evalBe;
                 [obj.solverHistory.totalEnergy(end + 1),obj.solverHistory.totalConergy(end + 1)] = obj.evalTotalEnergyCoenergy;
                 Bk = obj.results.Bxg.^2 + obj.results.Byg.^2;
-                
+
                 % updating nu & dnudB2
                 for i = 1:obj.m.Nmts
                     mtptr = obj.m.mts.(obj.m.materialNames(i));
@@ -787,35 +740,35 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     end
 
                 end
-                
+
                 % construction of stiffness matrix [K]
                 K11 = sparse(Iindex, Jindex, obj.edata.MagneticReluctivity .* obj.m.mtcs.Ke);
 
                 K = [K11 + obj.mtcs.M11/DeltaTime, obj.mtcs.K12, obj.mtcs.K13
-                K21, obj.mtcs.K22, obj.mtcs.K23
-                K31, obj.mtcs.K32, K33];
+                    K21, obj.mtcs.K22, obj.mtcs.K23
+                    K31, obj.mtcs.K32, K33];
                 K = [K,obj.mtcs.Ksy
-                obj.mtcs.Ksx,obj.mtcs.Kss];
-                
+                    obj.mtcs.Ksx,obj.mtcs.Kss];
+
                 % construction of [K] and [F] in NR algorithm
-                FF = -K * solVector + F;                
-                
+                FF = -K * solVector + F;
+
                 % evaluation and adding of jacobian matrix
                 K11 = K11 + sparse(Iindex, Jindex, emdlab_m2d_tl3_evalG(obj.m.cl, obj.m.mtcs.Ke, obj.m.JIT, obj.results.A, dnudB2) / obj.units.k_length^2);
-                
+
                 K = [K11 + obj.mtcs.M11/DeltaTime, obj.mtcs.K12, obj.mtcs.K13
-                K21, obj.mtcs.K22, obj.mtcs.K23
-                K31, obj.mtcs.K32, K33];
+                    K21, obj.mtcs.K22, obj.mtcs.K23
+                    K31, obj.mtcs.K32, K33];
                 K = [K,obj.mtcs.Ksy
-                obj.mtcs.Ksx,obj.mtcs.Kss];
-                
+                    obj.mtcs.Ksx,obj.mtcs.Kss];
+
                 % imposing boundary conditions on incrimentals
                 % dbcs
                 if obj.bcs.Nd
                     FF(obj.bcs.iD) = obj.bcs.vD;
-                K(obj.bcs.iD, :) = sparse(1:obj.bcs.Ndbcs, obj.bcs.iD, ones(1, obj.bcs.Ndbcs), obj.bcs.Ndbcs, xNgp);
+                    K(obj.bcs.iD, :) = sparse(1:obj.bcs.Ndbcs, obj.bcs.iD, ones(1, obj.bcs.Ndbcs), obj.bcs.Ndbcs, xNgp);
                 end
-                
+
                 % opbcs
                 if obj.bcs.Nop
                     FF(obj.bcs.mOP) = FF(obj.bcs.mOP) - FF(obj.bcs.sOP);
@@ -824,7 +777,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     K(obj.bcs.sOP, :) = sparse([1:obj.bcs.Nopbcs, 1:obj.bcs.Nopbcs], ...
                         [obj.bcs.mOP; obj.bcs.sOP], ones(1, 2 * obj.bcs.Nopbcs), obj.bcs.Nopbcs, xNgp);
                 end
-                
+
                 % epbcs
                 if obj.bcs.Nep
                     FF(obj.bcs.mEP) = FF(obj.bcs.mEP) + FF(obj.bcs.sEP);
@@ -833,7 +786,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     K(obj.bcs.sEP, :) = sparse([1:obj.bcs.Nepbcs, 1:obj.bcs.Nepbcs], ...
                         [obj.bcs.mEP; obj.bcs.sEP], [ones(1, obj.bcs.Nepbcs), -ones(1, obj.bcs.Nepbcs)], obj.bcs.Nepbcs, xNgp);
                 end
-                
+
                 % solving [K][U] = [F]
                 dU = K \ FF;
                 solVector = full(solVector + alphaNR*dU);
@@ -848,24 +801,24 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                     cptr.current(end) = solVector(obj.m.Nn + obj.NcoilArms + cptr.ci);
                     cptr.fluxLinkage(end) = cptr.Qvec * obj.results.A;
                 end
-                
+
                 % check for convergency
                 Residual = norm(dU, 2);
                 RelError = Residual / norm(solVector, 2);
-                
+
                 % monitoring of error
                 if obj.monitorResiduals
                     addpoints(er, Iterations+1, log10(RelError));
                     cAxis.XLim(2) = Iterations+2;
                     drawnow;
                 end
-                
+
                 % solver history
                 obj.solverHistory.relativeError(end + 1) = RelError;
-                
+
                 % printing Residual and RelError
                 fprintf('->%2d|%.2e|%.2e|%0.3f\n', Iterations, RelError, Residual, toc(loopTime));
-                
+
                 % go to next iteration
                 Iterations = Iterations + 1;
 
@@ -879,7 +832,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
                 end
 
             end
-            
+
             if obj.monitorResiduals
                 cAxis.YLim(2) = ceil(log10(obj.solverHistory.relativeError(1)));
             end
@@ -887,7 +840,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             obj.solverHistory.iterations = Iterations;
             disp(['Number of total iterations = ', num2str(Iterations - 1)]);
             toc, disp('-------------------------------------------------------');
-            
+
             % change states
             obj.evalBe;
             obj.evalHe;
@@ -904,7 +857,7 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
 
             timeInterval = stopTime - obj.simTime(end);
             spentTime = 0;
-            DeltaTime = diff(obj.simTime(end):timeStep:stopTime); 
+            DeltaTime = diff(obj.simTime(end):timeStep:stopTime);
             for dt = DeltaTime
                 obj.solveForOneTimeStep(dt);
                 spentTime = spentTime + dt;
@@ -914,6 +867,6 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwtm < handle & emdlab_solvers_mt2d_tlcp
             end
 
         end
-        
+
     end
 end
