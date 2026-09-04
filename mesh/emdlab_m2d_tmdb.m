@@ -2348,6 +2348,7 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             obj.makeFalse_isGlobalMeshGenerated;
         end
 
+        %% Airgap Mesh
         function varargout = aux_addCircularAirGap(obj, mzName, xci, yci, ri, xco, yco, ro, Nlayers)
 
             % set defaults
@@ -2372,6 +2373,36 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
         end
 
         function varargout = aux_addCircularAirGapInterface(obj, mzName, xci, yci, ri, xco, yco, ro, Nlayers, movingBoundary, type)
+
+            % set defaults
+            if nargin<9, Nlayers = 1; end
+            if nargin<10, movingBoundary = 'inner'; end
+            if nargin<11, type = 'remesh1'; end
+
+            % generate global mesh to find unique indices
+            obj.ggmesh;
+            kr = obj.getfbnioc([xci,yci],ri);
+            ks = obj.getfbnioc([xco,yco],ro);
+            rps = obj.nodes(kr,:);
+            sps = obj.nodes(ks,:);
+
+            % getting a moving contact object
+            agm = emdlab_mcs_circularAirGap([xci,yci], rps, [xco,yco], sps, Nlayers, movingBoundary);
+
+            % adding air gap to mesh zones
+            obj.addmz(mzName, agm.m);
+            obj.setMeshZoneColor(mzName,0,255,255);
+
+            % add to interface mesh zones
+            obj.imzs.(mzName) = agm;
+            obj.mzs.(mzName).props.isInterface = true;
+            obj.mzs.(mzName).props.interfaceType = type;
+
+            if nargout == 1, varargout{1} = agm; end
+            
+        end
+
+        function varargout = aux_addCircularAirGapSlidingInterface(obj, mzName, xci, yci, ri, xco, yco, ro, Nlayers, movingBoundary, type)
 
             % set defaults
             if nargin<9, Nlayers = 1; end
@@ -2474,6 +2505,54 @@ classdef emdlab_m2d_tmdb < handle & emdlab_g2d_constants & matlab.mixin.Copyable
             
         end
 
+        function aux_addSlidingCircularAirGapInterface(obj, ri, ro, tol)
+
+            if nargin < 4, tol = 1e-3; end
+
+            % generate global mesh to find unique indices
+            obj.ggmesh;
+            kr = obj.getfbnioc([0,0],ri);
+            ks = obj.getfbnioc([0,0],ro);
+            rps = obj.nodes(kr,:);
+            sps = obj.nodes(ks,:);
+
+            a1 = atan_02pi(rps);
+            [~,idx] = sort(a1);
+            rps = rps(idx,:);
+
+            a1 = atan_02pi(sps);
+            [~,idx] = sort(a1);
+            sps = sps(idx,:);
+
+            l1 = vecnorm(rps - circshift(rps,-1), 2, 2);
+            l2 = vecnorm(sps - circshift(sps,-1), 2, 2);
+            h0 = mean([l1;l2]);
+
+            n = ceil(pi * (ri + ro) / h0);
+            t = linspace(0, 2 * pi, n + 1)';
+            t(end) = [];
+
+            rmid = (ri+ro)/2;
+
+            p = [(rmid-tol) * cos(t), (rmid-tol) * sin(t)];
+
+            tr = delaunayTriangulation([rps;p]);
+            idx = vecnorm(tr.incenter, 2, 2) >= ri;
+            obj.addMeshZone('ag1', emdlab_m2d_tmz(tr.ConnectivityList(idx,:), tr.Points));
+
+            p = [(rmid+tol) * cos(t), (rmid+tol) * sin(t)];
+
+            tr = delaunayTriangulation([sps;p]);
+            idx = vecnorm(tr.incenter, 2, 2) >= (rmid+tol);
+            obj.addMeshZone('ag2', emdlab_m2d_tmz(tr.ConnectivityList(idx,:), tr.Points));
+
+            obj.ggmesh;
+            obj.contacts.ag.m = obj.getfbnioc([0,0],rmid-tol);
+            obj.contacts.ag.s = obj.getfbnioc([0,0],rmid+tol);
+
+        end
+
+        %% Casing Mesh
         function aux_addShaft(obj, mzName, x0, y0, R)
 
             mzName = obj.checkMeshZoneNonExistence(mzName);

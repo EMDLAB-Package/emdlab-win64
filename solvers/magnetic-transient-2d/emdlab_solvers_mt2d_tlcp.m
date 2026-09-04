@@ -698,6 +698,26 @@ classdef emdlab_solvers_mt2d_tlcp < handle & matlab.mixin.Copyable & emdlab_ui_c
 
         end
 
+        function defineMovingRegionSliding(obj, movingRegionName, meshZoneNames)
+
+            for i = 1:numel(meshZoneNames)
+                obj.m.checkMeshZoneExistence(meshZoneNames(i));
+            end
+
+            movingRegionName = obj.checkMovingRegionNonExistence(movingRegionName);
+            obj.movingRegions.(movingRegionName) = emdlab_solvers_mt2d_motion();
+            obj.movingRegions.(movingRegionName).meshZones = meshZoneNames;
+            obj.movingRegions.(movingRegionName).mi = obj.NmovingRegions;
+            obj.setMoving(movingRegionName, meshZoneNames);
+
+            idx = cell(numel(meshZoneNames),1);
+            for i = 1:numel(meshZoneNames)
+                idx{i} = obj.m.mzs.(meshZoneNames(i)).l2g;
+            end
+            obj.movingRegions.(movingRegionName).idx = cell2mat(idx);
+
+        end
+
         function defineMovingRegion(obj, movingRegionName, meshZoneNames, interfaceMeshZone)
 
             for i = 1:numel(meshZoneNames)

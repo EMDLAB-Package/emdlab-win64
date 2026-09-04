@@ -1,5 +1,5 @@
 %{
-note: calculation of the rotor field of an v-shape ipm motor
+note: calculation of the rotor field of a v-shape ipm motor
 %}
 
 % initialization

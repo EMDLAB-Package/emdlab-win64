@@ -64,6 +64,8 @@ classdef emdlab_m2d_xmdb < handle & emdlab_mdb_cp
         % element type
         etype (1,:) char = '';
 
+        contacts;
+
     end
 
     properties (Dependent = true)

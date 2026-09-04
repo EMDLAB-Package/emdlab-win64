@@ -1346,16 +1346,27 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
-        function varargout = addRectangleP0P1H(obj, x0, y0, W, H)
+        function varargout = addRectangleP0P1H(obj, p0ID, p1ID, H)
 
-            % add points 0 & 1
-            point0ID = obj.addPoint(x0,y0);
-            point1ID = obj.addPoint(x0 + W, y0 + H);
+            % add other corner points
+            p0ptr = obj.points(obj.pid2pi(p0ID));
+            p1ptr = obj.points(obj.pid2pi(p1ID));
 
-            if nargout == 0
-                obj.addRectangleP0P1(point0ID, point1ID);
-            elseif nargout == 1
-                varargout{1} = obj.addRectangleP0P1(point0ID, point1ID);
+            % u & n vectors
+            u = p1ptr.getVector - p0ptr.getVector;
+            u = u/norm(u);
+            n = [-u(2),u(1)];
+
+            p2ID = obj.addPoint(p1ptr.getVector + H*n);
+            p3ID = obj.addPoint(p0ptr.getVector + H*n);
+
+            e1ID = obj.addSegment(p0ID, p1ID);
+            e2ID = obj.addSegment(p1ID, p2ID);
+            e3ID = obj.addSegment(p2ID, p3ID);
+            e4ID = obj.addSegment(p3ID, p0ID);
+
+            if nargout == 1
+                varargout{1} = [e1ID, e2ID, e3ID, e4ID];
             elseif nargout > 1
                 error('The number of output arguments is too high.');
             end
@@ -1736,18 +1747,19 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
-        function iFlag = intersectEdges(obj, edgeID1, edgeID2)
+        function [iFlag,ipID] = intersectEdges(obj, edgeID1, edgeID2)
 
             iFlag = false;
+            ipID = [];
             [xi,yi] = obj.getIntersection(edgeID1, edgeID2);
 
             if ~isempty(xi)
                 ne = obj.Nedges;
                 for i = 1:length(xi)
 
-                    pointID = obj.addPoint(xi(i),yi(i));
-                    obj.splitEdge(edgeID1, pointID);
-                    obj.splitEdge(edgeID2, pointID);
+                    ipID = obj.addPoint(xi(i),yi(i));
+                    obj.splitEdge(edgeID1, ipID);
+                    obj.splitEdge(edgeID2, ipID);
 
                     if ne ~= obj.Nedges
                         iFlag = true;
@@ -2811,7 +2823,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
 
         end
 
-        function meshZone = getQMeshByEdges(obj, e1, e2, e3, e4, Nx, Ny)
+        function meshZone = getQMeshByEdges(obj, e1ID, e2ID, e3ID, e4ID, Nx, Ny)
 
             % set default values for Nx & Ny
             if nargin < 5, Nx = 3; end
@@ -2822,10 +2834,10 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             Ny = max(Ny+1,3);
 
             % edge pointers
-            e1ptr = obj.edges(abs(e1)).ptr;
-            e2ptr = obj.edges(abs(e2)).ptr;
-            e3ptr = obj.edges(abs(e3)).ptr;
-            e4ptr = obj.edges(abs(e4)).ptr;
+            e1ptr = obj.edges(abs(e1ID)).ptr;
+            e2ptr = obj.edges(abs(e2ID)).ptr;
+            e3ptr = obj.edges(abs(e3ID)).ptr;
+            e4ptr = obj.edges(abs(e4ID)).ptr;
 
             % Assign nodes to edges
             e1ptr.setNnodes(Nx);
@@ -2840,10 +2852,10 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             pts4 = e4ptr.getMeshNodes;
 
             % Correct orientation
-            if e1<0, pts1 = flipud(pts1); end
-            if e2<0, pts2 = flipud(pts2); end
-            if e3>0, pts3 = flipud(pts3); end
-            if e4>0, pts4 = flipud(pts4); end
+            if e1ID<0, pts1 = flipud(pts1); end
+            if e2ID<0, pts2 = flipud(pts2); end
+            if e3ID>0, pts3 = flipud(pts3); end
+            if e4ID>0, pts4 = flipud(pts4); end
 
             % Parametric grid
             [u,v] = ndgrid(linspace(0,1,Nx),linspace(0,1,Ny));
@@ -2861,7 +2873,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
             P11 = pts1(end,:);
 
             % Coons patch interpolation
-            pts = (1-v).*pts3(uIndex,:) + v.*pts1(uIndex,:) + ...
+            qm_pts = (1-v).*pts3(uIndex,:) + v.*pts1(uIndex,:) + ...
                 (1-u).*pts4(vIndex,:) + u.*pts2(vIndex,:) ...
                 - ((1-u).*(1-v).*P00 + ...
                 u.*(1-v).*P10 + ...
@@ -2885,7 +2897,7 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
                 end
             end
 
-            meshZone = emdlab_m2d_qmz(cl,pts);
+            meshZone = emdlab_m2d_qmz(cl,qm_pts);
             meshZone.color = 'c';
 
         end
