@@ -1556,7 +1556,8 @@ classdef emdlab_solvers_ms2d_tlcp < handle & emdlab_ui_console
 
             index = obj.m.edges(:, 3) - obj.m.edges(:, 4);
             patch(ax, 'faces', obj.m.edges(logical(abs(index)), 1:2), 'vertices', obj.m.nodes, ...
-                'EdgeColor', [150,150,150]/255);
+                'EdgeColor', [150,150,150]/255, 'linewidth',1);
+
             colormap(jet(12));
             cb = colorbar;
             cb.FontName = 'Verdana';

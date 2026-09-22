@@ -409,9 +409,9 @@ classdef emdlab_solvers_ms2d_tl6_ihnl < handle & emdlab_solvers_ms2d_tlcp
                 % update alphaNR
                 if length(obj.solverHistory.relativeError)>2
                     if obj.solverHistory.relativeError(end) > 0.8*obj.solverHistory.relativeError(end-1)
-                        alphaNR = max((0.95-2e-2*rand)*alphaNR,0.35);
+                        alphaNR = 0.5 + 0.2 * rand;
                     else
-                        alphaNR = min((1.05+2e-2*rand)*alphaNR,0.75);
+                        alphaNR = 0.7 + 0.2 * rand;
                     end
                 end
                 obj.solverHistory.alphaNR(end+1) = alphaNR;

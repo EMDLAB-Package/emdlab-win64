@@ -1,5 +1,5 @@
 % EMDLAB: Electrical Machines Design Laboratory
-% a 2-dimensional thermal-static solver based on thermal netwrok theory
+% 2-dimensional thermal-static solver based on thermal netwrok theory
 
 classdef emdlab_solvers_ts2d_tn < handle
 

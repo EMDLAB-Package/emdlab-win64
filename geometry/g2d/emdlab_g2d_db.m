@@ -244,9 +244,9 @@ classdef emdlab_g2d_db < handle & emdlab_ui_console
         end
 
         function [x,y] = getPointCoordinates(obj, pID)
-            pIDX = obj.pid2pi(pID);
-            x = obj.points(pIDX).x;
-            y = obj.points(pIDX).y;
+            pIndex = obj.pid2pi(pID);
+            x = obj.points(pIndex).x;
+            y = obj.points(pIndex).y;
         end
 
         function setPointXCoordinate(obj, pID, newX)

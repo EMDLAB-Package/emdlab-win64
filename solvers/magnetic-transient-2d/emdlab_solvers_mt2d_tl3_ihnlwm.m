@@ -314,13 +314,17 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
 
         end
 
-        function solveForInitialConditions(obj)
+        function solveForInitialConditions(obj, initialRelativePermeability)
 
             % check if it is already solved for initial conditions
             if obj.isSolvedForInitialConditions, return; end
 
             % prerequisties
-            obj.assignEdata;
+            if nargin == 2
+                obj.assignEdata(initialRelativePermeability);
+            else
+                obj.assignEdata;
+            end
 
             % updating boundary conditions
             obj.bcs.updateAll;
@@ -949,9 +953,9 @@ classdef emdlab_solvers_mt2d_tl3_ihnlwm < handle & emdlab_solvers_mt2d_tlcp & ma
                 % update alphaNR
                 if length(obj.solverHistory.relativeError)>2
                     if obj.solverHistory.relativeError(end) > 0.8*obj.solverHistory.relativeError(end-1)
-                        alphaNR = max((0.95-2e-2*rand)*alphaNR,0.5);
+                        alphaNR = 0.5 + 0.2 * rand;
                     else
-                        alphaNR = min((1.05+2e-2*rand)*alphaNR,0.9);
+                        alphaNR = 0.7 + 0.2 * rand;
                     end
                 end
 

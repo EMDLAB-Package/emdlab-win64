@@ -38,7 +38,7 @@ emdlab_g2d_lib_rm_spm1(g, gv_Dsh, gv_ISD-2*gv_g, gv_p, gv_dm, gv_embrace, 'rotor
 
 % set mesh density function
 g.setMeshLengthByRadialFunction(f_mesh);
-m = g.generateMesh('mg0');
+m = g.generateMesh('mm');
 
 % add materials
 m.addMaterial('m330', emdlab_mlib_es_M330_35A);
@@ -119,9 +119,11 @@ for i = 1:Nt
     s.solveForOneTimeStep(timeStep);
 end
 s.forcePeriodicCoilVoltages;
+
 % plot results
 s.plotCoilFluxLinkages;
 s.plotCoilInducedVoltages;
+
 % cogging torque
 figure;
 hold on; box on;
@@ -131,6 +133,7 @@ xlabel('Time [s]'); ylabel('Electric torque [Nm]');
 % set(gca,'ylim',[0,1.2*max(te)]);
 legend('Arkkio', 'MST');
 hold off;
+
 % finding alpha_d4A
 figure;
 hold on; box on;

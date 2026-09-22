@@ -67,7 +67,7 @@ m.aux_cmxjcr('rb',gv_Nr/2,2*pi/gv_Nr)
 m.aux_addArcAirGap('ag',0,0,gv_ISD/2-gv_gap,gv_ISD/2,2);
 
 % getting an instance of solver object
-s = emdlab_solvers_mt2d_tl3_ihnlwm(m);
+s = emdlab_solvers_mt2d_tl3_ihnlwtm(m);
 s.setLengthUnit('mm');
 s.setDepth(gv_Lstk);
 
