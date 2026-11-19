@@ -23,13 +23,13 @@ EMDLAB can be installed using either of the following methods.
 
 The web-based installer automatically downloads and installs the latest version of EMDLAB.
 
-1. Download **[`emdlab_setup.exe`](https://github.com/EMDLAB-Package/emdlab-win64/releases)**.
-2. Run the installer and follow the installation instructions.
+1. Download **[EMDLAB Setup (Windows 64-bit)](https://comprogexpert.com/emdlab_setup.exe)**.
+2. Run `emdlab_setup.exe` and follow the installation instructions.
 3. To update EMDLAB, simply run the same installer again. It automatically downloads and installs the latest version.
 
 ### Method 2: Manual Installation
 
-1. Download the **`emdlab-win64.zip`** archive.
+1. Download the **[`emdlab-win64.zip`](https://github.com/EMDLAB-Package/emdlab-win64/archive/refs/heads/main.zip)** archive.
 2. Extract the ZIP file.
 3. Copy the extracted **`emdlab-win64`** folder directly into the `C:\` directory.
 4. Make sure the folder name remains unchanged.
